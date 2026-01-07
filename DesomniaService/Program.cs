@@ -1,0 +1,87 @@
+﻿using Autofac;
+using MadWizard.Desomnia;
+using MadWizard.Desomnia.Logging;
+using MadWizard.Desomnia.Service.Windows;
+using Microsoft.Extensions.Hosting;
+using NLog;
+using System.Diagnostics;
+using System.Reflection;
+
+//await MadWizard.Desomnia.Test.Debugger.UntilAttached();
+
+LogManager.Setup().SetupExtensions(ext => ext.RegisterLayoutRenderer<SleepTimeLayoutRenderer>("sleep-duration")); // FIXME
+
+if (Process.GetCurrentProcess().IsWindowsService() is bool isRunningAsService && isRunningAsService)
+{
+    var applicationDir = new FileInfo(Assembly.GetExecutingAssembly().Locati‌​on).Directory!;
+
+    Directory.SetCurrentDirectory(applicationDir.FullName);
+
+    // Delete all *.log-Files
+    foreach (string file in Directory.GetFiles(applicationDir.FullName, "*.log", SearchOption.AllDirectories))
+    {
+        File.Delete(file);
+    }
+}
+
+string configPath = new ConfigDetector().Lookup();
+
+string pluginsPath = Path.Combine(Directory.GetCurrentDirectory(), "plugins");
+
+try
+{
+    if (!Environment.IsPrivilegedProcess)
+        throw new Exception("The application must be run with elevated privileges.");
+
+    ConfigFileWatcher watcher;
+
+    do
+    {
+        using (new SystemMutex("MadWizard.Desomnia", true)) using (watcher = new(configPath) { EnableRaisingEvents = isRunningAsService })
+        {
+            var builder = new DesomniaServiceBuilder();
+
+            if (isRunningAsService)
+            {
+                builder.RegisterModule<WindowsServiceModule>();
+            }
+
+            builder.RegisterModule<MadWizard.Desomnia.CoreModule>();
+
+            builder.RegisterModule<MadWizard.Desomnia.Service.PlatformModule>();
+
+            builder.RegisterModule<MadWizard.Desomnia.Network.Module>();
+            builder.RegisterModule<MadWizard.Desomnia.NetworkSession.Module>();
+            builder.RegisterModule<MadWizard.Desomnia.PowerRequest.Module>();
+            builder.RegisterModule<MadWizard.Desomnia.Process.Module>();
+            builder.RegisterModule<MadWizard.Desomnia.Session.Module>();
+
+            builder.RegisterPluginModules(pluginsPath);
+
+            builder.LoadConfiguration(configPath);
+
+            builder.Build().RunAsync(watcher.Token).Wait();
+        }
+    }
+    while (watcher.HasChanged);
+
+    return 0;
+}
+catch (Exception e)
+{
+    if (isRunningAsService)
+    {
+        File.WriteAllText(Path.Combine(Path.Combine(Directory.GetCurrentDirectory(), "logs"), "error.log"), e.ToString()); // TODO: Maybe write to EventLog?
+
+        return 1;
+    }
+    else
+    {
+        throw;
+    }
+}
+
+class DesomniaServiceBuilder() : MadWizard.Desomnia.ApplicationBuilder
+{
+
+}

@@ -1,0 +1,197 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+
+env:
+  name: 'Desomnia'
+
+  VERSION_NET: '9.0'
+  VERSION_DESOMNIA: ${{ github.ref_name }}
+
+jobs:
+
+  build-plugins:
+    name: Build Desomnia plugin
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        # name: [ FirewallKnockOperator ]
+        name: [ DuoStreamIntegration, HyperVSupport, FirewallKnockOperator ]
+
+        include:
+          - name: DuoStreamIntegration
+            os: -windows8.0
+          - name: HyperVSupport
+            os: -windows8.0
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '${{ env.VERSION_NET }}.x'
+
+      - name: Publish ${{ matrix.name }}
+        run: |
+          dotnet publish plugins/${{ matrix.name }}/${{ matrix.name }}.csproj \
+            -o ${{ runner.temp }}/publish/${{ matrix.name }} \
+            -f net${{ env.VERSION_NET }}${{ matrix.os }} \
+            -c Release \
+            --no-self-contained \
+            -p:DebugType=None \
+            -p:DebugSymbols=false \
+            -p:PublishSingleFile=false
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-${{ matrix.name }}
+          path:  ${{ runner.temp }}/publish/
+          if-no-files-found: error
+
+  build-windows:
+    name: Build DesomniaService
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        arch: [ arm64, x64 ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '${{ env.VERSION_NET }}.x'
+          
+      - name: Publish DesomniaService (${{ matrix.arch }})
+        run: |
+          dotnet publish DesomniaService/DesomniaService.csproj \
+            -o ${{ runner.temp }}/publish \
+            -f net${{ env.VERSION_NET }}-windows8.0 \
+            -c Release \
+            -r win-${{ matrix.arch }} \
+            --no-self-contained \
+            -p:DebugType=None \
+            -p:DebugSymbols=false \
+            -p:PublishSingleFile=false
+
+      - name: Publish DesomniaServiceHelper (${{ matrix.arch }})
+        run: |
+          dotnet publish helper/DesomniaServiceHelper/DesomniaServiceHelper.csproj \
+            -o ${{ runner.temp }}/publish \
+            -f net${{ env.VERSION_NET }}-windows8.0 \
+            -c Release \
+            -r win-${{ matrix.arch }} \
+            --no-self-contained \
+            -p:DebugType=None \
+            -p:DebugSymbols=false \
+            -p:PublishSingleFile=true \
+            -p:PublishReadyToRun=true
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DesomniaService_${{ matrix.arch }}
+          path:  ${{ runner.temp }}/publish/
+          if-no-files-found: error
+
+  build-windows-installer:
+    name: Build Desomnia installer
+    runs-on: windows-latest
+    needs: [ build-plugins, build-windows ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '${{ env.VERSION_NET }}.x'
+
+      - name: Install InnoSetup
+        run: choco install innosetup --no-progress -y
+        # Chocolatey package: InnoSetup :contentReference[oaicite:0]{index=0}
+
+      - name: Publish DesomniaServiceConfigurator
+        run: |
+          dotnet publish installer/DesomniaServiceConfigurator/DesomniaServiceConfigurator.csproj `
+            -o installer\build\components `
+            -f net${{ env.VERSION_NET }}-windows8.0 `
+            -c Release `
+            -r win-x64 `
+            --no-self-contained `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -p:PublishSingleFile=true `
+            -p:PublishReadyToRun=true
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          pattern: plugin-*
+          path: installer\build\components\plugins
+          merge-multiple: true
+      - name: Download service (x64)
+        uses: actions/download-artifact@v4
+        with:
+          name: DesomniaService_x64
+          path: installer\build\components\service\x64
+      - name: Download service (arm64)
+        uses: actions/download-artifact@v4
+        with:
+          name: DesomniaService_arm64
+          path: installer\build\components\service\arm64
+
+      - name: Build installer (ISCC)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $iscc "installer\setup.iss" `
+            "/DMyAppVersion=${VERSION_DESOMNIA#v}" `
+            "/DDisableBridge" `
+            "/O${{ runner.temp }}\installer"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path:  ${{ runner.temp }}/installer/
+          if-no-files-found: error
+
+  release:
+    name: Create Release
+    needs: [ build-windows-installer ]
+    runs-on: ubuntu-latest
+    steps:
+      # Download everything you want to publish as release assets
+      - name: Download installer
+        uses: actions/download-artifact@v4
+        with:
+          name: installer
+          path: ${{ runner.temp }}
+
+      # (Optional) If you need to re-zip folders into single distributables, do it here. 
+
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') }}
+          #generate_release_notes: true
+          files: |
+            ${{ runner.temp }}/Desomnia_*.exe

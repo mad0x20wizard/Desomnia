@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+	<LangVersion>preview</LangVersion>
+	<ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>MadWizard.Desomnia.Network</RootNamespace>
+    <AssemblyName>DesomniaNetworkMonitor</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="IPAddressRange" Version="6.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.9" />
+    <PackageReference Include="Nito.AsyncEx" Version="5.1.2" />
+    <PackageReference Include="SharpPcap" Version="6.3.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\DesomniaCore\DesomniaCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Services\SleepProxy\" />
+  </ItemGroup>
+
+</Project>

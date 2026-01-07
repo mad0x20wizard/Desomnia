@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "DesomniaServiceConfigurator": {
+      "commandName": "Project",
+      "commandLineArgs": "init \"C:\\Users\\Wizard\\AppData\\Local\\Temp\\is-ZWKQCSEG1X.tmp\\prefs.ini\" \"C:\\Program Files\\Desomnia\\config\\monitor.xml\""
+    }
+  }
+}

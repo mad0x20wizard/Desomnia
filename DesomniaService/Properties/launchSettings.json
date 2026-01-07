@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "DesomniaService": {
+      "commandName": "Project",
+      "commandLineArgs": "watch",
+      "workingDirectory": "C:\\Program Files\\Desomnia"
+    }
+  }
+}
