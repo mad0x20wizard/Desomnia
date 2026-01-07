@@ -159,9 +159,10 @@ jobs:
       - name: Build installer (ISCC)
         shell: pwsh
         run: |
+          $VERSION = "${{ env.VERSION_DESOMNIA }}" -replace '^v',''
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           & $iscc "installer\setup.iss" `
-            "/DMyAppVersion=${VERSION_DESOMNIA#v}" `
+            "/DMyAppVersion=$VERSION}" `
             "/DDisableBridge" `
             "/O${{ runner.temp }}\installer"
 
