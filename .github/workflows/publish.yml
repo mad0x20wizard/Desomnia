@@ -48,6 +48,7 @@ jobs:
             -f net${{ env.VERSION_NET }}${{ matrix.os }} \
             -c Release \
             --no-self-contained \
+            -p:DebugType=None \
             -p:DebugSymbols=false \
             -p:PublishSingleFile=false
 
@@ -58,13 +59,13 @@ jobs:
           path:  ${{ runner.temp }}/publish/
           if-no-files-found: error
 
-  build-linux:
-    name: Build DesomniaDaemon
-    runs-on: ubuntu-latest
+  # build-linux:
+  #   name: Build DesomniaDaemon
+  #   runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        arch: [ arm64, x64 ]
+  #   strategy:
+  #     matrix:
+  #       arch: [ arm64, x64 ]
 
   # build and publish docker image
 
@@ -104,6 +105,7 @@ jobs:
             -c Release \
             -r win-${{ matrix.arch }} \
             --no-self-contained \
+            -p:DebugType=None \
             -p:DebugSymbols=false \
             -p:PublishSingleFile=true \
             -p:PublishReadyToRun=true
@@ -141,6 +143,7 @@ jobs:
             -c Release `
             -r win-x64 `
             --no-self-contained `
+            -p:DebugType=None `
             -p:DebugSymbols=false `
             -p:PublishSingleFile=true `
             -p:PublishReadyToRun=true

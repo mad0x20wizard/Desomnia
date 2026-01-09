@@ -19,7 +19,7 @@ foreach ($plugin in $plugins)
 
         '--no-self-contained',
 
-        # '-p:DebugType=None', 
+        '-p:DebugType=None', 
         '-p:DebugSymbols=false',
         '-p:PublishSingleFile=false'
     )

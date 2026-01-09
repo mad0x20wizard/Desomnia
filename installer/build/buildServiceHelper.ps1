@@ -7,7 +7,7 @@ $parameters = @(
 
     '--no-self-contained',
 
-    # '-p:DebugType=None', 
+    '-p:DebugType=None', 
     '-p:DebugSymbols=false',
     '-p:PublishSingleFile=true', 
     '-p:PublishReadyToRun=true'
