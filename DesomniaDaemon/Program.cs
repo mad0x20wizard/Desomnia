@@ -11,7 +11,6 @@ using NLog;
 LogManager.Setup().SetupExtensions(ext => ext.RegisterLayoutRenderer<SleepTimeLayoutRenderer>("sleep-duration")); // FIXME
 
 const string FHS_CONFIG_PATH = "/etc/desomnia"; // Filesystem Hierarchy Standard
-const string FHS_PLUGINS_PATH = "/usr/lib/desomnia/plugins";
 
 bool autoReload = false;
 string? autoReloadPath = null;
@@ -27,7 +26,6 @@ Parser.Default.ParseArguments<CommandLineOptions>(args)
     });
 
 string configPath = new ConfigDetector(FHS_CONFIG_PATH).Lookup();
-string? pluginsPath = new PathDetector(FHS_PLUGINS_PATH, "plugins").Lookup();
 
 try
 {
@@ -45,12 +43,8 @@ try
             builder.RegisterModule<MadWizard.Desomnia.CoreModule>();
             builder.RegisterModule<MadWizard.Desomnia.Daemon.PlatformModule>();
             builder.RegisterModule<MadWizard.Desomnia.Network.Module>();
-            //builder.RegisterModule<MadWizard.Desomnia.Network.FirewallKnockOperator.PluginModule>();
 
-            if (pluginsPath is not null)
-            {
-                builder.RegisterPluginModules(pluginsPath);
-            }
+            builder.RegisterPluginModules();
 
             builder.LoadConfiguration(configPath);
 
@@ -69,6 +63,8 @@ catch (Exception)
 class DesomniaDaemonBuilder(bool useFHS = false) : MadWizard.Desomnia.ApplicationBuilder
 {
     const string FHS_LOGS_PATH = "/var/log/desomnia";
+    const string FHS_PLUGINS_PATH = "/usr/lib/desomnia/plugins";
 
     protected override string DefaultLogsPath => useFHS ? FHS_LOGS_PATH : base.DefaultLogsPath;
+    protected override string DefaultPluginsPath => useFHS ? FHS_PLUGINS_PATH : base.DefaultPluginsPath;
 }

@@ -8,10 +8,7 @@ namespace MadWizard.Desomnia
     {
         private static IEnumerable<Assembly> EnumPlugins(string path)
         {
-            //var bin = new DirectoryInfo(typeof(PluginLoadingExtensions).Assembly.Location).Parent!.FullName;
-            //var path = Path.Combine(bin, "path");
-
-            if (Directory.Exists(path))
+            if (Directory.Exists(path = Path.GetFullPath(path)))
             {
                 // extract path
                 foreach (var zipFile in Directory.GetFiles(path, "plugin-*.zip"))

@@ -26,8 +26,6 @@ if (Process.GetCurrentProcess().IsWindowsService() is bool isRunningAsService &&
 
 string configPath = new ConfigDetector().Lookup();
 
-string pluginsPath = Path.Combine(Directory.GetCurrentDirectory(), "plugins");
-
 try
 {
     if (!Environment.IsPrivilegedProcess)
@@ -56,7 +54,7 @@ try
             builder.RegisterModule<MadWizard.Desomnia.Process.Module>();
             builder.RegisterModule<MadWizard.Desomnia.Session.Module>();
 
-            builder.RegisterPluginModules(pluginsPath);
+            builder.RegisterPluginModules();
 
             builder.LoadConfiguration(configPath);
 

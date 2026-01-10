@@ -19,6 +19,7 @@ namespace MadWizard.Desomnia
         readonly List<Module> _modules = [];
 
         protected virtual string DefaultLogsPath => "${currentdir:dir=logs}";
+        protected virtual string DefaultPluginsPath => "plugins";
 
         public ApplicationBuilder()
         {
@@ -81,6 +82,11 @@ namespace MadWizard.Desomnia
         public void RegisterModule(Module module)
         {
             _modules.Add(module);
+        }
+
+        public void RegisterPluginModules()
+        {
+            this.RegisterPluginModules(DefaultPluginsPath);
         }
 
         public void LoadConfiguration(string path)
