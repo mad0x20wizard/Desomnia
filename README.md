@@ -95,3 +95,5 @@ It does the work for you, to register Desomnia as a system service, download and
 If it happens that you don't like Desomnia, the uninstaller will help you to remove everything from your system completely. For your convenience, you can run the installer again (or hit "Modify" in the system settings) to add/remove some of the optional features later on.
 
 🪄 To begin just download the latest release from GitHub and follow the steps of the 🧙 Wizard. 
+
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://coff.ee/mad0x20wizard)
