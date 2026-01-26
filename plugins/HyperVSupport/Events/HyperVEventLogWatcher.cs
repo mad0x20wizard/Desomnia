@@ -20,7 +20,7 @@ namespace MadWizard.Desomnia.Network.HyperV.Events
             }
         }
 
-        public required ILogger<HyperVManager> Logger { internal get; init; }
+        public required ILogger<HyperVEventLogWatcher> Logger { internal get; init; }
 
         EventLogWatcher Watcher { get; } = new(new EventLogQuery(LOG_NAME, PathType.LogName, XPath)
         {
@@ -49,6 +49,10 @@ namespace MadWizard.Desomnia.Network.HyperV.Events
                             case HyperVEventID.VM_SHUTDOWN:     vm.State = VirtualMachineState.Stopped;     break;
                             case HyperVEventID.VM_STOPPED:      vm.State = VirtualMachineState.Stopped;     break;
                         }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, $"Could update VM state for event ID = {record.Id}");
                     }
                     finally
                     {

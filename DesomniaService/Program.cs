@@ -18,11 +18,16 @@ if (Process.GetCurrentProcess().IsWindowsService() is bool isRunningAsService &&
     Directory.SetCurrentDirectory(applicationDir.FullName);
 
     // Delete all *.log-Files
-    foreach (string file in Directory.GetFiles(applicationDir.FullName, "*.log", SearchOption.AllDirectories))
-    {
-        File.Delete(file);
-    }
+    //foreach (string file in Directory.GetFiles(applicationDir.FullName, "*.log", SearchOption.AllDirectories))
+    //{
+    //    File.Delete(file);
+    //}
 }
+
+string logsPath = Path.Combine(Directory.GetCurrentDirectory(), "logs");
+
+const string EVENT_LOG_NAME = "Application";
+const string EVENT_LOG_SOURCE = "Desomnia";
 
 string configPath = new ConfigDetector().Lookup();
 
@@ -30,6 +35,11 @@ try
 {
     if (!Environment.IsPrivilegedProcess)
         throw new Exception("The application must be run with elevated privileges.");
+
+    if (!EventLog.SourceExists(EVENT_LOG_SOURCE))
+    {
+        EventLog.CreateEventSource(EVENT_LOG_SOURCE, EVENT_LOG_NAME);
+    }
 
     ConfigFileWatcher watcher;
 
@@ -65,18 +75,32 @@ try
 
     return 0;
 }
-catch (Exception e)
+catch (Exception ex)
 {
     if (isRunningAsService)
     {
-        File.WriteAllText(Path.Combine(Path.Combine(Directory.GetCurrentDirectory(), "logs"), "error.log"), e.ToString()); // TODO: Maybe write to EventLog?
+        try
+        {
+            EventLog.WriteEntry(EVENT_LOG_SOURCE, $"{ex}", EventLogEntryType.Error);
 
-        return 1;
+            return 1;
+        }
+        catch (Exception)
+        {
+            try
+            {
+                File.WriteAllText(Path.Combine(logsPath, "error.log"), $"{ex}");
+
+                return 1;
+            }
+            catch
+            {
+                // throw original error
+            }
+        }
     }
-    else
-    {
-        throw;
-    }
+
+    throw;
 }
 
 class DesomniaServiceBuilder() : MadWizard.Desomnia.ApplicationBuilder

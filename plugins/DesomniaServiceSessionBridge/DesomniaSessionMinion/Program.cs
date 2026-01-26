@@ -16,6 +16,8 @@ namespace MadWizard.Desomnia.Minion
 {
     static class Program
     {
+        const string EVENT_LOG_SOURCE = "Desomnia";
+
         static async Task Main(string[] args)
         {
             try
@@ -26,15 +28,25 @@ namespace MadWizard.Desomnia.Minion
                     MinionConfig config = await startup.ConnectToService(15000);
 
                     host = CreateHostBuilder(startup.PipeClient, config).Build();
+
                 }
 
                 host.Run();
 
                 Environment.Exit(0); // FIXME ?
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                File.WriteAllText($@"logs/error_minion_{Process.GetCurrentProcess().SessionId}.log", e.ToString());
+                try
+                {
+                    EventLog.WriteEntry(EVENT_LOG_SOURCE, $"{ex}", EventLogEntryType.Error);
+
+                    Environment.Exit(1);
+                }
+                catch (Exception exEventLog)
+                {
+                    throw new Exception(exEventLog.Message, ex);
+                }
             }
         }
 
