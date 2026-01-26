@@ -17,6 +17,8 @@
   
   font-size: 1.25em;
 
+  margin-top: 0.45rem;
+
   &::before
   {
     content: '';
@@ -30,7 +32,7 @@
     background-position: center;
     background-repeat: no-repeat;
     background-size: 100%;
-    
+
     image-rendering: pixelated;
 
   }
