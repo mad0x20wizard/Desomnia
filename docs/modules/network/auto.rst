@@ -1,2 +1,2 @@
-Auto configuration
+Auto-configuration
 ==================

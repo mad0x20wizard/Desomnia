@@ -1,3 +1,12 @@
+@font-face
+{
+  font-family: 'VCR OSD Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/VCR_OSD_Mono.woff') format('woff');
+}
+
 .wy-side-nav-search a
 {
   display: flex !important;
@@ -5,7 +14,8 @@
   align-items: center;
   gap: 0.5em;
   
-  font-family: 'Consolas', monospace;
+  font-family: 'VCR OSD Mono', monospace;
+  font-weight: normal;
   font-size: 1.5em;
 
   margin-top: 0.45rem;

@@ -5,12 +5,10 @@ Network Monitor
 
 .. toctree::
    auto
-   configuration
    ipv6
-   performance
    promiscuous
-   reference
-   spoofing
-   troubleshooting
+   performance
    virtual
    vpn
+   troubleshooting
+   reference

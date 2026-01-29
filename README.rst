@@ -151,7 +151,7 @@ How to get started
 🪟 Windows
 ~~~~~~~~~~
 
-A considerable amount of development time was invested to provide you with a sophisticated installer, that allows you to set everything up and running in a minute.
+The easiest way to setup Desomnia on Windows is to use it's installer, which allows you to set everything up and running in a minute.
 
 It does the work for you, to register Desomnia as a system service, download and install all necessary dependencies and guide you through a basic configuration of the parameters. Nevertheless, you are encouraged to 🚧 `Read the Docs <https://desomnia.readthedocs.io/>`__ to discover, what Desomnia can do for you and how to configure it.
 

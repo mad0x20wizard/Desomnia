@@ -14,6 +14,7 @@
    :caption: Guides
 
    /guides/quick
+   /guides/wakeonlan
 
 .. toctree::
    :maxdepth: 2
@@ -37,7 +38,7 @@
    :maxdepth: 2
    :caption: Plugins
 
-   /plugins/bridge
-   /plugins/duostream
    /plugins/fko
    /plugins/hyperv
+   /plugins/duo
+   /plugins/bridge

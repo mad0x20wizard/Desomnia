@@ -12,40 +12,42 @@ In order to be able to run Desomnia on your system, you will need the .NET Runti
 
     curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 10.0 -runtime dotnet --install-dir /usr/share/dotnet
 
+For the monitoring of network services the `libpcap`_ library is used, which is usually already installed on most distributions.
+
 Filesystem layout
 -----------------
 
-There is nothing wrong in using Desomnia in portable mode with everything residing in the same directory. But for a persistent installation, you are encouraged to use these locations in alignment with the Filesystem Hierarchy Standard (FHS) on Unix systems:
+There is nothing wrong in using Desomnia in portable mode with everything residing in the same directory. But for a persistent installation, you are encouraged to use these locations in alignment with the `Filesystem Hierarchy Standard <https://en.wikipedia.org/wiki/Filesystem_Hierarchy_Standard>`_ (FHS) on Unix systems:
 
-/usr/sbin`
+/usr/sbin
     Drop the appropriate executable for your platform and architecture into this location, so it can be automatically found. Don't forget to set the necessary executable permission on the file with ``chmod +x /usr/sbin/desomniad``.
 
-/etc/desomnia
-    In this location you can put the ``config.xml``, which will tell ARPergefactor how to act. You can also create a ``NLog.config`` file here, to configure additional logging, beside the console output.
-
-/var/log/desomnia
-    Here you will find the log files, if you enabled file [[logging]] in the NLog.config and used ``${var:logDir}`` as base path. 
+.. include:: ./shared_dirs.rst
 
 Service configuration
 ---------------------
 
-In order for automatic restart, we have to ...
+In order for systemd to manage the automatic start and stop of the service, we need to create a service unit, describing how to start the service.
 
 /etc/systemd/system/desomnia.service
-    If you followed the previous steps, you can create a new systemd service configuration, to have ARPergefactor automatically started every time the system starts:
-
     .. code:: ini
 
         [Unit]
-        Description=ARPergefactor
+        Description=Desomnia
 
         [Service]
-        ExecStartPre=find /var/log/arpergefactor/ -type f -delete
-        ExecStart=arpergefactor
+        ExecStartPre=find /var/log/desomnia/ -type f -delete
+        ExecStart=desomniad
         Restart=always
         RestartSec=5
 
         [Install]
         WantedBy=multi-user.target
 
-    You can use that `ExecStartPre` statement, to make sure that the log folder is cleaned every time when the application starts. I used it mostly for debugging purposes.
+    You can use that ``ExecStartPre`` statement, to make sure that the log folder is cleaned every time when the application starts. I use this mostly for debugging purposes.
+
+After you created or changed the configuration file, you have to reload systemd with ``systemctl daemon-reload``. If you want that Desomnia is started with the system, you have to enable it with ``systemctl enable desomnia``. In any case you can start Desomnia with ``systemctl start desomnia`` and stop it gracefully with ``systemctl stop desomnia``.
+
+To see the latest INFO logging, use ``journalctl -u desomnia -f -n 80``. Here you can see which hosts have received a Magic Packet recently and why.
+
+.. _`libpcap`: https://github.com/the-tcpdump-group/libpcap
