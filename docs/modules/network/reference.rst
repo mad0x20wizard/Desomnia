@@ -94,7 +94,8 @@ Describes the network to capture traffic on. You can specify a single IP address
 autoDetect
 ++++++++++
 
-:default: nothing
+:inherited: 
+:default: ``nothing``
 
 Desomnia can try to automatically discover the shape of your network. The values ``MAC``, ``IPv4``, ``IPv6`` and ``Services`` are inherited by all the configured hosts, while ``Router`` and ``SleepProxy`` tell Desomnia to discover the respective network entities. You can freely combine all the different values with the pipe operator or separate them by comma. The outcome of the discovery process will vary according to the installed plugins and the possibilities of your individual network.
 
@@ -117,22 +118,23 @@ The following entities are available for auto-configuration:
 
 Alternatively you may specify either ``nothing`` or ``everything`` in order to disable auto-configuration or to try to discover as much as possible.
 
+autoTimeout
++++++++++++
+
+:default: ``5s``
+
+Defines the timeout, after which a single request to a name or address resolution authority (e.g. ARP, NDP, DNS, WINS, etc.) will be cancelled and the configurable entity considered as unknown.
+
 autoLatency
 +++++++++++
 
 Defines the time span during which expired IP addresses may still linger in the cache of the application. Effectively this sets a timer at which interval all automatically detected IP addresses are discarded and fresh ones will be queried from the available name resolution authorities. This is an optional feature, so there is no default value.
 
-autoTimeout
-+++++++++++
-
-:default: 5s
-
-Defines the timeout, after which a single request to a name or address resolution authority (e.g. ARP, NDP, DNS, WINS, etc.) will be cancelled and the configurable entity considered as unknown.
-
 advertise
 ++++++++++
 
-:default: lazy
+:inherited:
+:default: ``lazy``
 
 This option controls when your system should advertise an IP address, that is not it's own. This only makes sense when the Network Monitor is in promiscuous mode, or when there are offline/suspended virtual machines. You can mix and match all the options using the pipe operator, or separate them with a comma.
 
@@ -168,13 +170,26 @@ For your convenience there are two practical short hand notations:
 advertiseIfStopped
 ++++++++++++++++++
 
-:default: true
+:inherited:
+:default: ``true``
 
 This options only affects remote hosts. Because there is no standard way of determining whether a remote host has been suspended or turned off without the host itself informing us, we have to assume that it stopped per default. A suspension can only reliably be detected if the remote host is running an instance of Desomnia or a Sleep Proxy client. You can then turn this off in order to prevent addresses for offline systems from being advertised.
 
 pingTimeout
++++++++++++
 
-  Defines the timeout, after which a single host will be considered as unreachable, after a ARP request, NDP solicitation of ICMP echo request remain without reply. The default value is ``500ms``. Decrease this value to accelerate WakeRequests in general. Increase this timeout to reduce the possibility of unnecessarily executed WakeRequests on a lagging network.
+:inherited:
+:default: ``500ms``
+
+Defines the timeout, after which a single host will be considered as unreachable, after a ARP request, NDP solicitation or ICMP echo request remain without reply. Decrease this value to accelerate WakeRequests in general. Increase this timeout to reduce the possibility of unnecessarily executed WakeRequests on a lagging network.
+
+pingFrequency
++++++++++++++
+
+:inherited:
+
+Lore ipsum.
+
 
 poseTimeout
 

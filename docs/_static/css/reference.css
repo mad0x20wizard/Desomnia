@@ -1,0 +1,25 @@
+#reference
+{
+    dl.field-list
+    {
+        dt:has(+ dd p:not(:empty))
+        {
+            .colon
+            {
+                display: unset;
+                color: transparent;
+                user-select: none;
+
+                &::before
+                {
+                    content: "=";
+                    margin-left: 12px;
+                    margin-right: -4px;
+                    color: black;
+                    font-weight: bold;
+                }
+            }
+        }
+    }
+}
+
