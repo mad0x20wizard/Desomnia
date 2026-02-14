@@ -1,7 +1,11 @@
 Automatic Wake-on-LAN
 =====================
 
+:OS: 🪐 *Platform-independent*
+
 One of Desomnia's primary modes of operation is to wake up remote hosts via the network based on automatic usage detection. In order for this to work, the program uses a OS-native userland packet capturing library to detect when you want to access a remote service and take an apropriate action, without any additional conscious effort on your part.
+
+As the :doc:`/modules/network/monitor` module is available on all major platforms, this feature works independently of the underlying operating system.
 
 Where to start?
 ---------------

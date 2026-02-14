@@ -1,5 +1,5 @@
-Reference
-=========
+Configuration reference
+=======================
 
 This reference has been created to allow you to easily see all the available configuration options of Desomnia at a glance, as opposed to the rather prosaic explanations on the other pages.
 
@@ -654,6 +654,8 @@ This rule configures the embedded packet filter to either include or exclude req
 
    </HostFilterRule>
 
+.. include:: /attributes/filtertype.rst
+
 name
 ++++
 
@@ -676,6 +678,8 @@ This rule configures the embedded packet filter to either include or exclude req
     lastIP="192.168.178.20">
 
   </HostFilterRule>
+
+.. include:: /attributes/filtertype.rst
 
 name
 ++++
@@ -700,6 +704,8 @@ The ``<ForeignHostFilterRule>`` does not have any attributes, besides the mandat
     <DynamicHostRange name="dynamic" ... /> <!-- this is a shortcut -->
 
   </ForeignHostFilterRule>
+
+.. include:: /attributes/filtertype.rst
 
 .. note::
 
@@ -728,6 +734,8 @@ This rule configures the embedded packet filter to either include or exclude req
      <HostRangeFilterRule ... />
 
    </ServiceFilterRule>
+
+.. include:: /attributes/filtertype.rst
 
 name
 ++++
@@ -790,6 +798,8 @@ RequestFilterRule
 
   </RequestFilterRule>
 
+.. include:: /attributes/filtertype.rst
+
 method
 ++++++
 
@@ -818,6 +828,8 @@ This filter checks for the presence of an ICMP echo request. There are no furthe
 .. code:: xml
 
    <PingFilterRule type="MustNot" />
+
+.. include:: /attributes/filtertype.rst
 
 Service
 -------

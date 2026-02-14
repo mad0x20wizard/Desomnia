@@ -130,12 +130,17 @@ Exploring the core modules
 
 The following monitors can be used without the need to install additional plugins. Each of these has it's own chapter in the documentation, so we will only briefly describe their purpose and how they relate to the built-in power management:
 
+``<SystemMonitor>``
++++++++++++++++++++
+
+This monitor acts as a meta-monitor and container for the actual usage monitors. It provides events and actions that enable you to customise your system’s sleep behaviour. Read more about the :doc:`/modules/system/monitor` to understand its role in Desomnia’s basic architecture.
+
 ``<SessionMonitor>``
 ++++++++++++++++++++
 
 Usually the system will be be considered non-idle and stay awake for as long as an actual user is interacting with the computer. Windows uses various indicators to determine this, such as mouse and keyboard activity.
 
-If you activate this monitor, it will track the activity of user sessions and their idle time will contribute to the system's overall idle state. Read more about how to configure the :doc:`/modules/session/monitor` to constrain this behaviour to individual user accounts, and how to use session events. For exmaple: to automatically log out idle sessions.
+If you activate this monitor, it will track the activity of user sessions and their idle time will contribute to the system's overall idle state. Read more about how to configure the :doc:`/modules/session/monitor` to constrain this behaviour to individual user accounts, and how to use session events. For example, you can set it up to automatically log out idle sessions or to stop idle processes.
 
 ``<NetworkSessionMonitor>``
 +++++++++++++++++++++++++++
@@ -145,7 +150,7 @@ You can configure this monitor if you want the system to stay awake while someon
 ``<PowerRequestMonitor>``
 +++++++++++++++++++++++++
 
-Any process or system driver can request the system to stay awake. If you configure this monitor, any active power requests will render the system as non-idle. Read more about how to configure the :doc:`/modules/power/monitor` to add filters that either exclude requests or allow specific ones only.
+Any process or system driver can request the system to stay awake. If you configure this monitor, active power requests will render the system as non-idle. Read more about how to configure the :doc:`/modules/power/monitor` to add filters that either exclude requests or allow specific ones only.
 
 ``<ProcessMonitor>``
 ++++++++++++++++++++
@@ -155,4 +160,4 @@ The built-in power management system does not provide any means to keep the syst
 ``<NetworkMonitor>``
 ++++++++++++++++++++
 
-The features of this monitor go beyond basic idle checks, but enable you to orchestrate entire network infrastructures. It achieves this by using packet-capturing techniques to dynamically detect when local or remote services are accessed, enabling you to switch their hosts on and off as required. There is a dedicated guide explaining how to do :doc:`wake`. Alternatively you can learn more about how to configure the :doc:`/modules/network/monitor` in order to watch local network services and prevent the system from going to sleep while they are in use.
+The features of this monitor go beyond basic idle checks and enable you to orchestrate entire network infrastructures. It achieves this by using packet-capturing techniques to dynamically detect when local or remote services are accessed, enabling you to switch their hosts on and off as required. There is a dedicated guide explaining how to do :doc:`wake`. Alternatively you can learn more about how to configure the :doc:`/modules/network/monitor` in order to watch local network services and prevent the system from going to sleep while they are in use.
