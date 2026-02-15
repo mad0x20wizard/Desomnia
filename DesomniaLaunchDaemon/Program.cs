@@ -9,9 +9,9 @@ using NLog;
 
 LogManager.Setup().SetupExtensions(ext => ext.RegisterLayoutRenderer<SleepTimeLayoutRenderer>("sleep-duration")); // FIXME
 
-const string AFS_CONFIG_PATH = "/Library/Application Support/Desomnia/config"; // Apple Filesystem Standard
+const string HOMEBREW_CONFIG_PATH = "/opt/homebrew/etc/desomnia"; // Homebrew config location
 
-string configPath = new ConfigDetector(AFS_CONFIG_PATH).Lookup();
+string configPath = new ConfigDetector(HOMEBREW_CONFIG_PATH).Lookup();
 
 try
 {
@@ -24,7 +24,7 @@ try
     {
         using (new SystemMutex("MadWizard.Desomnia", true)) using (watcher = new(configPath) { EnableRaisingEvents = false })
         {
-            var builder = new DesomniaLaunchDaemonBuilder(useAFS: configPath.StartsWith(AFS_CONFIG_PATH));
+            var builder = new DesomniaLaunchDaemonBuilder(useHomebrew: configPath.StartsWith(HOMEBREW_CONFIG_PATH));
 
             builder.RegisterModule<MadWizard.Desomnia.CoreModule>();
             builder.RegisterModule<MadWizard.Desomnia.LaunchDaemon.PlatformModule>();
@@ -45,9 +45,9 @@ catch (Exception)
     throw;
 }
 
-class DesomniaLaunchDaemonBuilder(bool useAFS = false) : MadWizard.Desomnia.ApplicationBuilder
+class DesomniaLaunchDaemonBuilder(bool useHomebrew = false) : MadWizard.Desomnia.ApplicationBuilder
 {
-    const string AFS_LOGS_PATH = "/Library/Logs/Desomnia";
+    const string AFS_LOGS_PATH = "/opt/homebrew/var/log/desomnia";
 
-    protected override string DefaultLogsPath => useAFS ? AFS_LOGS_PATH : base.DefaultLogsPath;
+    protected override string DefaultLogsPath => useHomebrew ? AFS_LOGS_PATH : base.DefaultLogsPath;
 }
