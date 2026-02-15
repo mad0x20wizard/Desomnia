@@ -15,7 +15,7 @@ string configPath = new ConfigDetector(HOMEBREW_CONFIG_PATH).Lookup();
 
 try
 {
-    if (!MacOSHelper.IsRoot)
+    if (!Environment.IsPrivilegedProcess)
         throw new Exception("The application must be run with root privileges.");
 
     ConfigFileWatcher watcher;
