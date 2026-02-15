@@ -359,28 +359,21 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: installer
+          name: windows_installer
           path:  ${{ runner.temp }}/installer/
           if-no-files-found: error
 
   release:
     name: Create Release
-    needs: [ build-windows-installer ]
+    needs: [ build-windows-installer, build-macos, build-linux ]
     runs-on: ubuntu-latest
     steps:
       # Download everything you want to publish as release assets
-      - name: Download installer
+      - name: Download windows installer
         uses: actions/download-artifact@v4
         with:
-          name: installer
+          name: windows_installer
           path: ${{ runner.temp }}
-
-      - name: Download installer
-        uses: actions/download-artifact@v4
-        with:
-          name: installer
-          path: ${{ runner.temp }}
-
 
       # (Optional) If you need to re-zip folders into single distributables, do it here. 
 
@@ -392,8 +385,9 @@ jobs:
       - name: Create platform-specific archives
         shell: bash
         run: |
-          VERSION="${{ env.VERSION_DESOMNIA }}" 
+          VERSION="${{ env.VERSION_DESOMNIA }}"
           VERSION="${VERSION#v}"
+
           cd ${{ runner.temp }}/artifacts
           
           for platform in windows linux macos; do
