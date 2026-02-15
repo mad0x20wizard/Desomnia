@@ -1,6 +1,5 @@
 ﻿using Autofac;
 using MadWizard.Desomnia;
-using MadWizard.Desomnia.LaunchDaemon.Tools;
 using MadWizard.Desomnia.Logging;
 using Microsoft.Extensions.Hosting;
 using NLog;
