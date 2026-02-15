@@ -365,7 +365,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [ build-windows-installer, build-windows, build-macos, build-linux, build-plugins ]
+    needs: [ build-windows-installer, build-macos, build-linux ]
     runs-on: ubuntu-latest
     steps:
       # Download everything you want to publish as release assets
