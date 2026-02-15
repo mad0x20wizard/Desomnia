@@ -365,7 +365,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [ build-windows-installer, build-macos, build-linux ]
+    needs: [ build-windows-installer, build-windows, build-macos, build-linux, build-plugins ]
     runs-on: ubuntu-latest
     steps:
       # Download everything you want to publish as release assets
@@ -375,12 +375,17 @@ jobs:
           name: windows_installer
           path: ${{ runner.temp }}
 
-      # (Optional) If you need to re-zip folders into single distributables, do it here. 
-
-      - name: Download all artifacts
+      - name: Download main artifacts
         uses: actions/download-artifact@v4
         with:
-          path: ${{ runner.temp }}/artifacts
+          pattern: "*_{x64,arm64}"
+          path: ${{ runner.temp }}/main
+      - name: Download plugin artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: plugin-*
+          path: ${{ runner.temp }}/plugins
+          merge-multiple: true
 
       - name: Create platform-specific archives
         shell: bash
@@ -388,16 +393,45 @@ jobs:
           VERSION="${{ env.VERSION_DESOMNIA }}"
           VERSION="${VERSION#v}"
 
-          cd ${{ runner.temp }}/artifacts
+          cd ${{ runner.temp }}/main
           
           for platform in windows linux macos; do
             for dir in ${platform}_*/; do
               if [ -d "$dir" ]; then
                 arch="${dir%/}"
                 arch="${arch#${platform}_}"
-                zip -r "${{ runner.temp }}/Desomnia_${platform}_${VERSION}_${arch}.zip" "$dir"
+
+                out="${{ runner.temp }}/Desomnia_${VERSION}_${platform}-${arch}.zip"
+
+                (
+                  cd "$dir" || exit 1
+                  # zip the *contents* of the dir, not the dir itself
+                  zip -r "$out" .
+                )
               fi
             done
+          done
+
+          # Create universal macOS archive with both architectures
+          if [ -d "macos_x64" ] && [ -d "macos_arm64" ]; then
+            mkdir -p "${{ runner.temp }}/macos_universal"
+            mkdir -p "${{ runner.temp }}/macos_universal/x64"
+            mkdir -p "${{ runner.temp }}/macos_universal/arm64"
+            cp -r macos_x64/* "${{ runner.temp }}/macos_universal/x64/"
+            cp -r macos_arm64/* "${{ runner.temp }}/macos_universal/arm64/"
+            (
+              cd "${{ runner.temp }}/macos_universal"
+              zip -r "${{ runner.temp }}/Desomnia_${VERSION}_macos.zip" .
+            )
+          fi
+
+          cd ${{ runner.temp }}/plugins
+
+          for plugin_dir in */; do
+            if [ -d "$plugin_dir" ]; then
+              plugin_name="${plugin_dir%/}"
+              zip -r "${{ runner.temp }}/plugin-${plugin_name}_${VERSION}.zip" "$plugin_dir"
+            fi
           done
 
       - name: Create GitHub Release and upload assets
@@ -409,3 +443,26 @@ jobs:
           #generate_release_notes: true
           files: |
             ${{ runner.temp }}/Desomnia_*
+            ${{ runner.temp }}/plugin-*.zip
+
+  release-homebrew:
+    name: Bump Homebrew formula
+    needs: [ release ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME}"     # v3.0.0-beta5
+          VERSION="${TAG#v}"           # 3.0.0-beta5
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Bump Homebrew formula in custom tap
+        uses: mislav/bump-homebrew-formula-action@v3
+        with:
+          formula-name: desomnia
+          homebrew-tap: mad0x20wizard/homebrew-tools
+          # If your asset name follows your tag, you can compute the URL like this:
+          download-url: https://github.com/mad0x20wizard/Desomnia/releases/download/${{ github.ref_name }}/Desomnia_${{ steps.version.outputs.version }}_macos.zip
+        env:
+          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
