@@ -45,7 +45,11 @@ catch (Exception)
 
 class DesomniaLaunchDaemonBuilder(bool useHomebrew = false) : MadWizard.Desomnia.ApplicationBuilder
 {
-    const string AFS_LOGS_PATH = "/opt/homebrew/var/log/desomnia";
+    const string HOMEBREW_LOGS_PATH = "/opt/homebrew/var/log/desomnia";
 
-    protected override string DefaultLogsPath => useHomebrew ? AFS_LOGS_PATH : base.DefaultLogsPath;
+    const string HOMEBREW_CORE_PLUGINS_PATH = "/opt/homebrew/opt/desomnia/lib/plugins";
+    const string HOMEBREW_USER_PLUGINS_PATH = "/opt/homebrew/var/lib/desomnia/plugins";
+
+    protected override string DefaultLogsPath => useHomebrew ? HOMEBREW_LOGS_PATH : base.DefaultLogsPath;
+    protected override string[] DefaultPluginsPaths => useHomebrew ? [HOMEBREW_CORE_PLUGINS_PATH, HOMEBREW_USER_PLUGINS_PATH] : base.DefaultPluginsPaths;
 }

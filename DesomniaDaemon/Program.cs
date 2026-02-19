@@ -66,5 +66,5 @@ class DesomniaDaemonBuilder(bool useFHS = false) : MadWizard.Desomnia.Applicatio
     const string FHS_PLUGINS_PATH = "/usr/lib/desomnia/plugins";
 
     protected override string DefaultLogsPath => useFHS ? FHS_LOGS_PATH : base.DefaultLogsPath;
-    protected override string DefaultPluginsPath => useFHS ? FHS_PLUGINS_PATH : base.DefaultPluginsPath;
+    protected override string[] DefaultPluginsPaths => useFHS ? [FHS_PLUGINS_PATH] : base.DefaultPluginsPaths;
 }
