@@ -375,7 +375,7 @@ jobs:
     runs-on: ubuntu-latest
     
     # Building macOS bottles is expensive, so we only update the Homebrew formula for stable releases.
-    if: ${{ ! (contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta')) }}
+    # if: ${{ ! (contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta')) }}
     
     steps:
       - name: Update Homebrew formula
