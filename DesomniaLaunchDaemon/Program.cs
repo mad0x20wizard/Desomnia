@@ -6,6 +6,8 @@ using NLog;
 
 //await MadWizard.Desomnia.Test.Debugger.UntilAttached();
 
+// TEST
+
 LogManager.Setup().SetupExtensions(ext => ext.RegisterLayoutRenderer<SleepTimeLayoutRenderer>("sleep-duration")); // FIXME
 
 const string HOMEBREW_CONFIG_PATH = "/opt/homebrew/etc/desomnia"; // Homebrew config location
