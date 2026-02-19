@@ -214,42 +214,6 @@ jobs:
         run: |
           docker buildx imagetools inspect ${{ vars.DOCKERHUB_IMAGE }}:${{ steps.meta.outputs.version }}
 
-  build-macos:
-    name: Build DesomniaLaunchDaemon
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        arch: [ arm64, x64 ]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '${{ env.VERSION_NET }}.x'
-          
-      - name: Publish DesomniaLaunchDaemon (${{ matrix.arch }})
-        run: |
-          dotnet publish DesomniaLaunchDaemon/DesomniaLaunchDaemon.csproj \
-            -o ${{ runner.temp }}/publish \
-            -f net${{ env.VERSION_NET }} \
-            -c Release \
-            -r osx-${{ matrix.arch }} \
-            --no-self-contained \
-            -p:DebugSymbols=false \
-            -p:PublishSingleFile=true \
-            -p:PublishReadyToRun=true
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos_${{ matrix.arch }}
-          path:  ${{ runner.temp }}/publish/desomniad
-          if-no-files-found: error
-
   build-windows:
     name: Build DesomniaService
     runs-on: ubuntu-latest
@@ -364,22 +328,15 @@ jobs:
           if-no-files-found: error
 
   release:
-    name: Create Release
-    needs: [ build-windows-installer, build-macos, build-linux ]
+    name: Create release
+    needs: [ build-windows-installer, build-linux ]
     runs-on: ubuntu-latest
     steps:
-      # Download everything you want to publish as release assets
-      - name: Download windows installer
+      - name: Download Windows installer
         uses: actions/download-artifact@v4
         with:
           name: windows_installer
           path: ${{ runner.temp }}
-
-      - name: Download main artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: "*_{x64,arm64}"
-          path: ${{ runner.temp }}/main
       - name: Download plugin artifacts
         uses: actions/download-artifact@v4
         with:
@@ -387,43 +344,11 @@ jobs:
           path: ${{ runner.temp }}/plugins
           merge-multiple: true
 
-      - name: Create platform-specific archives
+      - name: Create plugin archives
         shell: bash
         run: |
           VERSION="${{ env.VERSION_DESOMNIA }}"
           VERSION="${VERSION#v}"
-
-          cd ${{ runner.temp }}/main
-          
-          for platform in windows linux macos; do
-            for dir in ${platform}_*/; do
-              if [ -d "$dir" ]; then
-                arch="${dir%/}"
-                arch="${arch#${platform}_}"
-
-                out="${{ runner.temp }}/Desomnia_${VERSION}_${platform}-${arch}.zip"
-
-                (
-                  cd "$dir" || exit 1
-                  # zip the *contents* of the dir, not the dir itself
-                  zip -r "$out" .
-                )
-              fi
-            done
-          done
-
-          # Create universal macOS archive with both architectures
-          if [ -d "macos_x64" ] && [ -d "macos_arm64" ]; then
-            mkdir -p "${{ runner.temp }}/macos_universal"
-            mkdir -p "${{ runner.temp }}/macos_universal/x64"
-            mkdir -p "${{ runner.temp }}/macos_universal/arm64"
-            cp -r macos_x64/* "${{ runner.temp }}/macos_universal/x64/"
-            cp -r macos_arm64/* "${{ runner.temp }}/macos_universal/arm64/"
-            (
-              cd "${{ runner.temp }}/macos_universal"
-              zip -r "${{ runner.temp }}/Desomnia_${VERSION}_macos.zip" .
-            )
-          fi
 
           cd ${{ runner.temp }}/plugins
 
@@ -442,27 +367,21 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') }}
           #generate_release_notes: true
           files: |
-            ${{ runner.temp }}/Desomnia_*
+            ${{ runner.temp }}/Desomnia_*.exe
             ${{ runner.temp }}/plugin-*.zip
 
   release-homebrew:
-    name: Bump Homebrew formula
-    needs: [ release ]
+    name: Create Homebrew release
     runs-on: ubuntu-latest
+    
+    # Building macOS bottles is expensive, so we only update the Homebrew formula for stable releases.
+    if: ${{ ! (contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta')) }}
+    
     steps:
-      - name: Extract version
-        id: version
-        run: |
-          TAG="${GITHUB_REF_NAME}"     # v3.0.0-beta5
-          VERSION="${TAG#v}"           # 3.0.0-beta5
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Bump Homebrew formula in custom tap
-        uses: mislav/bump-homebrew-formula-action@v3
+      - name: Update Homebrew formula
+        uses: dawidd6/action-homebrew-bump-formula@v7
         with:
-          formula-name: desomnia
-          homebrew-tap: mad0x20wizard/homebrew-tools
-          # If your asset name follows your tag, you can compute the URL like this:
-          download-url: https://github.com/mad0x20wizard/Desomnia/releases/download/${{ github.ref_name }}/Desomnia_${{ steps.version.outputs.version }}_macos.zip
-        env:
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          tap: mad0x20wizard/homebrew-tools
+          formula: desomnia
+          no_fork: true
