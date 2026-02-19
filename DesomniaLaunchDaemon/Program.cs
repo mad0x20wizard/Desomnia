@@ -28,7 +28,6 @@ try
             builder.RegisterModule<MadWizard.Desomnia.CoreModule>();
             builder.RegisterModule<MadWizard.Desomnia.LaunchDaemon.PlatformModule>();
             builder.RegisterModule<MadWizard.Desomnia.Network.Module>();
-            builder.RegisterModule<MadWizard.Desomnia.Network.FirewallKnockOperator.PluginModule>();
 
             builder.LoadConfiguration(configPath);
 

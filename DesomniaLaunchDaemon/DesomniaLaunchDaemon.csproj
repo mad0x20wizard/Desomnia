@@ -18,7 +18,6 @@
   <ItemGroup>
     <ProjectReference Include="..\DesomniaCore\DesomniaCore.csproj" />
     <ProjectReference Include="..\modules\NetworkMonitor\NetworkMonitor.csproj" />
-    <ProjectReference Include="..\plugins\FirewallKnockOperator\FirewallKnockOperator.csproj" />
   </ItemGroup>
 
   <ItemGroup>
