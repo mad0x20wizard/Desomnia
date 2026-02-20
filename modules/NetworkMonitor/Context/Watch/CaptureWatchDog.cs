@@ -20,7 +20,6 @@ namespace MadWizard.Desomnia.Network.Context.Watch
         CancellationTokenSource? _cancel = null;
         DateTime _lastTimeReceived = DateTime.Now;
         bool _hasTestedRouterReachability = false;
-        bool _hasRestartedCapture = false;
 
         #region NetworkService
         void INetworkService.Resume()
@@ -72,26 +71,13 @@ namespace MadWizard.Desomnia.Network.Context.Watch
                             _hasTestedRouterReachability = true;
                         }
 
-                        if (_hasRestartedCapture)
-                        {
-                            Logger.LogWarning($"Received NO packets on device '{Device.Name}' for {timeout}, reconfiguring network monitors...");
+                        Logger.LogWarning($"Received NO packets on device '{Device.Name}' for {timeout}, reconfiguring network monitors...");
 
-                            await Observer.ReconfigureNetworkMonitors();
-                        }
-                        else
-                        {
-                            Logger.LogWarning($"Received NO packets on device '{Device.Name}' for {timeout}, restarting capture...");
-
-                            Device.StopCapture();
-                            Device.StartCapture();
-
-                            _hasRestartedCapture = true;
-                        }
+                        await Observer.ReconfigureNetworkMonitors();
                     }
                     else
                     {
                         _hasTestedRouterReachability = false;
-                        _hasRestartedCapture = false;
                     }
                 }
                 catch (TaskCanceledException)
