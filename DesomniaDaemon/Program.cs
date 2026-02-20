@@ -63,8 +63,10 @@ catch (Exception)
 class DesomniaDaemonBuilder(bool useFHS = false) : MadWizard.Desomnia.ApplicationBuilder
 {
     const string FHS_LOG_PATH = "/var/log/desomnia";
-    const string FHS_PLUGINS_PATH = "/usr/lib/desomnia/plugins";
+
+    const string FHS_CORE_PLUGINS_PATH = "/usr/lib/desomnia/plugins";
+    const string FHS_USER_PLUGINS_PATH = "/var/lib/desomnia/plugins";
 
     protected override string DefaultLogPath => useFHS ? FHS_LOG_PATH : base.DefaultLogPath;
-    protected override string[] DefaultPluginsPaths => useFHS ? [FHS_PLUGINS_PATH] : base.DefaultPluginsPaths;
+    protected override string[] DefaultPluginsPaths => useFHS ? [FHS_CORE_PLUGINS_PATH, FHS_USER_PLUGINS_PATH] : base.DefaultPluginsPaths;
 }
