@@ -28,7 +28,7 @@ string configPath = new ConfigDetector().Lookup();
 try
 {
     if (!Environment.IsPrivilegedProcess)
-        throw new Exception("The application must be run with elevated privileges.");
+        throw new NotSupportedException("The application must be run with elevated privileges.");
 
     if (!EventLog.SourceExists(EVENT_LOG_SOURCE))
     {

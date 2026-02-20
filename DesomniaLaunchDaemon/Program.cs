@@ -10,12 +10,10 @@ LogManager.Setup().SetupExtensions(ext => ext.RegisterLayoutRenderer<SleepTimeLa
 
 string configPath = new ConfigDetector().Lookup();
 
-Console.WriteLine(configPath);
-
 try
 {
     if (!Environment.IsPrivilegedProcess)
-        throw new Exception("The application must be run with root privileges.");
+        throw new NotSupportedException("The application must be run with root privileges.");
 
     ConfigFileWatcher watcher;
 

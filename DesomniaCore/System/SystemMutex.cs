@@ -18,7 +18,7 @@
             {
                 if (!_mutex.WaitOne(0, exitContext: false)) // 0ms -> non-blocking: true if we acquired it (no other instance holds it)
                 {
-                    throw new WaitHandleCannotBeOpenedException($"Another instance is already running ({type} '{name}' is held by another process).");
+                    throw new NotSupportedException($"Another instance is already running ({type} '{name}' is held by another process).");
                 }
 
                 //Logger.LogDebug("Successfully acquired {type}: '{name}'", type, name);

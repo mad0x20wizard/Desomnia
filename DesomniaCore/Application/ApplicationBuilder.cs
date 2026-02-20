@@ -19,11 +19,11 @@ namespace MadWizard.Desomnia
 
         readonly List<Module> _modules = [];
 
-        protected virtual string DefaultLogsPath
+        protected virtual string DefaultLogPath
         {
             get
             {
-                if (Environment.GetEnvironmentVariable("DESOMNIA_LOGS_DIR") is string logs)
+                if (Environment.GetEnvironmentVariable("DESOMNIA_LOG_DIR") is string logs)
                     return logs;
 
                 return "${currentdir:dir=logs}";
@@ -69,7 +69,7 @@ namespace MadWizard.Desomnia
             {
                 if (!config.Variables.ContainsKey("logDir"))
                 {
-                    config.Variables["logDir"] = "${currentdir:dir=logs}";
+                    config.Variables["logDir"] = DefaultLogPath;
                 }
             }
             else

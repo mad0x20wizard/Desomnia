@@ -30,7 +30,7 @@ string configPath = new ConfigDetector(FHS_CONFIG_PATH).Lookup();
 try
 {
     if (!Environment.IsPrivilegedProcess)
-        throw new Exception("The application must be run with root privileges.");
+        throw new NotSupportedException("The application must be run with root privileges.");
 
     ConfigFileWatcher watcher;
 
@@ -62,9 +62,9 @@ catch (Exception)
 
 class DesomniaDaemonBuilder(bool useFHS = false) : MadWizard.Desomnia.ApplicationBuilder
 {
-    const string FHS_LOGS_PATH = "/var/log/desomnia";
+    const string FHS_LOG_PATH = "/var/log/desomnia";
     const string FHS_PLUGINS_PATH = "/usr/lib/desomnia/plugins";
 
-    protected override string DefaultLogsPath => useFHS ? FHS_LOGS_PATH : base.DefaultLogsPath;
+    protected override string DefaultLogPath => useFHS ? FHS_LOG_PATH : base.DefaultLogPath;
     protected override string[] DefaultPluginsPaths => useFHS ? [FHS_PLUGINS_PATH] : base.DefaultPluginsPaths;
 }
