@@ -4,7 +4,7 @@ using MadWizard.Desomnia.Logging;
 using Microsoft.Extensions.Hosting;
 using NLog;
 
-//await MadWizard.Desomnia.Test.Debugger.UntilAttached();
+//await MadWizard.Desomnia.Test.Debugger.UntilAttached(); //
 
 LogManager.Setup().SetupExtensions(ext => ext.RegisterLayoutRenderer<SleepTimeLayoutRenderer>("sleep-duration")); // FIXME
 
