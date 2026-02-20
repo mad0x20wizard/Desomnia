@@ -354,8 +354,9 @@ jobs:
 
           for plugin_dir in */; do
             if [ -d "$plugin_dir" ]; then
-              plugin_name="${plugin_dir%/}"
-              zip -r "${{ runner.temp }}/plugin-${plugin_name}_${VERSION}.zip" "$plugin_dir"
+              cd $plugin_dir
+              zip -r "${{ runner.temp }}/plugin-${plugin_dir%/}_${VERSION}.zip" .
+              cd ..
             fi
           done
 
