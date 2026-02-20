@@ -16,12 +16,6 @@ if (Process.GetCurrentProcess().IsWindowsService() is bool isRunningAsService &&
     var applicationDir = new FileInfo(Assembly.GetExecutingAssembly().Locati‌​on).Directory!;
 
     Directory.SetCurrentDirectory(applicationDir.FullName);
-
-    // Delete all *.log-Files
-    //foreach (string file in Directory.GetFiles(applicationDir.FullName, "*.log", SearchOption.AllDirectories))
-    //{
-    //    File.Delete(file);
-    //}
 }
 
 string logsPath = Path.Combine(Directory.GetCurrentDirectory(), "logs");

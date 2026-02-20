@@ -34,13 +34,15 @@ namespace MadWizard.Desomnia
 
         readonly PathDetector _nlogConfigDetector;
 
-        public ConfigDetector(params string[] paths) : base([])
+        public ConfigDetector(params string?[] paths) : base([])
         {
-            var basePaths = new List<string>(paths)
+            var basePaths = new List<string>(paths.Where(p => p != null).ToArray() as string[])
             {
                 Path.Combine(Directory.GetCurrentDirectory(), "config"),
-                Directory.GetCurrentDirectory()
+                Directory.GetCurrentDirectory(),
             };
+
+            basePaths.Reverse();
 
             Paths.AddRange(basePaths.Select(p => Path.Combine(p, CONFIG_FILE_NAME)));
 
