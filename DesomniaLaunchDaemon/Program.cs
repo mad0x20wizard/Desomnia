@@ -8,7 +8,9 @@ using NLog;
 
 LogManager.Setup().SetupExtensions(ext => ext.RegisterLayoutRenderer<SleepTimeLayoutRenderer>("sleep-duration")); // FIXME
 
-string configPath = new ConfigDetector(HomebrewApplicationBuilder.ConfigPath).Lookup();
+string configPath = new ConfigDetector().Lookup();
+
+Console.WriteLine(configPath);
 
 try
 {
@@ -21,10 +23,7 @@ try
     {
         using (new SystemMutex("MadWizard.Desomnia", true)) using (watcher = new(configPath) { EnableRaisingEvents = false })
         {
-            MadWizard.Desomnia.ApplicationBuilder builder =
-                HomebrewApplicationBuilder.ConfigPath is string homebrew && configPath.StartsWith(homebrew) 
-                    ? new MadWizard.Desomnia.HomebrewApplicationBuilder() 
-                    : new MadWizard.Desomnia.ApplicationBuilder();
+            var builder = new MadWizard.Desomnia.ApplicationBuilder();
 
             builder.RegisterModule<MadWizard.Desomnia.CoreModule>();
             builder.RegisterModule<MadWizard.Desomnia.LaunchDaemon.PlatformModule>();

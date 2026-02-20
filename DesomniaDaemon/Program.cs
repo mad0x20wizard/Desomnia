@@ -25,7 +25,7 @@ Parser.Default.ParseArguments<CommandLineOptions>(args)
 
 const string FHS_CONFIG_PATH = "/etc/desomnia"; // Filesystem Hierarchy Standard
 
-string configPath = new ConfigDetector(HomebrewApplicationBuilder.ConfigPath, FHS_CONFIG_PATH).Lookup();
+string configPath = new ConfigDetector(FHS_CONFIG_PATH).Lookup();
 
 try
 {
@@ -38,10 +38,7 @@ try
     {
         using (new SystemMutex("MadWizard.Desomnia", true)) using (watcher = new(autoReloadPath ?? configPath) { EnableRaisingEvents = autoReload })
         {
-            MadWizard.Desomnia.ApplicationBuilder builder = 
-                HomebrewApplicationBuilder.ConfigPath is string homebrew && configPath.StartsWith(homebrew)
-                    ? new MadWizard.Desomnia.HomebrewApplicationBuilder() 
-                    : new DesomniaDaemonBuilder(useFHS: configPath.StartsWith(FHS_CONFIG_PATH));
+            var builder = new DesomniaDaemonBuilder(useFHS: configPath.StartsWith(FHS_CONFIG_PATH));
 
             builder.RegisterModule<MadWizard.Desomnia.CoreModule>();
             builder.RegisterModule<MadWizard.Desomnia.Daemon.PlatformModule>();

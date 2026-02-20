@@ -19,8 +19,33 @@ namespace MadWizard.Desomnia
 
         readonly List<Module> _modules = [];
 
-        protected virtual string DefaultLogsPath => "${currentdir:dir=logs}";
-        protected virtual string[] DefaultPluginsPaths => ["plugins"];
+        protected virtual string DefaultLogsPath
+        {
+            get
+            {
+                if (Environment.GetEnvironmentVariable("DESOMNIA_LOGS_DIR") is string logs)
+                    return logs;
+
+                return "${currentdir:dir=logs}";
+            }
+        }
+
+        protected virtual string[] DefaultPluginsPaths
+        {
+            get
+            {
+                List<string> paths = [];
+
+                if (Environment.GetEnvironmentVariable("DESOMNIA_PLUGINS_DIR") is string plugins)
+                    paths.Add(plugins);
+                if (Environment.GetEnvironmentVariable("DESOMNIA_CORE_PLUGINS_DIR") is string core)
+                    paths.Add(core);
+                if (Environment.GetEnvironmentVariable("DESOMNIA_USER_PLUGINS_DIR") is string user)
+                    paths.Add(user);
+
+                return paths.Count > 0 ? [.. paths] : ["plugins"];
+            }
+        }
 
         public ApplicationBuilder()
         {
@@ -116,66 +141,5 @@ namespace MadWizard.Desomnia
 
             return _builder.Build();
         }
-    }
-
-    public class HomebrewApplicationBuilder : ApplicationBuilder
-    {
-        const string HOMEBREW_CONFIG_PATH = "/etc/desomnia";
-
-        const string HOMEBREW_LOGS_PATH = "/log/desomnia";
-
-        const string HOMEBREW_CORE_PLUGINS_PATH = "/opt/desomnia/lib/plugins";
-        const string HOMEBREW_USER_PLUGINS_PATH = "/var/lib/desomnia/plugins";
-
-        private static string Prefix
-        {
-            get
-            {
-                // First try environment variable (fastest)
-                var envPrefix = Environment.GetEnvironmentVariable("HOMEBREW_PREFIX");
-                if (!string.IsNullOrWhiteSpace(envPrefix) && Directory.Exists(envPrefix))
-                    return envPrefix;
-
-                // Fallback: execute `brew --prefix`
-                var psi = new ProcessStartInfo
-                {
-                    FileName = "brew",
-                    Arguments = "--prefix",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start brew process.");
-                process.WaitForExit();
-
-                string prefix = process.StandardOutput.ReadToEnd().Trim();
-
-                if (process.ExitCode != 0 || string.IsNullOrWhiteSpace(prefix))
-                    throw new InvalidOperationException("Unable to determine Homebrew prefix.");
-
-                return prefix;
-            }
-        }
-
-        public static string? ConfigPath
-        {
-            get
-            {
-                try
-                {
-                    return Prefix + HOMEBREW_CONFIG_PATH;
-                }
-                catch (Exception)
-                {
-                    return null;
-                }
-            }
-        }
-
-        protected override string DefaultLogsPath => Prefix + HOMEBREW_LOGS_PATH;
-        protected override string[] DefaultPluginsPaths => [Prefix + HOMEBREW_CORE_PLUGINS_PATH, Prefix + HOMEBREW_USER_PLUGINS_PATH];
-
     }
 }
