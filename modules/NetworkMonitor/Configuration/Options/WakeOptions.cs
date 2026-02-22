@@ -22,6 +22,6 @@
         Unicast = 4,
         Broadcast = 8,
 
-        Auto = 0xFFFF
+        Auto = 128,
     }
 }
