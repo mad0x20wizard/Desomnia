@@ -13,7 +13,7 @@ LogManager.Setup().SetupExtensions(ext => ext.RegisterLayoutRenderer<SleepTimeLa
 
 if (Process.GetCurrentProcess().IsWindowsService() is bool isRunningAsService && isRunningAsService)
 {
-    var applicationDir = new FileInfo(Assembly.GetExecutingAssembly().Locati‌​on).Directory!;
+    var applicationDir = new FileInfo(Assembly.GetExecutingAssembly().Location).Directory!;
 
     Directory.SetCurrentDirectory(applicationDir.FullName);
 }
