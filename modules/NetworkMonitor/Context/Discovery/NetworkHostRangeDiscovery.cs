@@ -1,6 +1,7 @@
 ﻿using Autofac;
 using MadWizard.Desomnia.Network.Configuration.Knocking;
 using MadWizard.Desomnia.Network.Neighborhood;
+using Microsoft.Extensions.Logging;
 using NetTools;
 
 namespace MadWizard.Desomnia.Network.Context
@@ -37,7 +38,14 @@ namespace MadWizard.Desomnia.Network.Context
 
                 if (configRange is DynamicHostRangeInfo dynamic)
                 {
-                    CreateKnockContext(dynamic);
+                    try
+                    {
+                        CreateKnockContext(dynamic);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, $"DynamicHostRange '{dynamic.Name}' could not be initialized.");
+                    }
                 }
             }
         }
