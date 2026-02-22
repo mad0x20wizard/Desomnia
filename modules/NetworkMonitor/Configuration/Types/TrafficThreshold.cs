@@ -4,8 +4,8 @@ using System.Text.RegularExpressions;
 
 namespace MadWizard.Desomnia.Network.Configuration
 {
-    [TypeConverter(typeof(TrafficSpeedConverter))]
-    public struct TrafficSpeed
+    [TypeConverter(typeof(TrafficThresholdConverter))]
+    public struct TrafficThreshold
     {
         public long?    TrafficUnit { get; set; }
         public TimeSpan?   TimeUnit { get; set; }
@@ -13,7 +13,7 @@ namespace MadWizard.Desomnia.Network.Configuration
         public long           Value { get; set; }
     }
 
-    public partial class TrafficSpeedConverter : TypeConverter
+    public partial class TrafficThresholdConverter : TypeConverter
     {
         public override bool CanConvertFrom(ITypeDescriptorContext? context, Type type)
         {
@@ -30,13 +30,13 @@ namespace MadWizard.Desomnia.Network.Configuration
             return null;
         }
 
-        private static TrafficSpeed TryParseFormat(string str)
+        private static TrafficThreshold TryParseFormat(string str)
         {
             str = string.Concat(str.Where(c => !char.IsWhiteSpace(c))); // remove all whitespace
 
-            if (TrafficSpanPattern().Match(str) is Match match)
+            if (TrafficThresholdPattern().Match(str) is Match match)
             {
-                var speed = new TrafficSpeed { Value = long.Parse(match.Groups["Value"].Value) };
+                var speed = new TrafficThreshold { Value = long.Parse(match.Groups["Value"].Value) };
 
                 if (match.Groups.TryGetValue("TrafficUnit", out var traffic) && traffic.Success)
                 {
@@ -67,11 +67,11 @@ namespace MadWizard.Desomnia.Network.Configuration
                 return speed;
             }
 
-            throw new FormatException("Invalid traffic span format");
+            throw new FormatException("Invalid traffic threshold format");
         }
 
         [GeneratedRegex(@"^\s*(?<Value>\d+)\s*(?<TrafficUnit>(?:[kKmMgGtT]?[bB]))?\s*(?:/\s*(?<TimeUnit>ms|s|min|h|d))?\s*$")]
-        private static partial Regex TrafficSpanPattern();
+        private static partial Regex TrafficThresholdPattern();
 
     }
 

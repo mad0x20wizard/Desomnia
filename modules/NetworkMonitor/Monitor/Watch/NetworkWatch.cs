@@ -9,7 +9,7 @@ namespace MadWizard.Desomnia.Network
         private long _countBytes;
         private long _countPackets;
 
-        public TrafficSpeed? Threshold { get; set; }
+        public TrafficThreshold? Threshold { get; set; }
 
         protected void ReportNetworkTraffic(long? bytes = null)
         {
@@ -36,7 +36,7 @@ namespace MadWizard.Desomnia.Network
             {
                 bytes = _countBytes; long packets = _countPackets;
 
-                if (Threshold is TrafficSpeed speed)
+                if (Threshold is TrafficThreshold speed)
                 {
                     double value, minValue;
                     if (speed.TrafficUnit is long traffic)

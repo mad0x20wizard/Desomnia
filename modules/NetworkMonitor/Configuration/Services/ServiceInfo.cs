@@ -17,7 +17,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Services
         public IPProtocol Protocol { get; set; } = IPProtocol.TCP;
         public required ushort Port { get; set; }
 
-        public TrafficSpeed? MinTraffic { get; set; }
+        public TrafficThreshold? MinTraffic { get; set; }
 
         // Options
         #region                 KnockOptions

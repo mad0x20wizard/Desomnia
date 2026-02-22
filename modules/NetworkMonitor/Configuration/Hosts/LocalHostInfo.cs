@@ -6,7 +6,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
 {
     public class LocalHostInfo
     {
-        public TrafficSpeed? MinTraffic { get; set; }
+        public TrafficThreshold? MinTraffic { get; set; }
 
         // Options
         #region     DemandOptions
