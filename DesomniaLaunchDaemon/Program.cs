@@ -42,3 +42,12 @@ catch (Exception)
 {
     throw;
 }
+
+class DesomniaLaunchDaemonBuilder : MadWizard.Desomnia.ApplicationBuilder
+{
+    /**
+     * On macOS the StandardOut is written directly to file,
+     * so we have to include the timestamp explicitly.
+     */
+    protected override string DefaultLogConsoleLayout => "${longdate} " + base.DefaultLogConsoleLayout;
+}
