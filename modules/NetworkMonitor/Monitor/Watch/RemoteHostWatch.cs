@@ -7,6 +7,7 @@ using MadWizard.Desomnia.Network.Reachability;
 using MadWizard.Desomnia.Ressource.Events;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Nito.AsyncEx;
 using PacketDotNet;
 using System.Diagnostics;
 using System.Net;
@@ -32,9 +33,9 @@ namespace MadWizard.Desomnia.Network
 
         public bool IsSuspended { get; private set; } = false;
 
-        public DateTime? LastSeen   { get; internal set { Seen?.Invoke(this, value   ?? throw new ArgumentNullException(nameof(LastSeen)));     field = value; } }
-        public DateTime? LastUnseen { get; internal set { Unseen?.Invoke(this, value ?? throw new ArgumentNullException(nameof(LastUnseen)));   field = value; } }
-        public DateTime? LastWoken  { get; internal set { Woken?.Invoke(this, value  ?? throw new ArgumentNullException(nameof(LastWoken)));    field = value; } }
+        public DateTime? LastSeen   { get; internal set { Seen?.Invoke(this,    value ?? throw new ArgumentNullException(nameof(LastSeen)));     field = value; } }
+        public DateTime? LastUnseen { get; internal set { Unseen?.Invoke(this,  value ?? throw new ArgumentNullException(nameof(LastUnseen)));   field = value; } }
+        public DateTime? LastWoken  { get; internal set { Woken?.Invoke(this,   value ?? throw new ArgumentNullException(nameof(LastWoken)));    field = value; } }
 
         public event EventHandler<DateTime>? Seen;
         public event EventHandler<DateTime>? Unseen;
@@ -43,6 +44,7 @@ namespace MadWizard.Desomnia.Network
         public event EventInvocation? UnMagicPacket;
 
         private Timer? _pingTimer;
+        private readonly AsyncLock _pingLock = new();
 
         public RemoteHostWatch()
         {
@@ -71,7 +73,9 @@ namespace MadWizard.Desomnia.Network
 
         private async Task DetermineIfHostCanBeSeen(bool hasSuspended = false)
         {
-            _pingTimer?.Stop(); // stop timer to avoid re-entrance
+            using var mutex = await _pingLock.LockAsync();
+
+            _pingTimer?.Stop(); // stop timer to reduce concurrency
 
             try
             {

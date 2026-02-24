@@ -19,6 +19,8 @@ namespace MadWizard.Desomnia
 
         readonly List<Module> _modules = [];
 
+        protected virtual string DefaultLogConsoleLayout => "${pad:padding=5:inner=${level:uppercase=true}} :: ${message} ${exception}";
+
         protected virtual string DefaultLogPath
         {
             get
@@ -58,7 +60,7 @@ namespace MadWizard.Desomnia
             ConfigureLogging();
         }
 
-        protected virtual void ConfigureLogging()
+        protected virtual void ConfigureLogging(bool showTimestamp = false)
         {
             _builder.Logging.ClearProviders();
 
@@ -83,7 +85,7 @@ namespace MadWizard.Desomnia
                 {
                     var target = new ConsoleTarget("console")
                     {
-                        Layout = "${pad:padding=5:inner=${level:uppercase=true}} :: ${message} ${exception}"
+                        Layout = DefaultLogConsoleLayout
                     };
 
                     configNew.AddRule(NLog.LogLevel.Info, NLog.LogLevel.Fatal, target, "MadWizard.Desomnia.*");

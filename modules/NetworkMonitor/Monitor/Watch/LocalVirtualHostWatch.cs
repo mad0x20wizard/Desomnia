@@ -18,9 +18,7 @@ namespace MadWizard.Desomnia.Network
 
         public LocalVirtualHostWatch(IVirtualMachine vm)
         {
-            VM = vm;
-
-            VM.StateChanged += VM_StateChanged;
+            (VM = vm).StateChanged += VM_StateChanged;
 
             Suspended += async (@event) => HandleSuspended();
         }

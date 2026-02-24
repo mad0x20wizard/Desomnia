@@ -39,8 +39,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Services
 
         public KnockOptions? MakeKnockOptions()
         {
-            try
-            {
+            if (KnockMethod != null)
                 return new() // wird von network -> remote host -> service übertragen
                 {
                     Method = KnockMethod ?? throw new NullReferenceException("knockMethod"),
@@ -59,11 +58,8 @@ namespace MadWizard.Desomnia.Network.Configuration.Services
                         KnockSecretAuthType ?? throw new NullReferenceException("knockSecretAuthType"),
                         KnockEncoding ?? throw new NullReferenceException("knockEncoding"))
                 };
-            }
-            catch (NullReferenceException)
-            {
-                return null; // ist kein remote service
-            }
+
+            return null; // ist kein remote service
         }
         #endregion
 
@@ -98,7 +94,5 @@ namespace MadWizard.Desomnia.Network.Configuration.Services
                 Type = FilterRuleType.Must
             };
         }
-
-
     }
 }
