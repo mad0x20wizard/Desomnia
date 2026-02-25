@@ -1,7 +1,5 @@
 ﻿using Autofac;
-using MadWizard.Desomnia.Network.HyperV;
 using MadWizard.Desomnia.Network.Knocking;
-using MadWizard.Desomnia.Network.Services.Knocking;
 
 namespace MadWizard.Desomnia.Network.FirewallKnockOperator
 {
@@ -18,14 +16,6 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
                 .Named<IKnockMethod>("fko")
                 .AsImplementedInterfaces()
                 .SingleInstance();
-
-            // select default auth key type
-            builder.ComponentRegistryBuilder.Registered += (sender, args) =>
-            {
-                if (args.ComponentRegistration.IsLimitedTo<KnockStanza>())
-                    args.ComponentRegistration.PipelineBuilding += (_, pipeline) =>
-                        pipeline.Use(new DigestTypeSelector());
-            };
         }
     }
 }

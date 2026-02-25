@@ -1,4 +1,7 @@
-﻿using MadWizard.Desomnia.Network.Knocking.Secrets;
+﻿using ConcurrentCollections;
+using MadWizard.Desomnia.Network.Knocking.Secrets;
+using System.Collections.Concurrent;
+using System.Diagnostics.Eventing.Reader;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -54,6 +57,24 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
             byte[] iv = [.. derived.Skip(keyLen).Take(ivLen)];
 
             return (key, iv);
+        }
+
+        protected static HMAC? AuthMethod(SharedSecret secret)
+        {
+            if (secret.AuthKey != null)
+            {
+                switch (secret.AuthType)
+                {
+                    case DigestType.SHA256:
+                    case DigestType.Default:
+                        return new HMACSHA256(secret.AuthKey);
+
+                    default:
+                        throw new NotImplementedException(secret.AuthType.ToString());
+                }
+            }
+
+            return null;
         }
 
         protected static byte[] CalculateHMAC(string cipherB64, HMAC? auth)

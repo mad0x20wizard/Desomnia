@@ -15,12 +15,12 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
         {
             if (packet.PayloadPacket is TransportPacket transport)
             {
-                Packet data;
+                Payload payload;
                 try
                 {
                     var bytes = TransformPayload(transport.PayloadData);
 
-                    if (secret.Auth is HMAC auth)
+                    if (AuthMethod(secret) is HMAC auth) using (auth)
                     {
                         int length = auth.HashSize / 8;
 
@@ -42,7 +42,7 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
                     // TODO: verify HMAC if secret.AuthKey is set
                     // TODO: verify plaintext
 
-                    data = new Packet(plaintext);
+                    payload = new Payload(plaintext);
                 }
                 catch (Exception ex)
                 {
@@ -53,9 +53,9 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
 
                 yield return new KnockEvent
                 {
-                    Time = data.Timestamp.DateTime,
-                    SourceAddress = packet.SourceAddress, // data.SourceAddress, // TODO: implement public IP resolution
-                    TargetPort = data.TargetPort,
+                    Time = payload.Timestamp.DateTime,
+                    SourceAddress = payload.SourceAddress, // payload.SourceAddress, // TODO: implement public IP resolution
+                    TargetPort = payload.TargetPort,
                 };
             }
         }

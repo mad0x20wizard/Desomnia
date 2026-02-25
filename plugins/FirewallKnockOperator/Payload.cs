@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 
 namespace MadWizard.Desomnia.Network.FirewallKnockOperator
 {
-    internal class Packet
+    internal class Payload
     {
         static readonly char[] NUMBERS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
@@ -19,7 +19,7 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
 
         public byte[]? Digest { get; set; }
 
-        public Packet(string plaintext)
+        public Payload(string plaintext)
         {
             var split = plaintext.Split(':');
 
@@ -49,7 +49,7 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
             Digest = split.Length > 6 ? Base.DecodeBase64(split[6]) : null;
         }
 
-        public Packet(IPAddress source, IPPort? target)
+        public Payload(IPAddress source, IPPort? target)
         {
             Random = string.Join(null, RandomNumberGenerator.GetItems(NUMBERS, 16));
 

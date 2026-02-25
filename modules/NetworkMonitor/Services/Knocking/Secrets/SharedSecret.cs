@@ -23,26 +23,6 @@ namespace MadWizard.Desomnia.Network.Knocking.Secrets
             AuthType = authType;
         }
 
-        public HMAC? Auth
-        {
-            get
-            {
-                if (field == null && AuthKey != null)
-                {
-                    switch (AuthType)
-                    {
-                        case DigestType.SHA256:
-                            return field = new HMACSHA256(AuthKey);
-
-                        default:
-                            throw new NotImplementedException(AuthType.ToString());
-                    }
-                }
-
-                return field;
-            }
-        }
-
         internal static byte[]? TryConvert(string? str, string encoding)
         {
             if (str is not null)

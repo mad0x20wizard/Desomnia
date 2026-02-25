@@ -26,20 +26,22 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
 
         static byte[] BuildFKOPayload(SharedSecret secret, IPAddress source, IPPort? target, string username = "desomnia")
         {
+            using HMAC? auth = AuthMethod(secret);
+
             // 1) Build the plaintext fields (without the trailing digest yet)
-            var data = new Packet(source, target) { Username = username };
+            var payload = new Payload(source, target) { Username = username };
             // 2) Compute the plaintext digest (SHA256) over the body
-            data.Digest = SHA256.HashData(Encoding.UTF8.GetBytes(data.ToMessageString()));
+            payload.Digest = SHA256.HashData(Encoding.UTF8.GetBytes(payload.ToMessageString()));
 
             byte[] salt = GenerateSalt(); // 8 bytes salt
 
             var (key, iv) = DeriveKeyIV(secret.Key, salt, keyLen: secret.Key.Length); // AES-256-CBC
 
-            byte[] plaintext    = Encoding.ASCII.GetBytes(data.ToString());
+            byte[] plaintext    = Encoding.ASCII.GetBytes(payload.ToString());
             byte[] ciphertext   = EncryptAES(plaintext, key, iv);
 
             string b64Cipher    = EncodeBase64([.. SALT_PREFIX_BYTES, .. salt, .. ciphertext]);
-            string b64HMAC      = EncodeBase64(CalculateHMAC(b64Cipher, secret.Auth)); // optional
+            string b64HMAC      = EncodeBase64(CalculateHMAC(b64Cipher, auth)); // optional
 
             return TransformPayload(b64Cipher + b64HMAC);
         }

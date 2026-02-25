@@ -6,7 +6,6 @@ using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Knocking;
 using MadWizard.Desomnia.Network.Knocking.Events;
 using MadWizard.Desomnia.Network.Knocking.Secrets;
-using MadWizard.Desomnia.Network.Middleware;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Services.Knocking;
 using NetTools;
@@ -38,13 +37,8 @@ namespace MadWizard.Desomnia.Network.Context
                     var label = $"{config.Name}{(secret.Label != null ? $"::{secret.Label}" : "")}"; // maybe mit index?
 
                     builder.RegisterType<KnockStanza>()
-
-                        // TODO does this work?
-                        .OnPreparing(e => e.Parameters = [TypedParameter.From(secret)])
-                        .ConfigurePipeline(p => p.Use(new DefaultKnockSecretBuilder()))
-                        //.WithParameter(TypedParameter.From(BuildSharedSecret(secret)))
-
                         .WithParameter(TypedParameter.From(label)) 
+                        .WithParameter(TypedParameter.From(BuildSharedSecret(secret)))
                         .WithParameter(TypedNamedResolvedParameter<IKnockDetector>.FindBy(knockMethod))
                         .WithParameter(TypedParameter.From(new IPPort(knockProtocol, knockPort)))
                         .WithParameter(TypedParameter.From(knockTimeout))
@@ -104,6 +98,33 @@ namespace MadWizard.Desomnia.Network.Context
 
                 _targetRange.RemoveAddressRange(range);
             }
+        }
+
+        private static SharedSecret BuildSharedSecret(SharedSecretData data)
+        {
+            byte[]? key = null;
+            byte[]? authKey = null;
+
+            DigestType authType = default;
+
+            string defaultEncoding = data.Encoding ?? "UTF-8";
+
+            if (data.Key is KeyData keyData)
+            {
+                key = SharedSecret.TryConvert(keyData.Text, keyData.Encoding ?? defaultEncoding);
+
+                if (data.AuthKey is AuthKeyData authKeyData)
+                {
+                    authKey = SharedSecret.TryConvert(authKeyData.Text, authKeyData.Encoding ?? defaultEncoding);
+                    authType = authKeyData.Type;
+                }
+            }
+            else
+            {
+                key = SharedSecret.TryConvert(data.Text, defaultEncoding);
+            }
+
+            return new SharedSecret(key ?? throw new Exception($"Invalid SecretKey = '{data.Label}'"), authKey, authType);
         }
     }
 }
