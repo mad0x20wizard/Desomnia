@@ -49,7 +49,7 @@ namespace MadWizard.Desomnia.Session.Manager.Bridged
 
         private void ConfigureSessionCapabilities(BridgedTerminalServicesSession session)
         {
-            config.SessionMonitor?.Configure(session, desc =>
+            config.SessionMonitor?.Configure(session, (config, desc) =>
             {
                 if (desc.AllowControlSession != null)
                     if (desc.AllowControlSession?.IsMatchingNone ?? false)

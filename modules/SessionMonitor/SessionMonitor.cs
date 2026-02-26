@@ -26,9 +26,14 @@ namespace MadWizard.Desomnia.Session
         }
         private void SessionManager_UserLogout(object? sender, ISession session)
         {
-            foreach (var watch in this)
-                if (watch?.Session == session)
-                    this.StopTracking(watch);
+            foreach (var watch in this.Where(w => w.Session == session))
+            {
+                watch.TriggerLogout();
+
+                this.StopTracking(watch);
+
+                watch.Dispose();
+            }
         }
 
         private void MayBeTrackSession(ISession session, bool logon = false)
@@ -43,6 +48,10 @@ namespace MadWizard.Desomnia.Session
                 {
                     watch.TriggerLogon();
                 }
+            }
+            else
+            {
+                watch.Dispose();
             }
         }
     }

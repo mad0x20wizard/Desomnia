@@ -145,10 +145,11 @@ namespace MadWizard.Desomnia.Session.Manager
                 switch (desc.Reason)
                 {
                     case SessionChangeReason.SessionLogon when MaybeConfigureSession(sid) is TerminalServicesSession configured:
+                        Logger.LogDebug($"{configured} -> {desc.Reason}");
+
                         Sessions[sid] = configured;
                         UserLogon?.Invoke(this, configured);
 
-                        Logger.LogDebug($"{configured} -> {desc.Reason}");
                         break;
 
                     default:

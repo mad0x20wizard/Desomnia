@@ -3,7 +3,7 @@ using MadWizard.Desomnia.Session.Configuration;
 
 namespace MadWizard.Desomnia.Service.Bridge.Configuration
 {
-    public class BridgedSessionManagerConfig : SessionConfig<BridgedSessionDescriptor>
+    public class BridgedSessionManagerConfig : SessionMonitorConfig<BridgedSessionManagerConfig, BridgedSessionDescriptor>
     {
         public bool? SpawnMinions { get; set; } = true;
     }
