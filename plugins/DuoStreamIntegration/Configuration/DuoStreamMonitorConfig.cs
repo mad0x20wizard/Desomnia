@@ -6,8 +6,7 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
     {
         public required string ServiceName { get; set; } = "DuoService";
 
-        //public int ManagerPort { get; set; } = 38299;
-        public TimeSpan ManagerInterval { get; set; } = TimeSpan.FromSeconds(5);
+        public TimeSpan Refresh { get; set; } = TimeSpan.FromSeconds(5);
 
         public NamedAction? OnInstanceDemand { get; set; }
 

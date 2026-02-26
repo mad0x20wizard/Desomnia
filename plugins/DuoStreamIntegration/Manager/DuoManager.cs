@@ -101,7 +101,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                         Logger.LogError(ex, "Error checking instances.");
                     }
 
-                    await Task.Delay(config.ManagerInterval, stoppingToken);
+                    await Task.Delay(config.Refresh, stoppingToken);
                 }
             }
             catch (TaskCanceledException)
