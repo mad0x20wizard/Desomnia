@@ -6,8 +6,11 @@
    :maxdepth: 2
    :caption: Installation
 
-   /installation/linux
-   /installation/windows
+   /installation/manually
+   /installation/homebrew
+   /installation/docker
+   /installation/installer
+   /installation/winget
 
 .. toctree::
    :maxdepth: 2
@@ -43,5 +46,5 @@
 
    /plugins/fko
    /plugins/hyperv
-   /plugins/duo
-   /plugins/bridge
+   /plugins/duo/plugin
+..   /plugins/bridge

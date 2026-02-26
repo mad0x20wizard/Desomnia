@@ -2,7 +2,7 @@
 Desomnia
 ========
 
-|Build Status| |Build Status Docs| |License|
+|Build Status| |Build Status Docs| |License| |Discord|
 
 This background service monitors various system resources and takes action when they become idle or are accessed on demand. It can replace your OS's built-in sleep management to make the behaviour of when your system stays awake or suspends more predictable. It includes a sophisticated network monitor that allows arbitrary hosts or services to be started automatically when they are accessed.
 
@@ -93,16 +93,16 @@ Additional Features
 
 Thanks to its open architecture, Desomnia's functionality can be expanded using plug-ins. A variety of optional features are already available in this way:
 
-Firewall Knock Operator
-~~~~~~~~~~~~~~~~~~~~~~~
+DuoStreamMonitor
+~~~~~~~~~~~~~~~~
 
-:OS: 🪐 *Platform-independent*
+:OS: 🪟 *Windows-only*
 
-If you receive requests from outside your local network (for example, via port forwarding through your router), you can configure Desomnia to allow or block specific network masks statically. This ensures that hosts on your network won't wake up unnecessarily.
+For those who are enthusiastic users of `DuoStream <https://github.com/DuoStream>`__, this plugin makes Desomnia aware of the configured instances:
 
-However, if you are using a mobile device with a dynamic IP address, you may want to temporarily allow access from specific IP addresses. This plugin uses the FKO protocol to send and receive SPA (Single Packet Authorization) messages in order to configure the embedded packet filter, automatically.
-
-🚧 Future releases will also enable configuration of the local system firewall, which was `fwknop <https://github.com/mrash/fwknop>`__'s intended use case. This will offer a full-fledged replacement for this useful tool, which seems to have been abandoned.
+- Start instances on demand, when they are accessed by a Moonlight client (no further clientside configuration needed).
+- Stop instances after they become idle, to reduce power consumption of the GPU and to reduce the overall footprint of system resources.
+- The system will stay awake until the last session disconnects.
 
 HyperV support
 ~~~~~~~~~~~~~~
@@ -124,16 +124,16 @@ Incarnates a little helper process in each user session, that communicates with 
 
 🖥️ As an additional feature, you will be able to enable certain users to instantly switch console sessions without authentication. This allows you to use multiple user sessions, similar to having multiple desktops, but with strong isolation.
 
-DuoStreamMonitor
-~~~~~~~~~~~~~~~~
+Firewall Knock Operator
+~~~~~~~~~~~~~~~~~~~~~~~
 
-:OS: 🪟 *Windows-only*
+:OS: 🪐 *Platform-independent*
 
-For those who are enthusiastic users of `DuoStream <https://github.com/DuoStream>`__, this plugin makes Desomnia aware of the configured instances:
+If you receive requests from outside your local network (for example, via port forwarding through your router), you can configure Desomnia to allow or block specific network masks statically. This ensures that hosts on your network won't wake up unnecessarily.
 
-- Start instances on demand, when they are accessed by a Moonlight client (no further clientside configuration needed).
-- Stop instances after they become idle, to reduce power consumption of the GPU and to reduce the overall footprint of system resources.
-- The system will stay awake until the last session disconnects.
+However, if you are using a mobile device with a dynamic IP address, you may want to temporarily allow access from specific IP addresses. This plugin uses the FKO protocol to send and receive SPA (Single Packet Authorization) messages in order to configure the embedded packet filter, automatically.
+
+🚧 Future releases will also enable configuration of the local system firewall, which was `fwknop <https://github.com/mrash/fwknop>`__'s intended use case. This will offer a full-fledged replacement for this useful tool, which seems to have been abandoned.
 
 etc.
 ~~~~
@@ -188,3 +188,10 @@ I you like my work, consider to:
    :alt: Documentation Status
 .. |License| image:: https://img.shields.io/badge/license-GPL3-blue.svg
    :alt: License
+
+.. TODO: Create Discord server
+
+.. |Discord| image:: https://img.shields.io/badge/chat-on%20discord-7289da.svg
+   :target: https://discord.gg/???
+   :alt: Discord
+

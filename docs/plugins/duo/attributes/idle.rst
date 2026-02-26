@@ -1,0 +1,1 @@
+This event is triggered when, during the timeout phase, the instance is running but there is no remote client connected.

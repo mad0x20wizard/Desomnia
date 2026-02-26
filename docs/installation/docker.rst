@@ -7,7 +7,7 @@ Desomnia can be run inside a Docker container, to isolate the service from the r
 
 There are two directories, that you have to bind mount, to provide the service with your individual configuration and to see what's going on:
 
-.. include:: ./shared_dirs.rst
+.. include:: ./paths.rst
 
 This is an example ``docker-compose.yaml`` file, which contains all the configuration settings needed for the Docker container:
 
@@ -19,7 +19,8 @@ This is an example ``docker-compose.yaml`` file, which contains all the configur
 
         volumes:
           - ./config:/etc/desomnia
-          - ./logs:/var/log/desomnia
+          - ./plugins:/var/lib/desomnia/plugins # optional
+          - ./logs:/var/log/desomnia # optional
 
         restart: unless-stopped
 

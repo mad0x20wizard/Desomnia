@@ -59,6 +59,14 @@ knockSecretAuth
 
 This option specifies the key to be used for authenticating the SPA packet. If this option is not set, authentication will not be performed, which could compromise the security of the SPA.
 
+knockSecretAuthType
++++++++++++++++++++
+
+:inherited: 
+:default: *depends on the knock method*
+
+.. include:: /modules/network/attributes/digest.rst
+
 knockEncoding
 +++++++++++++
 

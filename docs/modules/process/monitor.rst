@@ -5,4 +5,4 @@ Process Monitor
 
 .. toctree::
    actions
-   reference
+   config

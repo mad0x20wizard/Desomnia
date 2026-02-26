@@ -1,5 +1,5 @@
-Configuration reference
-=======================
+Configuration
+=============
 
 This reference has been created to allow you to easily see all the available configuration options of Desomnia at a glance, as opposed to the rather prosaic explanations on the other pages.
 
@@ -37,6 +37,7 @@ Desomnia provides support for monitoring any number of installed network interfa
       knockTimeout="10s"
       knockSecret="changeme"
       knockSecretAuth="..."
+      knockSecretAuthType="SHA256"
       knockEncoding="UTF-8"
 
       pingTimeout="500ms" 
@@ -333,19 +334,26 @@ SharedSecret
 
 The shared secret for the authenticating can be specified either inline with a single value or as a complex key pair, consisting of two distinct cryptographically byte sequences:
 
-.. code::
+.. code:: xml
 
   <SharedSecret label="simple" encoding="UTF-8">password</SharedSecret>
 
   <SharedSecret label="secure" encoding="Base64" passthrough="false">
     <Key>RqBObjFUM9lguaZin1CjJEK0a4FQamAB9ivXHq0/z6w=</Key>
-    <AuthKey>AsJ0GS2IMgqbCf1hc9BfKpCK5vXiXs/J2ZLri+XdHCdZsarOTPTbPnwGT1bu7Q5+yjOlnK5oNHe3zyJf7A9J1g==</AuthKey>
+    <AuthKey type="SHA256">AsJ0GS2IMgqbCf1hc9BfKpCK5vXiXs/J2ZLri+XdHCdZsarOTPTbPnwGT1bu7Q5+yjOlnK5oNHe3zyJf7A9J1g==</AuthKey>
   </SharedSecret>
 
 label
 ~~~~~
 
 A custom label, to further reference the shared secret.
+
+type
+~~~~
+
+:default: *depends on the knock method*
+
+.. include:: ./attributes/digest.rst
 
 encoding
 ~~~~~~~~
@@ -528,6 +536,7 @@ For remote hosts you can configure these additional properties:
       knockTimeout="10s"
       knockSecret="changeme"
       knockSecretAuth="..."
+      knockSecretAuthType="SHA256"
       knockEncoding="UTF-8"
 
       pingTimeout="500ms" 
@@ -843,6 +852,17 @@ When you configure a ``<Service>`` you can configure all the attributes of a ``<
     
     minTraffic="10kb/s"
     
+    knockMethod="plain"
+    knockPort="62201"
+    knockProtocol="UDP"
+    knockDelay="500ms"
+    knockRepeat="2s"
+    knockTimeout="10s"
+    knockSecret="changeme"
+    knockSecretAuth="..."
+    knockSecretAuthType="SHA256"
+    knockEncoding="UTF-8"
+
     onDemand="knock"
     onIdle="?">
 
@@ -861,6 +881,8 @@ serviceName
   Here you will be able to define a custom service name, that will be advertised with mDNS in a later version. Ideally this name should match with it's counterpart in the `Service Name and Transport Protocol Port Number Registry <https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xml>`__, managed by IANA. If you don't configure this property, the name will be derived from the basic name property, but with all letters lowercase.
 
 .. include:: ./attributes/traffic.rst
+
+.. include:: ./options/knock.rst
 
 onDemand
 ++++++++

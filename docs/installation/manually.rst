@@ -1,9 +1,9 @@
-Daemon
-======
+Manually
+========
 
 :OS: 🐧 *Linux*
 
-To install Desomnia manually as a systemd daemon onto your system, you have several options available.
+To install Desomnia manually as a systemd daemon onto your system, you can follow this guide.
 
 Prerequisites
 -------------
@@ -12,7 +12,9 @@ In order to be able to run Desomnia on your system, you will need the .NET Runti
 
     curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 10.0 -runtime dotnet --install-dir /usr/share/dotnet
 
-For the monitoring of network services the `libpcap`_ library is used, which is usually already installed on most distributions.
+For the monitoring of network services the `libpcap`_ library is used, which is usually already installed on most distributions. If you find it missing, please install it with the package manager of your system. On a Debian-based distribution (Ubuntu, Raspbian, etc.), you can do this via::
+
+    apt-get install libpcap-dev
 
 Filesystem layout
 -----------------
@@ -22,7 +24,7 @@ There is nothing wrong in using Desomnia in portable mode with everything residi
 /usr/sbin
     Drop the appropriate executable for your platform and architecture into this location, so it can be automatically found. Don't forget to set the necessary executable permission on the file with ``chmod +x /usr/sbin/desomniad``.
 
-.. include:: ./shared_dirs.rst
+.. include:: ./paths.rst
 
 Service configuration
 ---------------------
@@ -45,6 +47,9 @@ In order for systemd to manage the automatic start and stop of the service, we n
         WantedBy=multi-user.target
 
     You can use that ``ExecStartPre`` statement, to make sure that the log folder is cleaned every time when the application starts. I use this mostly for debugging purposes.
+
+Starting and stopping
++++++++++++++++++++++
 
 After you created or changed the configuration file, you have to reload systemd with ``systemctl daemon-reload``. If you want that Desomnia is started with the system, you can enable it with ``systemctl enable desomnia``. In any case you will start Desomnia with ``systemctl start desomnia`` and stop it gracefully with ``systemctl stop desomnia``.
 

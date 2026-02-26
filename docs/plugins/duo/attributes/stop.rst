@@ -1,0 +1,1 @@
+This event is triggered when the Duo instance begins to stop.

@@ -8,4 +8,4 @@ This monitor acts as a meta monitor and container for actual usage monitors. It 
 
 .. toctree::
    actions
-   reference
+   config

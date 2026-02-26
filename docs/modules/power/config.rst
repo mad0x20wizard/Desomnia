@@ -1,5 +1,5 @@
-Configuration reference
-=======================
+Configuration
+=============
 
 PowerRequestMonitor
 -------------------

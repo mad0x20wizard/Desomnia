@@ -1,4 +1,4 @@
-🚧 WinGet
+🚧 Windows Package Manager
 ===========================
 
 :OS: 🪟 *Windows*

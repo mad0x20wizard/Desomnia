@@ -431,6 +431,7 @@ It is advised that any system exposed to the network wilderness for a prolonged 
 
 As both the sender and receiver of "knocks", Desomnia uses a pluggable system to install additional protocols. The main repository contains an implementation of the reverse-engineered original protocol used by `fwknop`_, which we will call "FKO" for short. You can read more about this in the  :doc:`/plugins/fko` plugin documentation.
 
+You can read more about this concept under :doc:`/modules/network/knocking`.
 
 .. _`fwknop`: https://github.com/mrash/fwknop
 

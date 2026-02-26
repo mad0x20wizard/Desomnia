@@ -1,4 +1,4 @@
-Installer
+Windows installer
 =================
 
 :OS: 🪟 *Windows*
@@ -15,7 +15,7 @@ Optional Features
 
 This installer includes all the available plugins from the main repository. You can install these plugins as needed, provided your system meets the necessary requirements:
 
-* :doc:`/plugins/duo` – needs **Duo** to be installed
+* :doc:`/plugins/duo/plugin` – needs **Duo** to be installed
 * :doc:`/plugins/hyperv` – needs the **Hyper-V-Platform** feature enabled
 * :doc:`/plugins/fko`
 

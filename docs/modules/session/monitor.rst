@@ -5,4 +5,4 @@ Session Monitor
 
 .. toctree::
    actions
-   reference
+   config
