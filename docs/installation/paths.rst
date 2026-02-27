@@ -1,5 +1,5 @@
 /etc/desomnia
-    In this location you can put the ``config.xml``, which will tell ARPergefactor how to act. You can also create a ``NLog.config`` file here, to configure additional logging, beside the console output.
+    In this location you can put the ``monitor.xml``, which will tell Desomnia what to do. You can also create a ``NLog.config`` file here, to configure additional logging, beside the console output.
 
 /var/lib/desomnia/plugins
     Here you can drop your custom plugins, which will be loaded when the programs starts.

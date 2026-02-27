@@ -27,13 +27,15 @@ When you install software via Homebrew, the source code is downloaded and the pr
 - ``macos/sequoia/arm64``
 - ``macos/tahoe/arm64``
 
-Configuration
--------------
+Filesystem layout
+-----------------
 
-In order for Desomnia to do something cool, you have to create your configuration file at ``.../etc/desomnia/monitor.xml``.
+Use these locations to customize your installation of Desomnia, relative to you Hombrew installation:
 
-Run as background service
--------------------------
+.. include:: ./paths.rst
+
+Running as background service
+-----------------------------
 
 Desomnia can only reach its full potential when run as a background service. Homebrew provides a platform-agnostic method of installing the software as an auto-started service using the following command:
 

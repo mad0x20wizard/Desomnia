@@ -42,7 +42,7 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
 
         protected static (byte[] key, byte[] iv) DeriveKeyIV(byte[] passphrase, byte[] salt, int keyLen, int ivLen = IV_LENGTH)
         {
-            // OpenSSL EVP_BytesToKey with MD5, 1 iteration
+            // OpenSSL EVP_BytesToKey with MD5, 1 iteration (PBKDF1)
 
             byte[] prev = [];
             byte[] derived = [];

@@ -15,7 +15,7 @@ sleepless
 
 :🔥 action:
 
-This creates a system-wide power request, which will prevent the built-in power management from suspending the system.
+This creates a system-wide power request, which will prevent the built-in power management from suspending the system. The request will be valid until the next *timeout phase*, when it has to be recreated.
 
 restart
 -------
@@ -29,7 +29,7 @@ shutdown
 
 :🔥 action:
 
-This will initiate a system shutdown.
+This will initiate a full system shutdown.
 
 .. caution::
 
@@ -49,7 +49,7 @@ This will attempt to run the specified script or program. This process will exec
 
     <SystemMonitor onResume="exec('C:\stuff\sleep.ps1', 'resume')">
 
-When the system resumes from sleep, it will execute the PowerShell script ``sleep.ps1`` with ``resume`` as command line arguments.
+In this example, when the system resumes from sleep, it will execute the PowerShell script ``sleep.ps1`` with ``resume`` as command line arguments.
 
 .. hint::
 
