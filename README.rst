@@ -192,6 +192,6 @@ I you like my work, consider to:
 .. TODO: Create Discord server
 
 .. |Discord| image:: https://img.shields.io/badge/chat-on%20discord-7289da.svg
-   :target: https://discord.gg/???
+   :target: https://discord.gg/RzrBjcy2
    :alt: Discord
 
