@@ -280,19 +280,6 @@ jobs:
         run: choco install innosetup --no-progress -y
         # Chocolatey package: InnoSetup :contentReference[oaicite:0]{index=0}
 
-      - name: Publish DesomniaServiceConfigurator
-        run: |
-          dotnet publish installer/DesomniaServiceConfigurator/DesomniaServiceConfigurator.csproj `
-            -o installer\build\components `
-            -f net${{ env.VERSION_NET }}-windows8.0 `
-            -c Release `
-            -r win-x64 `
-            --no-self-contained `
-            -p:DebugType=None `
-            -p:DebugSymbols=false `
-            -p:PublishSingleFile=true `
-            -p:PublishReadyToRun=true
-
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:

@@ -7,7 +7,7 @@
 #define MyAppId "{B5C0DEEA-FFF1-49B8-B923-4E680E4A552D}"
 #define MyAppName "Desomnia"
 ; #define MyAppVersion ""
-#define MyAppPublisher "MadWizardDE"
+#define MyAppPublisher "mad0x20wizard"
 #define MyAppURL "https://madwizard.de/"
 
 #ifdef MyAppVersion
@@ -21,16 +21,34 @@
   #define MyOutputBaseFilename "Desomnia"
 #endif
 
+#include "dependencies/functions.iss"
 
-;#include <idp.iss>
+#include "dependencies/windows/api.iss"
+#include "dependencies/windows/combo.iss"
+#include "dependencies/windows/balloon.iss"
+#include "dependencies/windows/font.iss"
+#include "dependencies/windows/ip.iss"
+#include "dependencies/windows/menu.iss"
+#include "dependencies/windows/registry.iss"
 
-#include "functions.iss"
+#include "dependencies/version.iss"
 #include "dependencies/installer.iss"
-#include "settings/SystemSessionMonitor.iss"
-#include "settings/NetworkMonitor.iss"
-#include "settings/DuoStreamMonitor.iss"
-#include "settings/NetworkSessionMonitor.iss"
-#include "settings/PowerRequestMonitor.iss"
+#include "dependencies/virtual.iss"
+
+#include "config.iss"
+
+#include "layout/FormGridLayout.iss"
+
+#include "dialog/SecurityDialog.iss"
+#include "dialog/ServiceDialog.iss"
+#include "dialog/HostServiceDialog.iss"
+#include "dialog/HostAutomationDialog.iss"
+
+#include "settings/Settings.iss"
+#include "settings/NetworkSettings.iss"
+#include "settings/VirtualMachineSettings.iss"
+
+#include "export.iss"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
@@ -78,7 +96,7 @@ Name: "DesomniaService"; Description: "Desomnia Service"; Types: full minimal du
 Name: "DesomniaService\NetworkMonitor"; Description: "Network Monitoring"; Types: full server duo custom; Flags: disablenouninstallwarning;
 Name: "plugins"; Description: "Additional Features"; Types: full custom; Flags: disablenouninstallwarning;
 Name: "plugins\DuoStreamIntegration"; Description: "DuoStream Integration"; Types: full duo server custom; Flags: disablenouninstallwarning; Check: IsDuoInstalled
-Name: "plugins\HyperVSupport"; Description: "Hyper-V Support"; Types: full server custom; Flags: disablenouninstallwarning; Check: IsHyperVInstalled
+Name: "plugins\HyperVSupport"; Description: "Hyper-V Support"; Types: full server custom; Flags: disablenouninstallwarning; Check: HasVMProvider('HyperV')
 Name: "plugins\FirewallKnockOperator"; Description: "Firewall Knock Operator"; Types: full custom; Flags: disablenouninstallwarning;
 Name: "plugins\DesomniaServiceBridge"; Description: "Interactive Taskbar Icon"; Types: full custom; Flags: disablenouninstallwarning; Check: IsBridgeReady
 
@@ -88,13 +106,16 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 ; Enables full Unicode-Support in INI-File
-Source: "resources\prefs.ini"; DestDir: "{tmp}";
+Source: "resources\prefs.ini"; Flags: dontcopy
 
-Source: "resources\CheckNetworkInterfaces.ps1"; Flags: dontcopy noencryption
-Source: "resources\CheckVirtualSupport.ps1"; Flags: dontcopy noencryption
+Source: "resources\EnumerateNetworkInterfaces.ps1"; Flags: dontcopy noencryption
+Source: "resources\EnumerateVirtualMachineProviders.ps1"; Flags: dontcopy noencryption
+Source: "resources\EnumerateVirtualMachines.ps1"; Flags: dontcopy noencryption
+Source: "resources\CreateConfiguration.ps1"; DestDir: "{tmp}";
+Source: "resources\IniFile.cs"; DestDir: "{tmp}";
+
 Source: "resources\network.ico"; Flags: dontcopy noencryption
-
-Source: "build\components\DesomniaServiceConfigurator.exe"; DestDir: "{tmp}"; Flags: ignoreversion
+Source: "resources\network.png"; Flags: dontcopy noencryption
 
 Source: "build\components\service\x64\*"; DestDir: "{app}"; Components: DesomniaService; Flags: ignoreversion recursesubdirs createallsubdirs; Check: IsX64
 Source: "build\components\service\arm64\*"; DestDir: "{app}"; Components: DesomniaService; Flags: ignoreversion recursesubdirs createallsubdirs; Check: IsARM64
@@ -106,22 +127,18 @@ Source: "build\components\plugins\FirewallKnockOperator\*"; DestDir: "{app}\plug
 Source: "build\components\plugins\DesomniaServiceBridge\*"; DestDir: "{app}\plugins\DesomniaServiceBridge"; Components: plugins\DesomniaServiceBridge; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 
 [INI]
-Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: timeout; String: {code:SystemMonitorPrefs|Timeout}; Check: ShouldConfigureSystemMonitor
-Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: idle; String: {code:SystemMonitorPrefs|IdleAction}; Check: ShouldConfigureSystemMonitor
-Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: usage; String: {code:SystemMonitorPrefs|UsageAction}; Check: ShouldConfigureSystemMonitor
-
-Filename: {tmp}\prefs.ini; Section: SessionMonitor; Key: track; String: {code:SessionMonitorPrefs|Track}; Check: ShouldConfigureSessionMonitor
-Filename: {tmp}\prefs.ini; Section: SessionMonitor; Key: allowSleepControl; String: {code:SessionMonitorPrefs|AllowSleepControl}; Check: ShouldConfigureSleepControl
+Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: version; String: 1; Check: ShouldConfigureDesomnia
+Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: timeout; String: {code:SystemMonitorPrefs|Timeout}; Check: ShouldConfigureDesomnia
+Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: idle; String: {code:SystemMonitorPrefs|IdleAction}; Check: ShouldConfigureDesomnia
+Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: demand; String: {code:SystemMonitorPrefs|DemandAction}; Check: ShouldConfigureDesomnia
 
 Filename: {tmp}\prefs.ini; Section: DuoStreamMonitor; Key: idle; String: {code:DuoStreamMonitorPrefs|IdleAction}; Check: ShouldConfigureDuoStreamMonitor
 Filename: {tmp}\prefs.ini; Section: DuoStreamMonitor; Key: demand; String: {code:DuoStreamMonitorPrefs|DemandAction}; Check: ShouldConfigureDuoStreamMonitor
 
-Filename: {tmp}\prefs.ini; Section: NetworkMonitor; Key: interface; String: {code:NetworkMonitorPrefs|Interface}; Check: ShouldConfigureNetworkMonitor
 Filename: {tmp}\prefs.ini; Section: NetworkMonitor; Key: name; String: {code:NetworkMonitorPrefs|InterfaceName}; Check: ShouldConfigureNetworkMonitor
-
-Filename: {tmp}\prefs.ini; Section: NetworkSessionMonitor; Key: track; String: {code:NetworkSessionMonitorPrefs|Track}; Check: ShouldConfigureNetworkSessionMonitor
-Filename: {tmp}\prefs.ini; Section: PowerRequestMonitor; Key: track; String: {code:PowerRequestMonitorPrefs|Track}; Check: ShouldConfigurePowerRequestMonitor
-
+Filename: {tmp}\prefs.ini; Section: NetworkMonitor; Key: interface; String: {code:NetworkMonitorPrefs|InterfaceID}; Check: ShouldConfigureNetworkMonitor
+Filename: {tmp}\prefs.ini; Section: NetworkMonitor; Key: network; String: {code:NetworkMonitorPrefs|Network}; Check: ShouldConfigureNetworkMonitor
+Filename: {tmp}\prefs.ini; Section: NetworkMonitor; Key: mode; String: {code:NetworkMonitorPrefs|Mode}; Check: ShouldConfigureNetworkMonitor
 
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
@@ -151,11 +168,12 @@ Filename: "sc.exe"; \
   Flags: runhidden waituntilterminated
 
   
-Filename: "{tmp}\DesomniaServiceConfigurator.exe"; \
-  Parameters: "init ""{tmp}\prefs.ini"" ""{app}\config\monitor.xml"""; \
+Filename: "powershell.exe"; \
+  Parameters: "-ExecutionPolicy Bypass -File ""{tmp}\CreateConfiguration.ps1"" -IniPath ""{tmp}\prefs.ini"" -XmlPath ""{app}\config\monitor.xml"""; \
   StatusMsg: "Configuring Desomnia..."; \
   Flags: runhidden waituntilterminated; \
   Check: ShouldConfigureDesomnia
+  
   
 // Post Installation Checkboxes //
 
@@ -182,81 +200,41 @@ Filename: "sc.exe"; \
 Type: filesandordirs; Name: "{app}\logs";
 Type: filesandordirs; Name: "{commonappdata}\{#MyAppName}\Installer";
 
-
 [Code]
 var
-  HasReadConfigFile: Boolean;
-  DeleteConfigFiles: Boolean; 
-  
+  DeleteConfigFiles: Boolean;
+
 function InitializeSetup: Boolean;
 begin
   IsReinstall := RegKeyExists(HKEY_LOCAL_MACHINE, UninstallKey);
-
-  HasReadConfigFile := False;
   
-  CheckVirtualSupport
+  VirtualProviders := EnumerateVirtualMachineProviders;
   
   Result := True;
 end;
 
-procedure VersionLabelOnLinkClick(Sender: TObject; const Link: string; LinkType: TSysLinkType);
-var
-  ErrorCode: Integer;
-begin
-  ShellExecAsOriginalUser('open', Link, '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
-end;
-
-procedure CreateVersionLabel();
-var
-  DummyLabel: TLabel;
-  VersionLabel: TNewLinkLabel;
-begin
-  DummyLabel := TLabel.Create(WizardForm);
-  DummyLabel.Caption := 'Version';
-    
-  VersionLabel := TNewLinkLabel.Create(WizardForm);
-  //VersionLabel.Caption := 'Version {#MyAppVersion}';
-  if not ('{#MyAppVersion}' = '') then
-    VersionLabel.Caption := 'Version <a href="https://github.com/MadWizardDE/Desomnia/releases/tag/v{#MyAppVersion}">{#MyAppVersion}</a>';
-  //VersionLabel.Font.Color := clGreen;
-  //VersionLabel.Font.Style := fsBold;
-
-  VersionLabel.Left := ScaleX(10);
-  VersionLabel.Top := WizardForm.CancelButton.Top + (WizardForm.CancelButton.Height / 2) - (DummyLabel.Height / 2)
-  VersionLabel.Anchors := [akLeft, akBottom];
-  //VersionLabel.Enabled := False;
-  VersionLabel.OnLinkClick := @VersionLabelOnLinkClick;
-
-  VersionLabel.UseVisualStyle := False;
-
-  VersionLabel.Parent := WizardForm;
-end;
-
-
 procedure InitializeWizard();
 begin
-  RemoveAboutMenu
+  RemoveAboutMenu;
   
   CreateVersionLabel;
   
   SettingsPage := CreateSettingsPage(wpSelectComponents);
-  DuoSettingsPage := CreateDuoSettingsPage(SettingsPage.ID);
-  NetworkSettingsPage := CreateNetworkSettingsPage(DuoSettingsPage.ID);
+  NetworkSettingsPage := CreateNetworkSettingsPage(SettingsPage.ID);
+  VirtualMachineSettingsPage := CreateVirtualMachineSettingsPage(NetworkSettingsPage.ID);
   
-  RefreshNetworkInterfaces
-end;
-
-<event('CurPageChanged')>
-procedure AfterPageChanged(CurPageID: Integer);
-begin
-  if CurPageID = wpSelectComponents then
-    if IsReinstall and HasExistingConfig() and not HasReadConfigFile then
-      HasReadConfigFile := ReadExistingConfig;
 end;
 
 <event('CurStepChanged')>
 procedure PostInstallSetup(CurStep: TSetupStep);
 begin
+  if CurStep = ssInstall then
+  begin
+    ExtractTemporaryFile('prefs.ini');
+
+    ExportHostServiceConfig(ExpandConstant('{tmp}\prefs.ini'));
+  end;
+
   if CurStep = ssPostInstall then
   begin
     AddUninstallerArguments('/SILENT /CONTROLPANEL');
@@ -293,4 +271,3 @@ begin
       DelTree(ExpandConstant('{app}\config'), True, True, True);
   end;
 end;
-

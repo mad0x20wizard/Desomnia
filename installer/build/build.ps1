@@ -1,25 +1,14 @@
 param([string]$Version = "")
 
-$env:VERSION_NET = "9.0"
+$components = "./components"
 
-. "./functions.ps1"
-
-# Build Service (x64)
-. "./buildService.ps1" -TargetDirectory "./components/service/x64" -Arch 'x64'
-. "./buildServiceHelper.ps1" -TargetDirectory "./components/service/x64" -Arch 'x64'
-# Build Service (arm64)
-. "./buildService.ps1" -TargetDirectory "./components/service/arm64" -Arch 'arm64'
-. "./buildServiceHelper.ps1" -TargetDirectory "./components/service/arm64" -Arch 'arm64'
-
-# Build Plugins
-. "./buildPlugins.ps1" -TargetParentDirectory "./components/plugins"
-. "./buildServiceBridge.ps1" -TargetDirectory "./components/plugins/DesomniaServiceBridge"
+# Build application components
+. "./buildApplication.ps1" -ComponentsDirectory $components
 
 # Build Installer
-. "./buildServiceConfigurator.ps1" -TargetDirectory "./components"
 . "./buildSetup.ps1" -Version $Version
 
-Remove-Item -Path "./components" -Recurse -Force
+Remove-Item -Path $components -Recurse -Force
 
 exit 0
 

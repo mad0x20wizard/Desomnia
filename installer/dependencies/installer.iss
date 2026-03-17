@@ -3,41 +3,15 @@
 [Code]
 
 const
+  UninstallKey = 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{#MyAppId}_is1';
+  UninstallStringName = 'UninstallString';
+
+const
   NPCAP_VERSION = '1.85';
   
 var
-  HyperVInstalled: Boolean;
+  IsReinstall: Boolean;
   
-procedure CheckVirtualSupport;
-var
-  ScriptFile: string;
-  ResultCode: Integer;
-  I: Integer;
-  
-  ExecOutput: TExecOutput;
-  Lines: TArrayOfString;
-begin
-  HyperVInstalled := false;
-
-  ExtractTemporaryFile('CheckVirtualSupport.ps1');
-  
-  ScriptFile := ExpandConstant('{tmp}\CheckVirtualSupport.ps1')
-
-  // Run PowerShell script and capture output
-  if ExecAndCaptureOutput('powershell.exe', '-ExecutionPolicy Bypass -File "' + ScriptFile + '"', ExpandConstant('{tmp}'), SW_HIDE, ewWaitUntilTerminated, ResultCode, ExecOutput) then
-  begin
-    Lines := ExecOutput.StdOut;
-    
-    for I := 0 to GetArrayLength(Lines) - 1 do
-    begin
-      if Lines[I] = 'HyperV' then
-      begin
-        HyperVInstalled := true;
-      end;
-    end;
-  end;
-end;
-
 function IsNpcapInstalled(): Boolean;
 var
   InstalledVersion: string;
@@ -51,11 +25,6 @@ end;
 function IsDuoInstalled(): Boolean;
 begin
   Result := RegKeyExists(GetHKLM, 'SOFTWARE\Duo');   
-end;
-
-function IsHyperVInstalled(): Boolean;
-begin
-  Result := HyperVInstalled;   
 end;
 
 function IsBridgeReady(): Boolean;
@@ -109,4 +78,19 @@ begin
     
   ForceDirectories(ExtractFileDir(TargetPath));
   FileCopy(SourceFile, TargetPath, False);
+end;
+
+
+procedure AddUninstallerArguments(Arguments: String);
+var
+  S: string;
+begin
+  if RegQueryStringValue(HKEY_LOCAL_MACHINE, UninstallKey, UninstallStringName, S) then
+  begin
+    S := S + ' ' + Arguments;
+    
+    if not RegWriteStringValue(HKEY_LOCAL_MACHINE, UninstallKey, UninstallStringName, S) then
+      MsgBox('Error adding arguments to uninstaller.', mbError, MB_OK);
+  end else
+      MsgBox('Error reading arguments of uninstaller from ' + UninstallKey, mbError, MB_OK);
 end;
