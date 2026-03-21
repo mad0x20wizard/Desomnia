@@ -3,12 +3,12 @@ Manually
 
 :OS: 🐧 *Linux*
 
-To install Desomnia manually as a systemd daemon onto your system, you can follow this guide.
+Follow this guide to learn how to use Desomnia on your Linux based OS and setup everything by yourself.
 
 Prerequisites
 -------------
 
-In order to be able to run Desomnia on your system, you will need the .NET Runtime (< 100 MB in size). You can use this official script, to download everything you need into the default location, where the runtime environment will be found automatically::
+In order to be able to run Desomnia on your system, you will need the .NET Runtime (< 100 MB in size). You can use the official script, to download everything you need into the default location, where the runtime environment will be found automatically::
 
     curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 10.0 -runtime dotnet --install-dir /usr/share/dotnet
 
@@ -16,13 +16,20 @@ For the monitoring of network services the `libpcap`_ library is used, which is 
 
     apt-get install libpcap-dev
 
+Portable mode
+-------------
+
+To see if Desomnia is compatible with your system and network infrastructure, you can try using the application in portable mode.
+
+First go to the `GitHub Releases <https://github.com/mad0x20wizard/Desomnia/releases>`_ page and download the appropriate version for your platform. Set the necessary executable permission on the binary with ``chmod +x ./desomniad``. Then create an suitable configuration file and place it next to the binary. Additional plugin archives can be downloaded into a subdirectory ``plugins``. You can then test the application by running ``./desomniad`` as root.
+
 Filesystem layout
 -----------------
 
-There is nothing wrong in using Desomnia in portable mode with everything residing in the same directory. But for a persistent installation, you are encouraged to use these locations in alignment with the `Filesystem Hierarchy Standard <https://en.wikipedia.org/wiki/Filesystem_Hierarchy_Standard>`_ (FHS) on Unix systems:
+If you aim for a more persistent installation, you are encouraged to use these locations in alignment with the `Filesystem Hierarchy Standard`_ (FHS) on Unix systems:
 
 /usr/sbin
-    Drop the appropriate executable for your platform and architecture into this location, so it can be automatically found. Don't forget to set the necessary executable permission on the file with ``chmod +x /usr/sbin/desomniad``.
+    Drop the appropriate executable for your platform and architecture into this location, so it can automatically be found. Don't forget to set the necessary executable permission on the file with ``chmod +x /usr/sbin/desomniad``.
 
 .. include:: ./paths.rst
 
@@ -56,3 +63,7 @@ After you created or changed the configuration file, you have to reload systemd 
 To see the latest INFO logging, use ``journalctl -u desomnia -f -n 80``. Here you can see which hosts have received a Magic Packet recently and why.
 
 .. _`libpcap`: https://github.com/the-tcpdump-group/libpcap
+
+.. _'Filesystem Hierarchy Standard': https://en.wikipedia.org/wiki/Filesystem_Hierarchy_Standard
+
+.. _'Releases': 

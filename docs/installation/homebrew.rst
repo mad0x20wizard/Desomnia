@@ -53,6 +53,24 @@ If you want to stop the Homebrew service and unregister it from auto-start, you 
 
     You need to use ``sudo`` here so that Desomnia will be installed and uninstalled as a system service with root privileges.
 
+.. note::
+
+   Although Homebrew suggests to install and run the service the same way on both platforms, there are some discrepancies, while doing this on 🐧 **Linux**:
+   
+   - Running the brew command with sudo can fail, if brew is not on the default path of the root user. You can get around this by specifying an absolute path instead:
+
+      .. code:: bash
+
+         sudo /home/linuxbrew/.linuxbrew/bin/brew services start mad0x20wizard/tools/desomnia
+
+   - On some platforms, it seems necessary to configure sudo to preserve the ``HOME`` environment variable in order to run the brew command as root:
+
+      .. code:: bash
+
+         sudo --preserve-env=HOME brew services start mad0x20wizard/tools/desomnia
+
+   Please use either of these fixes or both, to successfully configure Desomnia as a root service on your system.
+
 Plugins included
 ----------------
 

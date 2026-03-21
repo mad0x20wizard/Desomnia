@@ -13,11 +13,24 @@ It does the work for you, to register Desomnia as a system service, download and
 Optional Features
 -----------------
 
-This installer includes all the available plugins from the main repository. You can install these plugins as needed, provided your system meets the necessary requirements:
+The installer includes all the available plugins from the main repository. You can install these plugins as needed, provided your system meets the necessary requirements:
 
 * :doc:`/plugins/duo/plugin` – needs **Duo** to be installed
 * :doc:`/plugins/hyperv` – needs the **Hyper-V-Platform** feature enabled
 * :doc:`/plugins/fko`
+
+Configuration wizard
+--------------------
+
+To ease the onboarding process, the installer will ask you a few questions to create an initial configuration file. This will allow you to configure the following options:
+
+- Decide if Desomnia should replace the built-in power management
+- Set timeouts and delays
+- Select a specific :doc:`network interface </modules/network/interface>` for monitoring
+- Enable :doc:`Promiscuous mode </modules/network/promiscuous>`
+- Configure local and remote hosts/services
+- Instruct Desomnia to perform :doc:`Single Packet Authorization </modules/network/knocking>` (SPA)
+- Add :doc:`virtual machines </modules/network/virtual>` to monitor and automate
 
 Uninstallation
 --------------
