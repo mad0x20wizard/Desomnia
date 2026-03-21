@@ -1,10 +1,10 @@
 Virtual machines
 ================
 
-Because this is something you may or may not need, depending on the level of your wizardry, the ramifications of having virtual machines in your setup will be discussed here separately.
+Because this is a somehow advanced feature, the ramifications of having virtual machines in your setup will be discussed here separately.
 
-Why this is useful
-------------------
+When this becomes useful
+------------------------
 
 If you run a couple of VMs in your network, which offer dedicated services that are reachable under individual host names and share a bridged network interface with their respective physical host, it can be beneficial to make the Network Monitor aware of them:
 
@@ -60,4 +60,4 @@ There are two different types of virtual hosts, identified by the combination of
 ``<RemoteHost>`` × ``<VirtualHost>``
     Since virtual machines on remote hosts cannot be controlled directly by any standard protocol, your options are a bit more limited here. So when Desomnia registers a connection attempt to one of their services, it will at least try to wake up their physical host.
     
-    If it happens, that you also run Desomnia as a :doc:`local sleep manager </guides/sleep>` on the remote host, it can take it over from there and start the virtual machine if it is not already running.
+    If it happens, that you also run Desomnia as a :doc:`local resource manager </guides/sleep>` on the remote host, it can take it over from there and start the virtual machine if it is not already running.
