@@ -60,7 +60,10 @@ Starting and stopping
 
 After you created or changed the configuration file, you have to reload systemd with ``systemctl daemon-reload``. If you want that Desomnia is started with the system, you can enable it with ``systemctl enable desomnia``. In any case you will start Desomnia with ``systemctl start desomnia`` and stop it gracefully with ``systemctl stop desomnia``.
 
-To see the latest INFO logging, use ``journalctl -u desomnia -f -n 80``. Here you can see which hosts have received a Magic Packet recently and why.
+Logging
++++++++
+
+.. include:: ./journal.rst
 
 .. _`libpcap`: https://github.com/the-tcpdump-group/libpcap
 

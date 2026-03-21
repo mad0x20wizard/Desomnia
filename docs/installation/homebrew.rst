@@ -55,7 +55,7 @@ If you want to stop the Homebrew service and unregister it from auto-start, you 
 
 .. note::
 
-   Although Homebrew suggests to install and run the service the same way on both platforms, there are some discrepancies, while doing this on 🐧 **Linux**:
+   Although Homebrew suggests to install and run the service the same way on both platforms, a couple of problems can arise, while doing this on 🐧 **Linux**:
    
    - Running the brew command with sudo can fail, if brew is not on the default path of the root user. You can get around this by specifying an absolute path instead:
 
@@ -79,9 +79,16 @@ If you install Desomnia via Homebrew, it comes with all the plugins of the main 
 Logging
 -------
 
-You can find the **StandardOutput** and **-Error** logs at ``.../var/log/desomnia``.
+macOS
++++++
 
-In order for Desomnia to write additional log files, you must create a :doc:`log configuration </concepts/logging>` at ``.../etc/desomnia/NLog.config``.
+You can find the **StandardOutput** and **-Error** logs at ``.../var/log/desomnia``. In order for Desomnia to write additional log files, you must create a :doc:`log configuration </concepts/logging>` at ``.../etc/desomnia/NLog.config``.
+
+Linux
++++++
+
+.. include:: ./journal.rst
+
 
 Uninstallation
 --------------
