@@ -23,11 +23,9 @@
    :maxdepth: 2
    :caption: Basic Concepts
 
-   /concepts/intro
    /concepts/resources
    /concepts/events
    /concepts/logging
-
 
 .. toctree::
    :maxdepth: 2

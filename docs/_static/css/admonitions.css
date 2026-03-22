@@ -17,3 +17,13 @@
         }
     }
 }
+
+html[data-theme="dark"] .admonition-work-in-progress
+{
+    background: DimGray !important;
+
+    .admonition-title
+    {
+        background: #3b3b3b !important;
+    }
+}
