@@ -19,7 +19,7 @@ namespace MadWizard.Desomnia.Network.Configuration
         public IPNetwork?       Network         { get; set; }
 
         public bool             UseBPF          { get; set; } = true;
-        public TimeSpan?        DeviceTimeout   { get; set; } = null;
+        public TimeSpan?        DeviceTimeout   { get; set; } = TimeSpan.FromMinutes(1); //= null; // TODO: safety net, but why?
 
         // Actions
         public DelayedAction?   OnConnect       { get; set; }

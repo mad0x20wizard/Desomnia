@@ -128,7 +128,9 @@ namespace MadWizard.Desomnia.Network.Context
                         .WithParameter(TypedParameter.From(timeout))
                         .AsImplementedInterfaces()
                         .InstancePerNetwork()
-                        .AsSelf();
+                        .AsSelf()
+
+                        .OnActivated(x => x.Instance.GatewayTimeout = config.PingTimeout);
                 }
 
                 if (config.Hosts.Any(h => h.Trace))
