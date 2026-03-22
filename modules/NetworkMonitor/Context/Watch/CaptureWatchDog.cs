@@ -3,6 +3,7 @@ using MadWizard.Desomnia.Network.Reachability;
 using MadWizard.Desomnia.Network.Services;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
+using SharpPcap;
 
 namespace MadWizard.Desomnia.Network.Context.Watch
 {
@@ -79,6 +80,12 @@ namespace MadWizard.Desomnia.Network.Context.Watch
                 {
                     break;
                 }
+                //catch (PcapException ex)
+                //{
+                //    Logger.LogError(ex, $"An error while accessing device '{Device.Name}, reconfiguring network monitors...'");
+
+                //    await Observer.ReconfigureNetworkMonitors();
+                //}
                 catch (Exception ex)
                 {
                     Logger.LogError(ex, $"An error while checking device '{Device.Name}'");
