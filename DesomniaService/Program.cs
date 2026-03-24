@@ -45,7 +45,7 @@ try
 
             if (isRunningAsService)
             {
-                builder.RegisterModule<WindowsServiceModule>();
+                builder.RegisterModule(new WindowsServiceModule(watcher.Token));
             }
 
             builder.RegisterModule<MadWizard.Desomnia.CoreModule>();
@@ -63,6 +63,13 @@ try
             builder.LoadConfiguration(configPath);
 
             builder.Build().RunAsync(watcher.Token).Wait();
+        }
+
+        if (isRunningAsService && watcher.HasChanged)
+        {
+            EventLog.WriteEntry(EVENT_LOG_SOURCE, $"Configuration file changed. Restarting...", EventLogEntryType.Information);
+
+            return -1;
         }
     }
     while (watcher.HasChanged);

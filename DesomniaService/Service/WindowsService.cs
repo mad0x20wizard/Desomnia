@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
 using System.Text;
@@ -15,6 +16,8 @@ namespace MadWizard.Desomnia.Service
     public class WindowsService : WindowsServiceLifetime
     {
         public required ILogger<WindowsService> Logger { private get; init; }
+
+        public required CancellationToken RestartToken { private get; init; }
 
         public WindowsService(IHostEnvironment environment, IHostApplicationLifetime lifetime, ILoggerFactory logging, IOptions<HostOptions> options)
             : base(environment, lifetime, logging, options)
@@ -44,6 +47,11 @@ namespace MadWizard.Desomnia.Service
 
         protected override void OnStop()
         {
+            if (RestartToken.IsCancellationRequested)
+            {
+                ScheduleSelfRestart();
+            }
+
             Logger.LogInformation("Shutdown requested...");
 
             base.OnStop();
@@ -60,6 +68,27 @@ namespace MadWizard.Desomnia.Service
         protected override void OnSessionChange(SessionChangeDescription changeDescription)
         {
             SessionChanged?.Invoke(this, changeDescription);
+        }
+
+        private void ScheduleSelfRestart()
+        {
+            var ps = $@"
+                $service = '{this.ServiceName}'
+                do {{
+                    Start-Sleep -Seconds 1
+                    $s = Get-Service -Name $service -ErrorAction SilentlyContinue
+                }} while ($s -and $s.Status -ne 'Stopped')
+
+                Start-Service -Name $service
+            ";
+
+            System.Diagnostics.Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -NonInteractive -WindowStyle Hidden -Command \"{ps}\"",
+                CreateNoWindow = true,
+                UseShellExecute = false
+            });
         }
 
         #region ServiceStatus
