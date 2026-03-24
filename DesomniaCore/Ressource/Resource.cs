@@ -24,17 +24,12 @@ namespace MadWizard.Desomnia
         public event EventInvocation? Idle;
         public event EventInvocation? Demand;
 
-        protected event EventHandler<MonitorEventArgs>? MonitoringStarted;
-        protected event EventHandler<MonitorEventArgs>? MonitoringStopped;
-
         internal void StartTrackingBy(ResourceMonitor monitor, bool adopt)
         {
             if (adopt)
             {
                 Monitors.Add(monitor);
             }
-
-            MonitoringStarted?.Invoke(this, new MonitorEventArgs(monitor));
         }
 
         private void TriggerIdle(Event @event)
@@ -90,8 +85,6 @@ namespace MadWizard.Desomnia
         internal void StopTrackingBy(ResourceMonitor monitor)
         {
             Monitors.Remove(monitor);
-
-            MonitoringStopped?.Invoke(this, new MonitorEventArgs(monitor));
         }
 
         #region Action/Error-Bubbling

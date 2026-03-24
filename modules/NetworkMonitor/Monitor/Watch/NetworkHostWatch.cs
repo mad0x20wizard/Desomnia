@@ -1,5 +1,6 @@
 ﻿using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Network.Neighborhood;
+using MadWizard.Desomnia.Ressource.Events;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
 
@@ -23,7 +24,13 @@ namespace MadWizard.Desomnia.Network
 
         public NetworkServiceWatch? this[NetworkService? service] => this.Where(watch => watch.Service == service).FirstOrDefault();
 
-        protected override bool ShouldInspectResource(NetworkServiceWatch service) => !service.IsHidden;
+        internal protected override void StartWatch()
+        {
+            foreach (var service in this)
+                service.StartWatch();
+
+            base.StartWatch();
+        }
 
         protected internal override void ReportNetworkTraffic(EthernetPacket packet)
         {
@@ -43,6 +50,16 @@ namespace MadWizard.Desomnia.Network
             }
         }
 
+        internal protected override void StopWatch()
+        {
+            foreach (var service in this)
+                service.StopWatch();
+
+            base.StopWatch();
+        }
+
+        protected override bool ShouldInspectResource(NetworkServiceWatch service) => !service.IsHidden;
+
         protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
         {
             if (HadThresholdTraffic(interval, out long bytes))
@@ -57,5 +74,6 @@ namespace MadWizard.Desomnia.Network
                 yield return token;
             }
         }
+
     }
 }

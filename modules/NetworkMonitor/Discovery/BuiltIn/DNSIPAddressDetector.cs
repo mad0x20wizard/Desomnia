@@ -39,7 +39,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
 
             foreach (var ip in await FindIPAddresses(host, family, CancellationToken.None))
             {
-                if (host.AddAddress(ip))
+                if (host.AddAddress(ip, options.Refresh))
                 {
                     Logger.LogHostAddressAdded(host, ip);
                 }
@@ -66,7 +66,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
                         {
                             foreach (var ip in await FindIPAddresses(host, family, _autoCancellation.Token))
                             {
-                                if (host.AddAddress(ip))
+                                if (host.AddAddress(ip, options.Refresh))
                                 {
                                     Logger.LogHostAddressAdded(host, ip);
                                 }

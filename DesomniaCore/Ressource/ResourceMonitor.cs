@@ -70,6 +70,16 @@ namespace MadWizard.Desomnia
                         yield return token;
         }
 
+        public override void Dispose()
+        {
+            foreach (var inspectable in this.ToArray())
+            {
+                this.StopTracking(inspectable);
+            }
+
+            base.Dispose();
+        }
+
         IEnumerator<T> IEnumerable<T>.GetEnumerator() => _inspectables.GetEnumerator();
     }
 }

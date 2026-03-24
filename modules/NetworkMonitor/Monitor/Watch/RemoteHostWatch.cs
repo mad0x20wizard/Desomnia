@@ -51,9 +51,7 @@ namespace MadWizard.Desomnia.Network
             Seen += RemoteHostWatch_Seen;
             Unseen += RemoteHostWatch_Unseen;
 
-            MonitoringStarted += RemoteHostWatch_TrackingStarted;
             UnMagicPacket += RemoteHostWatch_UnMagicPacket;
-            MonitoringStopped += RemoteHostWatch_TrackingStopped;
 
             Suspended += async (@event) => HandleOffline(true);
             Stopped += async (@event) => HandleOffline(false);
@@ -313,7 +311,7 @@ namespace MadWizard.Desomnia.Network
         #endregion
 
         #region Triggers for Ping
-        private void RemoteHostWatch_TrackingStarted(object? sender, MonitorEventArgs args)
+        protected internal override void StartWatch()
         {
             if (PingOptions.Frequency is TimeSpan interval && interval > TimeSpan.Zero)
             {
@@ -322,6 +320,8 @@ namespace MadWizard.Desomnia.Network
                 _pingTimer.AutoReset = true;
                 _pingTimer.Start();
             }
+
+            base.StartWatch();
         }
 
         private async void Timer_Elapsed(object? sender, ElapsedEventArgs e)
@@ -348,10 +348,12 @@ namespace MadWizard.Desomnia.Network
             });
         }
 
-        private void RemoteHostWatch_TrackingStopped(object? sender, MonitorEventArgs args)
+        protected internal override void StopWatch()
         {
             _pingTimer?.Stop();
             _pingTimer = null;
+
+            base.StopWatch();
         }
         #endregion
 

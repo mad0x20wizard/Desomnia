@@ -49,9 +49,10 @@ namespace MadWizard.Desomnia.Network
             Device.EthernetCaptured += HandlePacket;
 
             foreach (var service in Services)
-            {
                 service.Startup();
-            }
+
+            foreach (var watch in this)
+                watch.StartWatch();
 
             TriggerEvent(nameof(Connected));
 
@@ -67,9 +68,10 @@ namespace MadWizard.Desomnia.Network
             Device.StartCapture();
 
             foreach (var service in Services)
-            {
                 service.Resume();
-            }
+
+            foreach (var watch in this)
+                watch.StartWatch();
         }
 
         private void HandlePacket(object? sender, EthernetPacket packet)
@@ -85,10 +87,11 @@ namespace MadWizard.Desomnia.Network
 
         internal void SuspendMonitoring()
         {
+            foreach (var watch in this)
+                watch.StopWatch();
+
             foreach (var service in Services)
-            {
                 service.Suspend();
-            }
 
             Device.StopCapture();
 
@@ -101,12 +104,13 @@ namespace MadWizard.Desomnia.Network
 
             Network.HostRemoved -= Network_HostRemoved;
 
-            Device.EthernetCaptured -= HandlePacket;
+            foreach (var watch in this)
+                watch.StopWatch();
 
             foreach (var service in Services)
-            {
                 service.Shutdown();
-            }
+
+            Device.EthernetCaptured -= HandlePacket;
 
             TriggerEvent(nameof(Disconnected));
         }
