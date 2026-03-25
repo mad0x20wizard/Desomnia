@@ -8,8 +8,8 @@ namespace MadWizard.Desomnia.Network
 
         public NetworkHost Host => host;
 
-        public IList<NetworkServiceUsage> Services => [.. Tokens.OfType<NetworkServiceUsage>()];
+        private IEnumerable<NetworkServiceUsage> ServiceTokens => Tokens.OfType<NetworkServiceUsage>();
 
-        public override string ToString() => Name + (Services != null ? ":" + string.Join(':', Services) : string.Empty);
+        public override string ToString() => Name + (ServiceTokens.Any() ? ":" + string.Join(':', ServiceTokens) : string.Empty);
     }
 }

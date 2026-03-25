@@ -3,6 +3,7 @@ using Autofac.Core.Registration;
 using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Pipe.Messages;
+using MadWizard.Desomnia.Process;
 using MadWizard.Desomnia.Session;
 using MadWizard.Desomnia.Session.Manager;
 using MadWizard.Desomnia.Session.Manager.Bridged;
@@ -81,6 +82,12 @@ namespace MadWizard.Desomnia.Service.Bridge.Notification
                 {
                     DisplayName = service.Service.Name,
                     TypeName = "Netzwerkdienst",
+                },
+
+                ProcessUsage process => new UsageTokenInfo
+                {
+                    DisplayName = process.Name,
+                    TypeName = "Prozess",
                 },
 
                 _ => ConvertUnknownToken(token)

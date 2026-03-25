@@ -1,4 +1,6 @@
-﻿namespace MadWizard.Desomnia.Session
+﻿using MadWizard.Desomnia.Session.Manager;
+
+namespace MadWizard.Desomnia.Session
 {
     public class SessionUsage(string userName, string? clientName = null) : UsageToken
     {
@@ -6,6 +8,8 @@
         public string? ClientName => clientName;
 
         public bool IsRemote => clientName != null;
+
+        public SessionUsage(ISession session) : this(session.UserName, session.ClientName) { }
 
         //public bool MatchesNetworkSession(NetworkSessionUsage usage)
         //{
@@ -25,6 +29,24 @@
 
         public bool HasNetworkSession { get; set; }
 
-        public override string ToString() => "<" + (HasNetworkSession ? @"\\" : "") + (clientName != null ? @$"{clientName}\" : string.Empty) + userName + ">";
+        public override string ToString()
+        {
+            string str = string.Empty;
+
+            str += "<";
+
+            if (HasNetworkSession)
+                str += @"\\";
+
+            str += (clientName != null ? @$"{clientName}\" : string.Empty) + userName;
+
+            foreach (var process in Tokens)
+                str += "+" + process.ToString();
+
+            str += ">";
+
+            return str;
+
+        }
     }
 }

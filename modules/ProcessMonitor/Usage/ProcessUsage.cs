@@ -17,20 +17,16 @@
             this.Time = time;
         }
 
-        public override string ToString()
+        public string ToUsage()
         {
-            var str = "{";
-
-            str += $"{Name}";
-
             if (Usage is double usage)
-                str += $":{usage*100:0.0}%";
+                return $":{usage * 100:0.0}%";
             else if (Time is TimeSpan time)
-                str += $":{time}";
-
-            str += "}";
-
-            return str;
+                return $":{time}";
+            else
+                return "";
         }
+
+        public override string ToString() => "{" + Name + ToUsage() + "}";
     }
 }

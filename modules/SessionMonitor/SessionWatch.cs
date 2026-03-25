@@ -1,6 +1,8 @@
-﻿using MadWizard.Desomnia.Network.Configuration.Options;
+﻿using Autofac.Core;
+using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 
@@ -75,22 +77,30 @@ namespace MadWizard.Desomnia.Session
 
         protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
         {
+            var token = new SessionUsage(Session);
+
+            foreach (var processToken in base.InspectResource(interval))
+                token.Tokens.Add(processToken);
+
+            if (HadUsageSince(interval) || token.Tokens.Count > 0)
+                yield return token;
+        }
+
+        private bool HadUsageSince(TimeSpan interval)
+        {
             if (Session.IsRemoteConnected && !Clock.Remote)
             {
-                yield return new SessionUsage(Session.UserName, Session.ClientName);
+                return true;
             }
             else if ((Clock.Disconnected || Session.IsConnected) && Session.IdleTime is TimeSpan time)
             {
                 if (time < (MaxIdleTime ?? interval))
                 {
-                    yield return new SessionUsage(Session.UserName, Session.ClientName);
+                    return true;
                 }
             }
 
-            foreach (var token in base.InspectResource(interval))
-            {
-                yield return token;
-            }
+            return false;
         }
 
         [ActionHandler("lock")]

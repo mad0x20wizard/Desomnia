@@ -21,8 +21,5 @@ namespace MadWizard.Desomnia.Session
         }
 
         protected override IEnumerable<IProcess> EnumerateProcesses() => Session.Processes;
-
-        protected override SessionProcessUsage CreateUsageToken(double usage) => new(Name, usage) { UserName = Session.UserName };
-        protected override SessionProcessUsage CreateUsageToken(TimeSpan time) => new(Name, time) { UserName = Session.UserName };
     }
 }
