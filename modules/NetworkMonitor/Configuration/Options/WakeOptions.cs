@@ -8,6 +8,7 @@
         public TimeSpan     Timeout { get; init; }
         public TimeSpan?    Repeat  { get; init; }
 
+        public bool         Ping    { get; init; }
         public bool         Silent  { get; init; }
     }
 

@@ -13,7 +13,7 @@ namespace MadWizard.Desomnia.Network
         {
             if (base.ShouldStartRequest(packet))
             {
-                return !IsOnline || packet.IsIPUnicast(); // if host is online, only consider Address traffic
+                return !IsOnline || packet.IsIPUnicast(); // if host is online, only consider unicast traffic
             }
 
             return false;

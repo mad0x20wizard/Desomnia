@@ -76,20 +76,24 @@ namespace MadWizard.Desomnia.Network.Reachability
 
         public async Task<TimeSpan> MaybePingUntil(RemoteHostWatch watch, TimeSpan? timeout = null)
         {
-            using var timer = new System.Timers.Timer(100);
+            var ips = watch.Host.IPAddresses.Where(ip => watch.WakeOptions.Ping || !Network.LocalRange.Contains(ip));
 
-            foreach (var ip in watch.Host.IPAddresses)
+            return await PingUntil(watch, ips, timeout);
+        }
+
+        public async Task<TimeSpan> PingUntil(RemoteHostWatch watch, IEnumerable<IPAddress> ips, TimeSpan? timeout = null)
+        {
+            using var timer = new System.Timers.Timer(watch.PingOptions.Timeout);
+
+            foreach (var ip in ips)
             {
-                if (!Network.LocalRange.Contains(ip))
+                timer.Elapsed += (sender, args) =>
                 {
-                    timer.Elapsed += (sender, args) =>
+                    using (Logger.BeginHostScope(watch.Host))
                     {
-                        using (Logger.BeginHostScope(watch.Host))
-                        {
-                            SendICMPEchoRequest(ip);
-                        }
-                    };
-                }
+                        SendPing(ip);
+                    }
+                };
             }
 
             timer.Start();
@@ -134,17 +138,22 @@ namespace MadWizard.Desomnia.Network.Reachability
 
             foreach (var ip in test)
             {
-                if (useICMP || !Network.LocalRange.Contains(ip))
-                    SendICMPEchoRequest(ip);
-                else if (ip.AddressFamily == AddressFamily.InterNetwork)
-                    SendARPRequest(ip);
-                else if (ip.AddressFamily == AddressFamily.InterNetworkV6)
-                    SendNDPNeighborSolicitation(ip);
-                else
-                    throw new NotImplementedException($"Unsupported address family {ip.AddressFamily}");
+                SendPing(ip, useICMP);
             }
 
             return await MeasureLatency(test);
+        }
+
+        private void SendPing(IPAddress ip, bool useICMP = false)
+        {
+            if (useICMP || !Network.LocalRange.Contains(ip))
+                SendICMPEchoRequest(ip);
+            else if (ip.AddressFamily == AddressFamily.InterNetwork)
+                SendARPRequest(ip);
+            else if (ip.AddressFamily == AddressFamily.InterNetworkV6)
+                SendNDPNeighborSolicitation(ip);
+            else
+                throw new NotImplementedException($"Unsupported address family {ip.AddressFamily}");
         }
 
         private async Task<TimeSpan> MeasureLatency(ReachabilityTest test)

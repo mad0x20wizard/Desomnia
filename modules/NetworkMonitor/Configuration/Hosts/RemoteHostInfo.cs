@@ -60,6 +60,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
         ushort?     WakePort        { get; set; }
         TimeSpan?   WakeTimeout     { get; set; }
         TimeSpan?   WakeRepeat      { get; set; }
+        bool?       WakePing        { get; set; }
 
         bool        WakeSilent      { get; set; }
 
@@ -70,6 +71,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
 
             Timeout = WakeTimeout ?? network.WakeTimeout,
             Repeat = WakeRepeat ?? network.WakeRepeat,
+            Ping = WakePing ?? network.WakePing,
 
             Silent = WakeSilent,
         };

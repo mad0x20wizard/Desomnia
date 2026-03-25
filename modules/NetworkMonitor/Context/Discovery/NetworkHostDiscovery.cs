@@ -36,6 +36,11 @@ namespace MadWizard.Desomnia.Network.Context
                 .AsImplementedInterfaces()
                 .SingleInstance()
                 .AsSelf();
+            builder.RegisterType<DHCPRequestDetector>()
+                .WithParameter(TypedParameter.From(config.MakeAutoDiscoveryOptions()))
+                .AsImplementedInterfaces()
+                .SingleInstance()
+                .AsSelf();
             // Router/Address-Discovery
             builder.RegisterType<DefaultGatewayDetector>()
                 .WithParameter(TypedParameter.From(config.AutoDetect))

@@ -84,6 +84,7 @@ namespace MadWizard.Desomnia.Network.Configuration
         internal ushort             WakePort            { get; set; } = 9;
         internal TimeSpan           WakeTimeout         { get; set; } = TimeSpan.FromSeconds(10);
         internal TimeSpan?          WakeRepeat          { get; set; }
+        internal bool               WakePing            { get; set; } = false;
         #endregion
 
         #region Network :: WatchOptions
