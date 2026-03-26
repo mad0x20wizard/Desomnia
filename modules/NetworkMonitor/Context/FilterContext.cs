@@ -19,6 +19,8 @@ namespace MadWizard.Desomnia.Network.Context
 
         private readonly bool _needsTCPData;
 
+        private readonly ConcurrentBag<HostFilterRuleInfo> _dynamicHostFilters = [];
+
         private readonly ConcurrentDictionary<NetworkService, TrafficFilterRequest> _dynamicTrafficFilters = [];
 
         protected FilterContext(ILifetimeScope parent)
@@ -51,6 +53,8 @@ namespace MadWizard.Desomnia.Network.Context
                     .WithParameter(NetworkHostParameter<NetworkHost>.FindBy(filter.Name!))
                     .As<PacketFilterRule>().As<HostFilterRule>()
                     .SingleInstance();
+
+                _dynamicHostFilters.Add(filter);
             }
             else
             {
@@ -99,6 +103,8 @@ namespace MadWizard.Desomnia.Network.Context
                     .WithProperty(HostFilterRulesParameter.From(filter))
                     .SingleInstance()
                     .AsSelf();
+
+                RememberDynamicHostFilters(filter);
             }
         }
 
@@ -129,6 +135,8 @@ namespace MadWizard.Desomnia.Network.Context
                     .AsSelf();
 
                 RegisterTrafficFilter(builder, new TCPTrafficType(filter.Port, _needsTCPData));
+
+                RememberDynamicHostFilters(filter);
             }
             if (filter.Protocol.HasFlag(IPProtocol.UDP))
             {
@@ -140,6 +148,8 @@ namespace MadWizard.Desomnia.Network.Context
                     .AsSelf();
 
                 RegisterTrafficFilter(builder, new UDPTrafficType(filter.Port));
+
+                RememberDynamicHostFilters(filter);
             }
         }
 
@@ -154,6 +164,30 @@ namespace MadWizard.Desomnia.Network.Context
                     .WithProperty(HostFilterRulesParameter.From(filter))
                     .SingleInstance()
                     .AsSelf();
+
+                RememberDynamicHostFilters(filter);
+            }
+        }
+
+        protected void RememberDynamicHostFilters(IPFilterRuleInfo rule)
+        {
+            foreach (var host in rule.HostFilterRule)
+            {
+                if (host.IsDynamic)
+                {
+                    _dynamicHostFilters.Add(host);
+                }
+            }
+        }
+
+        public IEnumerable<string> FindMissingDynamicHosts(IEnumerable<NetworkHost> hosts)
+        {
+            foreach (HostFilterRuleInfo filter in _dynamicHostFilters)
+            {
+                if (filter.Name is not null && !hosts.Any(host => host.Name == filter.Name))
+                {
+                    yield return filter.Name;
+                }
             }
         }
 

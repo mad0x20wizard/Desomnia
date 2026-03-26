@@ -114,6 +114,28 @@ namespace MadWizard.Desomnia.Network.Context
             }
         }
 
+        internal async Task DiscoverDynamicFilterHosts()
+        {
+            List<FilterContext> filterContexts = [this];
+            foreach (var host in _hostContexts)
+                filterContexts.Add(host);
+
+            foreach (var ctx in filterContexts)
+            {
+                foreach (var host in ctx.FindMissingDynamicHosts(_hostContexts.Select(x => x.Host)).ToArray())
+                {
+                    var config = new NetworkHostInfo()
+                    {
+                        AutoDetect = Config.AutoDetect,
+
+                        Name = host
+                    };
+
+                    CreateHost(new TypedParameter(typeof(NetworkHostInfo), config));
+                }
+            }
+        }
+
         private void CreateLocalHost()
         {
             LocalHostInfo configHost;

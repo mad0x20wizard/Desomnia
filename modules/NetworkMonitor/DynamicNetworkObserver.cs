@@ -111,6 +111,7 @@ namespace MadWizard.Desomnia.Network
             await context.DiscoverRouters();
             await context.DiscoverHosts();
             await context.DiscoverHostRanges();
+            await context.DiscoverDynamicFilterHosts();
 
             context.Monitor.StartMonitoring();
 
