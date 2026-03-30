@@ -41,6 +41,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             {
                 ServiceController service = new(config.ServiceName);
 
+                bool serviceNotFound = false;
                 var status = ServiceControllerStatus.Stopped;
                 while (config != null && !stoppingToken.IsCancellationRequested)
                 {
@@ -89,12 +90,16 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                         }
 
                         status = service.Status;
+                        serviceNotFound = false;
                     }
                     catch (InvalidOperationException ex) when (ex.InnerException is Win32Exception win && win.NativeErrorCode == 1060)
                     {
-                        Logger.LogError(ex, "Duo service not found.");
+                        if (!serviceNotFound) // log only once
+                        {
+                            Logger.LogWarning(ex, "Duo service not found.");
 
-                        break;
+                            serviceNotFound = true;
+                        }
                     }
                     catch (Exception ex)
                     {
