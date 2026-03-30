@@ -1,10 +1,9 @@
 ﻿using Autofac;
-using Autofac.Core;
 using MadWizard.Desomnia;
 using MadWizard.Desomnia.Logging;
+using MadWizard.Desomnia.Network.Logging;
 using MadWizard.Desomnia.Service;
 using MadWizard.Desomnia.Service.Windows;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using System.Diagnostics;
@@ -13,20 +12,18 @@ using System.Reflection;
 //await MadWizard.Desomnia.Test.Debugger.UntilAttached();
 
 LogManager.Setup().SetupExtensions(ext => ext.RegisterLayoutRenderer<SleepTimeLayoutRenderer>("sleep-duration")); // FIXME
+LogManager.Setup().SetupExtensions(ext => ext.RegisterLayoutRenderer<NetworkHostLayoutRenderer>()); // FIXME
+LogManager.Setup().SetupExtensions(ext => ext.RegisterLayoutRenderer<NetworkLayoutRenderer>()); // FIXME
 
 if (Process.GetCurrentProcess().IsWindowsService() is bool isRunningAsService && isRunningAsService)
 {
-    var applicationDir = new FileInfo(Assembly.GetExecutingAssembly().Location).Directory!;
-
-    Directory.SetCurrentDirectory(applicationDir.FullName);
+    Directory.SetCurrentDirectory(DesomniaServiceBuilder.ProgramDataDir);
 }
 
-string logsPath = Path.Combine(Directory.GetCurrentDirectory(), "logs");
+string configPath = new ConfigDetector().Lookup();
 
 const string EVENT_LOG_NAME = "Application";
 const string EVENT_LOG_SOURCE = "Desomnia";
-
-string configPath = new ConfigDetector().Lookup();
 
 try
 {
@@ -44,7 +41,7 @@ try
     {
         using (new SystemMutex("MadWizard.Desomnia", true)) using (watcher = new(configPath) { EnableRaisingEvents = isRunningAsService })
         {
-            var builder = new DesomniaServiceBuilder();
+            var builder = new DesomniaServiceBuilder(isRunningAsService);
 
             if (isRunningAsService)
             {
@@ -101,23 +98,18 @@ catch (Exception ex)
         }
         catch (Exception)
         {
-            try
-            {
-                File.WriteAllText(Path.Combine(logsPath, "error.log"), $"{ex}");
-
-                return 1;
-            }
-            catch
-            {
-                // throw original error
-            }
+            // throw original error
         }
     }
 
     throw;
 }
 
-class DesomniaServiceBuilder() : MadWizard.Desomnia.ApplicationBuilder
+class DesomniaServiceBuilder(bool service) : MadWizard.Desomnia.ApplicationBuilder
 {
+    internal static string ProgramDir => new FileInfo(Assembly.GetExecutingAssembly().Location).Directory!.FullName;
+    internal static string ProgramDataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Desomnia");
 
+    protected override string   DefaultLogPath      => service ? Path.Combine(ProgramDataDir, "logs") : base.DefaultLogPath;
+    protected override string[] DefaultPluginsPaths => service ? [Path.Combine(ProgramDataDir, "plugins"), Path.Combine(ProgramDir, "plugins"), ] : base.DefaultPluginsPaths;
 }

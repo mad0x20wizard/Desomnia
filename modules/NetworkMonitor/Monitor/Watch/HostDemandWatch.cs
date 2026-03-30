@@ -3,6 +3,7 @@ using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Network.Demand.Filter;
 using MadWizard.Desomnia.Network.Filter;
+using MadWizard.Desomnia.Network.Neighborhood;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
 using System.Collections.Concurrent;
@@ -28,7 +29,19 @@ namespace MadWizard.Desomnia.Network
         public required DemandOptions               DemandOptions   { get; init; }
         public required Lazy<IDemandPacketFilter>   DemandFilter    { private get; init; }
 
-        readonly ConcurrentDictionary<IPAddress, DemandRequest> _ongoingRequests = [];
+        readonly ConcurrentDictionary<object, DemandRequest> _ongoingRequests = [];
+
+        public object DetermineSource(IPAddress source)
+        {
+            switch (DemandOptions.Source)
+            {
+                case DemandSource.Host when Host.Network[source] is NetworkHost host:
+                    return host;
+
+                default:
+                    return source;
+            }
+        }
 
         internal protected virtual DemandRequest? Evaluate(EthernetPacket packet)
         {
@@ -50,8 +63,8 @@ namespace MadWizard.Desomnia.Network
              */
             else if (packet.FindSourceIPAddress() is IPAddress source)
             {
-                // do we already have an ongoing request for that source Address?
-                if (_ongoingRequests.TryGetValue(source, out DemandRequest? ongoing))
+                // do we already have an ongoing request for that source?
+                if (_ongoingRequests.TryGetValue(DetermineSource(source), out DemandRequest? ongoing))
                 {
                     ongoing.EnqueuePacket(packet);
                 }
@@ -131,7 +144,7 @@ namespace MadWizard.Desomnia.Network
 
                 scope.CurrentScopeEnding += (sender, args) => EndRequest(request);
 
-                _ongoingRequests[request.SourceAddress] = request;
+                _ongoingRequests[DetermineSource(request.SourceAddress)] = request;
 
                 return request;
             }
@@ -205,7 +218,15 @@ namespace MadWizard.Desomnia.Network
 
         private void EndRequest(DemandRequest request)
         {
-            _ongoingRequests.TryRemove(request.SourceAddress, out _);
+            foreach (var pair  in _ongoingRequests)
+            {
+                if (pair.Value == request)
+                {
+                    _ongoingRequests.TryRemove(pair.Key, out _);
+
+                    break;
+                }
+            }
         }
     }
 }

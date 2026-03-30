@@ -1,16 +1,55 @@
-﻿using MadWizard.Desomnia.Network.Demand;
+﻿using MadWizard.Desomnia.Network;
+using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Network.Neighborhood;
+using NLog;
 using PacketDotNet;
 using System.Net;
 using System.Net.NetworkInformation;
+using System.Reactive.Disposables;
 
 namespace Microsoft.Extensions.Logging
 {
     public static class LoggerExt
     {
+        public static IDisposable? BeginRequestScope(this ILogger logger, HostDemandWatch watch, DemandRequest request, TimeSpan prepare)
+        {
+            var scope = new CompositeDisposable
+            {
+                Disposable.Create(() => // should be called first, so that it logs into the request scope
+                {
+                    logger.LogTrace($"END {request}; duration = {Math.Floor(request.Duration.TotalMilliseconds)} ms");
+                })
+            };
+
+            if (logger.BeginHostScope(request.Host) is IDisposable dHost)
+                scope.Add(dHost);
+
+            object source = watch.DetermineSource(request.SourceAddress);
+            string sourceName = (source is NetworkHost host ? host.Name : source.ToString())!;
+
+            if (logger.BeginScope(new Dictionary<string, object> { ["Source"] = source! }) is IDisposable dSource)
+                scope.Add(dSource);
+
+            if (logger.BeginScope(new Dictionary<string, object> { ["Request"] = request }) is IDisposable dRequest)
+                scope.Add(dRequest);
+
+            logger.LogTrace($"BEGIN {request}: '{sourceName}' -> '{request.Host.Name}'; prepare = {Math.Round(prepare.TotalMilliseconds)} ms");
+
+            return scope;
+        }
+
+        public static IDisposable? BeginRequestPacketScope(this ILogger logger, EthernetPacket packet)
+        {
+            var scope = logger.BeginScope(new Dictionary<string, object> { ["Packet"] = packet });
+
+            logger.LogTrace($"VERIFY packet = \n{packet.ToTraceString()}");
+
+            return scope;
+        }
+
         public static IDisposable? BeginHostScope(this ILogger logger, NetworkHost networkHost)
         {
-            return logger.BeginScope(new Dictionary<string, object> { ["HostName"] = networkHost.Name });
+            return logger.BeginScope(new Dictionary<string, object> { ["Host"] = networkHost });
         }
 
         public static async Task LogRequestError(this ILogger logger, DemandEvent @event, Exception ex)

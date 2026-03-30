@@ -83,29 +83,16 @@ namespace MadWizard.Desomnia.Network.Reachability
 
         public async Task<TimeSpan> PingUntil(RemoteHostWatch watch, IEnumerable<IPAddress> ips, TimeSpan? timeout = null)
         {
-            using var timer = new System.Timers.Timer(watch.PingOptions.Timeout);
+            using PeriodicTimer timer = new(watch.PingOptions.Timeout);
 
-            foreach (var ip in ips)
+            async void PeriodicSendPing()
             {
-                timer.Elapsed += (sender, args) =>
-                {
-                    using (Logger.BeginHostScope(watch.Host))
-                    {
-                        SendPing(ip);
-                    }
-                };
+                do foreach (var ip in ips) SendPing(ip); while (await timer.WaitForNextTickAsync());
             }
 
-            timer.Start();
+            PeriodicSendPing();
 
-            try
-            {
-                return await Until(new HostReachabilityTest(watch, timeout));
-            }
-            finally
-            {
-                timer.Stop();
-            }
+            return await Until(new HostReachabilityTest(watch, timeout));
         }
 
         /// <summary>

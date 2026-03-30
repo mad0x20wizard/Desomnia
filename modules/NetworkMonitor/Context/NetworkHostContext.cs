@@ -34,6 +34,8 @@ namespace MadWizard.Desomnia.Network.Context
             });
 
             Host = ConfigureHost(networkConfig, config).Result;
+
+            parent.Disposer.AddInstanceForDisposal(Scope); // automatic child scope disposal
         }
 
         // Router
@@ -50,6 +52,8 @@ namespace MadWizard.Desomnia.Network.Context
             });
 
             Host = ConfigureHost(networkConfig, config).Result;
+
+            parent.Disposer.AddInstanceForDisposal(Scope); // automatic child scope disposal
         }
 
         // LocalHost
@@ -76,6 +80,8 @@ namespace MadWizard.Desomnia.Network.Context
             Watch = Scope.Resolve<LocalHostWatch>();
 
             Watch.Threshold = config.MinTraffic;
+
+            parent.Disposer.AddInstanceForDisposal(Scope); // automatic child scope disposal
         }
 
         // LocalVirtualHost
@@ -102,6 +108,8 @@ namespace MadWizard.Desomnia.Network.Context
 
             Host = ConfigureHost(networkConfig, config).Result;
             Watch = ConfigureWatch(networkConfig, config);
+
+            parent.Disposer.AddInstanceForDisposal(Scope); // automatic child scope disposal
         }
 
         // RemoteHost
@@ -123,6 +131,8 @@ namespace MadWizard.Desomnia.Network.Context
 
             Host = ConfigureHost(networkConfig, config).Result;
             Watch = ConfigureWatch(networkConfig, config);
+
+            parent.Disposer.AddInstanceForDisposal(Scope); // automatic child scope disposal
         }
 
         // RemoteVirtualHost
@@ -151,6 +161,8 @@ namespace MadWizard.Desomnia.Network.Context
 
             Host = ConfigureHost(networkConfig, config).Result;
             Watch = ConfigureWatch(networkConfig, config);
+
+            parent.Disposer.AddInstanceForDisposal(Scope); // automatic child scope disposal
         }
 
         private void RegisterHost(ContainerBuilder builder, NetworkHostInfo config)

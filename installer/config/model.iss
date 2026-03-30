@@ -1,7 +1,7 @@
 [Code]
 
 const
-  MONITOR_CONFIG_PATH = '{app}\config\monitor.xml';
+  MONITOR_CONFIG_PATH = '{commonappdata}\{#MyAppName}\config\monitor.xml';
 
 type
   TServiceConfig = record

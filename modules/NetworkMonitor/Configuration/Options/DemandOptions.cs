@@ -6,10 +6,11 @@ namespace MadWizard.Desomnia.Network.Configuration.Options
 {
     public readonly struct DemandOptions
     {
-        public TimeSpan Timeout     { get; init; }
-        public bool     Forward     { get; init; }
-        public int      Parallel    { get; init; }
-
+        public DemandSource Source      { get; init; }
+        public TimeSpan     Timeout     { get; init; }
+        public bool         Forward     { get; init; }
+        public int          Parallel    { get; init; }
+        
         public AddressAdvertisment Advertise { get; init; }
 
         public bool ShouldForward(DemandEvent @event) => Forward && @event.CanBeForwarded;
@@ -32,6 +33,12 @@ namespace MadWizard.Desomnia.Network.Configuration.Options
                     return false;
             }
         }
+
+    }
+
+    public enum DemandSource
+    {
+        Host, IP
     }
 
     [Flags]

@@ -241,7 +241,10 @@ end;
 
 function ShouldConfigureDesomnia(): Boolean;
 begin
-  Result := not IsReinstall or ShouldReconfigure;
+  if IsReinstall then
+    Result := ShouldReconfigure
+  else
+    Result := not FileExists(ExpandConstant(MONITOR_CONFIG_PATH));
   
   if Debugging then
     Result := True;

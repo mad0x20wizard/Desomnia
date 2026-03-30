@@ -78,9 +78,7 @@ namespace MadWizard.Desomnia.Network.Demand
 
         private async Task ExecuteDemandRequest(HostDemandWatch watch, DemandRequest request, TimeSpan prepare = default)
         {
-            using var scope = Logger.BeginHostScope(watch.Host);
-
-            Logger.LogTrace($"BEGIN {request}: '{(request.SourceHost is NetworkHost source ? source.Name : request.SourceAddress)}' -> '{request.Host.Name}'; prepare = {Math.Round(prepare.TotalMilliseconds)} ms");
+            using var scope = Logger.BeginRequestScope(watch, request, prepare);
 
             using (request)
             {
@@ -88,7 +86,7 @@ namespace MadWizard.Desomnia.Network.Demand
 
                 await foreach (var packet in request.ReadPackets(watch.DemandOptions.Timeout))
                 {
-                    Logger.LogTrace($"VERIFY packet = \n{packet.ToTraceString()}");
+                    using var scopePacket = Logger.BeginRequestPacketScope(packet);
 
                     try
                     {
@@ -139,8 +137,6 @@ namespace MadWizard.Desomnia.Network.Demand
                     break;
                 }
             }
-
-            Logger.LogTrace($"END {request}; duration = {Math.Floor(request.Duration.TotalMilliseconds)} ms");
         }
 
         void INetworkService.Suspend()

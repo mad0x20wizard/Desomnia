@@ -50,6 +50,7 @@ namespace MadWizard.Desomnia.Network.Configuration
         #endregion
 
         #region Network :: DemandOptions 
+        internal DemandSource       DemandSource        { get; set; } = DemandSource.Host;
         internal TimeSpan           DemandTimeout       { get; set; } = TimeSpan.FromSeconds(5);
         internal bool               DemandForward       { get; set; } = true;
         internal int                DemandParallel      { get; set; } = 1;

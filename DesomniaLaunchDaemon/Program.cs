@@ -1,12 +1,15 @@
 ﻿using Autofac;
 using MadWizard.Desomnia;
 using MadWizard.Desomnia.Logging;
+using MadWizard.Desomnia.Network.Logging;
 using Microsoft.Extensions.Hosting;
 using NLog;
 
 //await MadWizard.Desomnia.Test.Debugger.UntilAttached();
 
 LogManager.Setup().SetupExtensions(ext => ext.RegisterLayoutRenderer<SleepTimeLayoutRenderer>("sleep-duration")); // FIXME
+LogManager.Setup().SetupExtensions(ext => ext.RegisterLayoutRenderer<NetworkHostLayoutRenderer>()); // FIXME
+LogManager.Setup().SetupExtensions(ext => ext.RegisterLayoutRenderer<NetworkLayoutRenderer>()); // FIXME
 
 string configPath = new ConfigDetector().Lookup();
 

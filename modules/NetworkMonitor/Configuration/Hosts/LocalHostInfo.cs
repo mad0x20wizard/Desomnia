@@ -9,12 +9,14 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
         public TrafficThreshold? MinTraffic { get; set; }
 
         // Options
-        #region     DemandOptions
-        TimeSpan?   DemandTimeout { get; set; }
-        int?        DemandParallel { get; set; }
+        #region         DemandOptions
+        DemandSource?   DemandSource        { get; set; }
+        TimeSpan?       DemandTimeout       { get; set; }
+        int?            DemandParallel      { get; set; }
 
         public DemandOptions MakeDemandOptions(NetworkMonitorConfig network) => new()
         {
+            Source = DemandSource ?? network.DemandSource,
             Timeout = DemandTimeout ?? network.DemandTimeout,
             Parallel = DemandParallel ?? network.DemandParallel,
             Forward = false,

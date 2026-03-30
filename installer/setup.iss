@@ -74,7 +74,7 @@ OutputBaseFilename={#MyOutputBaseFilename}
 SolidCompression=yes
 WizardStyle=classic
 SetupIconFile=..\DesomniaService\Properties\moon.ico
-AppModifyPath="{commonappdata}\{#MyAppName}\Installer\setup.exe" /modify=1
+AppModifyPath="{commonappdata}\{#MyAppName}\installer\setup.exe" /modify=1
 UninstallDisplayIcon={app}\DesomniaService.exe
 DisableProgramGroupPage=yes
 DisableWelcomePage=no
@@ -173,7 +173,7 @@ Filename: "sc.exe"; \
 
   
 Filename: "powershell.exe"; \
-  Parameters: "-ExecutionPolicy Bypass -File ""{tmp}\CreateConfiguration.ps1"" -IniPath ""{tmp}\prefs.ini"" -XmlPath ""{app}\config\monitor.xml"""; \
+  Parameters: "-ExecutionPolicy Bypass -File ""{tmp}\CreateConfiguration.ps1"" -IniPath ""{tmp}\prefs.ini"" -XmlPath ""{commonappdata}\{#MyAppName}\config\monitor.xml"""; \
   StatusMsg: "Configuring Desomnia..."; \
   Flags: runhidden waituntilterminated; \
   Check: ShouldConfigureDesomnia
@@ -181,7 +181,7 @@ Filename: "powershell.exe"; \
   
 // Post Installation Checkboxes //
 
-Filename: "{app}\config\monitor.xml"; \
+Filename: "{commonappdata}\{#MyAppName}\config\monitor.xml"; \
   Verb: "edit"; \
   Description: "Edit configuration"; \
   Flags: postinstall shellexec skipifsilent
@@ -201,8 +201,11 @@ Filename: "sc.exe"; \
   Flags: runhidden waituntilterminated
 
 [UninstallDelete]
-Type: filesandordirs; Name: "{app}\logs";
-Type: filesandordirs; Name: "{commonappdata}\{#MyAppName}\Installer";
+Type: filesandordirs; Name: "{commonappdata}\{#MyAppName}\logs";
+Type: filesandordirs; Name: "{commonappdata}\{#MyAppName}\installer";
+
+// delete only if empty:
+Type: dirifempty; Name: "{commonappdata}\{#MyAppName}"
 
 [Code]
 var
@@ -237,7 +240,7 @@ begin
   begin
     if IsReinstall and not ShouldReconfigure then
     begin
-      if TryImportConfig(ExpandConstant('{commonappdata}\{#MyAppName}\Installer\prefs.ini')) then
+      if TryImportConfig(ExpandConstant('{commonappdata}\{#MyAppName}\installer\prefs.ini')) then
       begin
         // ShouldReconfigure := True; // TODO later
       end
@@ -255,7 +258,7 @@ var
 begin
   PrefsFile := ExpandConstant('{tmp}\prefs.ini');
   InstallerFile := ExpandConstant('{srcexe}');
-  InstallerDataDir := ExpandConstant('{commonappdata}\{#MyAppName}\Installer');
+  InstallerDataDir := ExpandConstant('{commonappdata}\{#MyAppName}\installer');
 
   if CurStep = ssInstall then
   begin
@@ -299,6 +302,6 @@ begin
   if CurUninstallStep = usUninstall then
   begin
     if DeleteConfigFiles = True then
-      DelTree(ExpandConstant('{app}\config'), True, True, True);
+      DelTree(ExpandConstant('{commonappdata}\{#MyAppName}\config'), True, True, True);
   end;
 end;
