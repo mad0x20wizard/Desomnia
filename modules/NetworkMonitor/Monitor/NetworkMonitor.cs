@@ -11,7 +11,7 @@ namespace MadWizard.Desomnia.Network
     {
         public required ILogger<NetworkMonitor> Logger { private get; init; }
 
-        public string Name { get => field ?? Device.Interface.Name; internal set; }
+        public required string Name { private get; init; }
 
         public required WatchOptions Options { get; init; }
 
@@ -24,12 +24,7 @@ namespace MadWizard.Desomnia.Network
         public event EventInvocation? Connected;
         public event EventInvocation? Disconnected;
 
-        public NetworkHostWatch? this[NetworkHost host] => this.Where(w => w.Host == host).FirstOrDefault();
-
-        public NetworkMonitor(string? name)
-        {
-            Name = name!;
-        }
+        public NetworkHostWatch? this[NetworkHost host] => this.FirstOrDefault(w => w.Host == host);
 
         public bool IsWatchedBy<T>(EthernetPacket packet) where T : NetworkHostWatch
         {

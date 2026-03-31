@@ -1,10 +1,9 @@
 ﻿using Autofac;
+using MadWizard.Desomnia.Network.Address;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Demand;
-using MadWizard.Desomnia.Network.Address;
 using MadWizard.Desomnia.Network.Knocking;
 using MadWizard.Desomnia.Network.Reachability;
-using MadWizard.Desomnia.Ressource.Events;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Nito.AsyncEx;
@@ -14,9 +13,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Timers;
-
 using PingOptions = MadWizard.Desomnia.Network.Configuration.Options.PingOptions;
-
 using Timer = System.Timers.Timer;
 
 namespace MadWizard.Desomnia.Network
@@ -328,8 +325,6 @@ namespace MadWizard.Desomnia.Network
         {
             if (!HasOngoingRequests)
             {
-                using var scope = Logger.BeginHostScope(Host);
-
                 Logger.LogTrace($"Time for periodic reachability check; scheduled every {PingOptions.Frequency}");
 
                 await DetermineIfHostCanBeSeen();
@@ -360,8 +355,6 @@ namespace MadWizard.Desomnia.Network
         #region Triggers for Started/Suspended/Stopped events
         private void RemoteHostWatch_Seen(object? sender, DateTime time)
         {
-            using var scope = Logger.BeginHostScope(Host);
-
             IsSuspended = false;
 
             if (LastUnseen != null)
@@ -375,8 +368,6 @@ namespace MadWizard.Desomnia.Network
 
         private void RemoteHostWatch_Unseen(object? sender, DateTime time)
         {
-            using var scope = Logger.BeginHostScope(Host);
-
             if (LastSeen != null)
             {
                 if (LastUnseen == null || LastUnseen < LastSeen)

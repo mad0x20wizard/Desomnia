@@ -14,7 +14,8 @@ namespace MadWizard.Desomnia.Network.Configuration
     public class NetworkMonitorConfig : LocalHostInfo
     {
         // Network-Identification
-        public required string  Name            { get; set; }
+        public string?          Name            { get => (field?.StartsWith("NetworkMonitor#") ?? false) ? null : field; init; }
+
         public string?          Interface       { get; set; }
         public IPNetwork?       Network         { get; set; }
 

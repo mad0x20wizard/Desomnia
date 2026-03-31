@@ -1,6 +1,6 @@
-﻿using MadWizard.Desomnia.Network.Configuration.Options;
+﻿using MadWizard.Desomnia.Network.Address;
+using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Filter;
-using MadWizard.Desomnia.Network.Address;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Services;
 using Microsoft.Extensions.Logging;
@@ -76,9 +76,9 @@ namespace MadWizard.Desomnia.Network.Demand
             }
         }
 
-        private async Task ExecuteDemandRequest(HostDemandWatch watch, DemandRequest request, TimeSpan prepare = default)
+        private async Task ExecuteDemandRequest(HostDemandWatch watch, DemandRequest request, TimeSpan evalutation = default)
         {
-            using var scope = Logger.BeginRequestScope(watch, request, prepare);
+            using var scope = Logger.BeginRequestScope(watch, request, evalutation);
 
             using (request)
             {
@@ -179,8 +179,6 @@ namespace MadWizard.Desomnia.Network.Demand
             {
                 foreach (var watch in Monitor.OfType<LocalHostWatch>())
                 {
-                    using var scope = Logger.BeginHostScope(watch.Host);
-
                     watch.YieldWatch();
                 }
             }

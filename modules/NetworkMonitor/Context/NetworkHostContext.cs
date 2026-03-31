@@ -203,9 +203,11 @@ namespace MadWizard.Desomnia.Network.Context
 
         private async Task<LocalHost> ConfigureLocalHost(NetworkMonitorConfig configNetwork, LocalHostInfo config)
         {
-            Logger.LogDebug("Configuring localhost:");
-
             var host = Scope.Resolve<LocalHost>();
+
+            using var scope = Logger.BeginHostScope(host);
+
+            Logger.LogDebug("Configuring localhost:");
 
             Logger.LogDebug("{family} '{address}'", "MAC", host.PhysicalAddress?.ToHexString());
 
@@ -227,9 +229,11 @@ namespace MadWizard.Desomnia.Network.Context
 
         private async Task<NetworkHost> ConfigureHost(NetworkMonitorConfig configNetwork, NetworkHostInfo config)
         {
-            Logger.LogDebug("Configuring host '{name}':", config.Name);
-
             var host = Scope.Resolve<NetworkHost>();
+
+            using var scope = Logger.BeginHostScope(host);
+
+            Logger.LogDebug("Configuring host '{name}':", config.Name);
 
             // Configure hostname
             if (config.HostName != null)

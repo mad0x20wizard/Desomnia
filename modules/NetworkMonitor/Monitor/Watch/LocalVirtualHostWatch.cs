@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using PacketDotNet;
 using System.Net;
 using System.Net.NetworkInformation;
-using System.Runtime.CompilerServices;
 
 namespace MadWizard.Desomnia.Network
 {
@@ -43,8 +42,6 @@ namespace MadWizard.Desomnia.Network
 
         private void VM_StateChanged(object? sender, VirtualMachineStateChangedEventArgs args)
         {
-            using var scope = Logger.BeginHostScope(Host);
-
             switch (args.State)
             {
                 case VirtualMachineState.Running:

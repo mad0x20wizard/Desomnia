@@ -13,8 +13,6 @@ namespace MadWizard.Desomnia.Network.HyperV
 
         public void Execute(ResolveRequestContext context, Action<ResolveRequestContext> next)
         {
-            var logger = context.Resolve<ILogger<HyperVDeviceSelector>>();
-
             var @interface = context.FirstParameterOfType<NetworkInterface>();
             var device = context.FirstParameterOfType<ILiveDevice>();
 
@@ -28,8 +26,9 @@ namespace MadWizard.Desomnia.Network.HyperV
                     {
                         context.ChangeParameterByType(physical);
 
-                        logger.LogDebug("Switched virtual device '{virtual}' to physical device '{physical}', to monitor entire VM traffic", 
-                            device.Description, physical.Description);
+                        context.Resolve<ILogger<HyperVDeviceSelector>>()
+                            .LogDebug("Switched virtual device '{virtual}' to physical device '{physical}', to monitor entire VM traffic", 
+                                device.Description, physical.Description);
                     }
                 }
             }

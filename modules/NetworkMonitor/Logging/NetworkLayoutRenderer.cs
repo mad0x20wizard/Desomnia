@@ -1,4 +1,5 @@
-﻿using NLog;
+﻿using MadWizard.Desomnia.Network.Context;
+using NLog;
 using NLog.LayoutRenderers;
 using System.Text;
 
@@ -9,7 +10,10 @@ namespace MadWizard.Desomnia.Network.Logging
     {
         protected override void Append(StringBuilder sb, LogEventInfo logEvent)
         {
-            sb.Append("network");
+            if (ScopeContext.TryGetProperty("Network", out var property) && property is NetworkContext network)
+            {
+                sb.Append(network.Name);
+            }
         }
     }
 }

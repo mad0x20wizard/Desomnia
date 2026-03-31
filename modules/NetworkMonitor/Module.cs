@@ -1,4 +1,5 @@
 ﻿using Autofac;
+using MadWizard.Desomnia.Network.Address;
 using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Context;
 using MadWizard.Desomnia.Network.Demand;
@@ -7,7 +8,6 @@ using MadWizard.Desomnia.Network.Demand.Filter;
 using MadWizard.Desomnia.Network.Discovery;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
-using MadWizard.Desomnia.Network.Address;
 using MadWizard.Desomnia.Network.Knocking;
 using MadWizard.Desomnia.Network.Knocking.Methods;
 using MadWizard.Desomnia.Network.Manager;
@@ -67,7 +67,6 @@ namespace MadWizard.Desomnia.Network
                 // Network Context
                 builder.RegisterType<NetworkContext>()
                     .InstancePerOwned<NetworkContext>()
-                    //.SingleInstance()
                     .AsSelf();
 
                 // --- Network Scope ---- //

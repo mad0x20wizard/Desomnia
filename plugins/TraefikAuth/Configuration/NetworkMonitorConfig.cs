@@ -2,7 +2,7 @@
 {
     public class NetworkMonitorConfig
     {
-        public string?      Name        { get; set; }
+        public string?      Name                { get; set; }
 
         internal ushort     TraefikAuthPort     { get; set; } = 5000;
         internal TimeSpan   TraefikAuthTimeout  { get; set; } = TimeSpan.FromSeconds(5);

@@ -1,7 +1,6 @@
 ﻿using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Network.Neighborhood;
-using NLog;
 using PacketDotNet;
 using System.Net;
 using System.Net.NetworkInformation;
@@ -11,7 +10,7 @@ namespace Microsoft.Extensions.Logging
 {
     public static class LoggerExt
     {
-        public static IDisposable? BeginRequestScope(this ILogger logger, HostDemandWatch watch, DemandRequest request, TimeSpan prepare)
+        public static IDisposable? BeginRequestScope(this ILogger logger, HostDemandWatch watch, DemandRequest request, TimeSpan evaluation)
         {
             var scope = new CompositeDisposable
             {
@@ -33,7 +32,7 @@ namespace Microsoft.Extensions.Logging
             if (logger.BeginScope(new Dictionary<string, object> { ["Request"] = request }) is IDisposable dRequest)
                 scope.Add(dRequest);
 
-            logger.LogTrace($"BEGIN {request}: '{sourceName}' -> '{request.Host.Name}'; prepare = {Math.Round(prepare.TotalMilliseconds)} ms");
+            logger.LogTrace($"BEGIN {request}: '{sourceName}' -> '{request.Host.Name}'; evaluate = {Math.Round(evaluation.TotalMilliseconds)} ms");
 
             return scope;
         }
@@ -49,7 +48,12 @@ namespace Microsoft.Extensions.Logging
 
         public static IDisposable? BeginHostScope(this ILogger logger, NetworkHost networkHost)
         {
-            return logger.BeginScope(new Dictionary<string, object> { ["Host"] = networkHost });
+            if (!NLog.ScopeContext.TryGetProperty("Host", out _))
+            {
+                return logger.BeginScope(new Dictionary<string, object> { ["Host"] = networkHost });
+            }
+
+            return null;
         }
 
         public static async Task LogRequestError(this ILogger logger, DemandEvent @event, Exception ex)
@@ -122,11 +126,15 @@ namespace Microsoft.Extensions.Logging
 
         public static void LogHostPhysicalAddressChanged(this ILogger logger, NetworkHost host, PhysicalAddress mac)
         {
+            using var scope = logger.BeginHostScope(host);
+
             logger.LogDebug("Host '{HostName}' is at {MAC}", host.Name, mac.ToHexString());
         }
 
         public static void LogHostAddressAdded(this ILogger logger, NetworkHost host, IPAddress ip)
         {
+            using var scope = logger.BeginHostScope(host);
+
             logger.LogDebug("Add {Family} address '{IPAddress}' to host '{HostName}' "
                 + (host.Network.LocalRange.Contains(ip) ? "[link-local]" : "[remote]"),
 
@@ -136,6 +144,8 @@ namespace Microsoft.Extensions.Logging
 
         public static void LogHostAddressRemoved(this ILogger logger, NetworkHost host, IPAddress ip, bool hasExpired = false)
         {
+            using var scope = logger.BeginHostScope(host);
+
             logger.LogDebug("Removed {Family} address '{IPAddress}' from host '{HostName}'"
                 + (hasExpired ? " (expired)" : ""),
 
