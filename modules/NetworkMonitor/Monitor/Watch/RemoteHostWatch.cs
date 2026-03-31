@@ -214,7 +214,7 @@ namespace MadWizard.Desomnia.Network
                         udp.EnableBroadcast = true;
                     }
 
-                    Logger.LogTrace($"Wake up \"{Host.Name}\" at at {Host.PhysicalAddress.ToHexString()} via {wakeIP}:{WakeOptions.Port}/udp");
+                    Logger.LogTrace($"Wake up \"{Host.Name}\" at {Host.PhysicalAddress.ToHexString()} via {wakeIP}:{WakeOptions.Port}/udp");
 
                     var bytes = udp.Send(wol.Bytes, new IPEndPoint(wakeIP, WakeOptions.Port));
 
