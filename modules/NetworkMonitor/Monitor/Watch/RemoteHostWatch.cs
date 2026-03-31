@@ -325,6 +325,8 @@ namespace MadWizard.Desomnia.Network
         {
             if (!HasOngoingRequests)
             {
+                using var scope = Logger.BeginHostScope(Host);
+
                 Logger.LogTrace($"Time for periodic reachability check; scheduled every {PingOptions.Frequency}");
 
                 await DetermineIfHostCanBeSeen();

@@ -10,7 +10,7 @@ namespace MadWizard.Desomnia.Network.Logging
     {
         public required NetworkContext Network { private get; set; }
 
-        private NetworkHost? Host => scope.ResolveOptional<NetworkHost>();
+        private NetworkHost? Host { get; } = scope.ResolveOptional<NetworkHost>();
 
         private IDisposable? MaybeBeginNetworkScope()
         {

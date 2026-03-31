@@ -73,6 +73,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
             {
                 if (!host.HasAddress(ip:ip))
                 {
+                    using var scope = Logger.BeginHostScope(host);
                     Logger.LogDebug("Host '{HostName}' advertised unknown {Family} address '{IPAddress}'",
                         host.Name, ip.ToFamilyName(), ip);
 
