@@ -190,16 +190,33 @@ namespace MadWizard.Desomnia.Network
             var wol = new WakeOnLanPacket(Host.PhysicalAddress ?? throw new HostAbortedException($"Host '{Host.Name}' has no PhysicalAddress configured."));
 
             int countPackets = 0;
-            var wakeType = WakeOptions.Type;
             foreach (var ip in (hint != null ? [hint] : Host.IPAddresses.ToArray()))
             {
-                if (wakeType == WakeType.Auto && !Host.Network.LocalRange.Contains(ip) || wakeType.HasFlag(WakeType.Network))
+                WakeType wakeType = WakeOptions.Type;
+                if (WakeOptions.Type == WakeType.Auto && !Host.Network.LocalRange.Contains(ip))
+                    wakeType = WakeType.Network | WakeType.Unicast;
+
+                if (wakeType.HasFlag(WakeType.Network))
                 {
                     using UdpClient udp = new(ip.AddressFamily);
 
-                    Logger.LogTrace($"Wake up \"{Host.Name}\" at {ip} using {WakeOptions.Port}/udp ");
+                    IPAddress wakeIP = ip;
+                    if (!wakeType.HasFlag(WakeType.Unicast))
+                    {
+                        wakeIP = ip.AddressFamily switch
+                        {
+                            AddressFamily.InterNetwork => IPAddress.Broadcast,
+                            AddressFamily.InterNetworkV6 => IPAddressExt.LinkLocalMulticast,
 
-                    var bytes = udp.Send(wol.Bytes, new IPEndPoint(ip, WakeOptions.Port));
+                            _ => throw new NotImplementedException(ip.AddressFamily.ToString()),
+                        };
+
+                        udp.EnableBroadcast = true;
+                    }
+
+                    Logger.LogTrace($"Wake up \"{Host.Name}\" at at {Host.PhysicalAddress.ToHexString()} via {wakeIP}:{WakeOptions.Port}/udp");
+
+                    var bytes = udp.Send(wol.Bytes, new IPEndPoint(wakeIP, WakeOptions.Port));
 
                     LastWoken = DateTime.Now;
 
@@ -207,10 +224,10 @@ namespace MadWizard.Desomnia.Network
                 }
             }
 
-            if (wakeType == WakeType.Auto && countPackets == 0 || WakeOptions.Type.HasFlag(WakeType.Link))
+            if (WakeOptions.Type == WakeType.Auto && countPackets == 0 || WakeOptions.Type.HasFlag(WakeType.Link))
             {
                 var sourceMAC = Device.PhysicalAddress;
-                var targetMAC = wakeType.HasFlag(WakeType.Unicast) ? Host.PhysicalAddress : PhysicalAddressExt.Broadcast;
+                var targetMAC = WakeOptions.Type.HasFlag(WakeType.Unicast) ? Host.PhysicalAddress : PhysicalAddressExt.Broadcast;
 
                 Logger.LogTrace($"Wake up '{Host.Name}' at {Host.PhysicalAddress.ToHexString()}");
 
