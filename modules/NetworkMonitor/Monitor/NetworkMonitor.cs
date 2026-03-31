@@ -11,7 +11,7 @@ namespace MadWizard.Desomnia.Network
     {
         public required ILogger<NetworkMonitor> Logger { private get; init; }
 
-        public required string Name { private get; init; }
+        public required string Name { get; init; }
 
         public required WatchOptions Options { get; init; }
 

@@ -34,6 +34,9 @@ namespace MadWizard.Desomnia.Network
         {
             Logger.LogDebug("Start monitoring networks...");
 
+            this.MonitoringStarted += NetworkMonitor_Started;
+            this.MonitoringStopped += NetworkMonitor_Stopped;
+
             await ConfigureNetworkMonitors();
 
             Power.Suspended += PowerManager_Suspended;
@@ -49,6 +52,9 @@ namespace MadWizard.Desomnia.Network
             Power.Suspended -= PowerManager_Suspended;
 
             await UnconfigureNetworkMonitors();
+
+            this.MonitoringStopped -= NetworkMonitor_Stopped;
+            this.MonitoringStarted -= NetworkMonitor_Started;
 
             Logger.LogDebug("Stopped monitoring networks.");
         }
@@ -147,7 +153,19 @@ namespace MadWizard.Desomnia.Network
             return _contexts.Select(c => c.Value.Monitor).GetEnumerator();
         }
 
-        #region Power Management
+        #region NetworkMonitor events
+        private void NetworkMonitor_Started(object? sender, NetworkMonitor monitor)
+        {
+            Logger.LogDebug("Monitoring of '" + monitor.Name + "' has started");
+        }
+
+        private void NetworkMonitor_Stopped(object? sender, NetworkMonitor monitor)
+        {
+            Logger.LogDebug("Monitoring of '" + monitor.Name + "' has stopped");
+        }
+        #endregion
+
+        #region PowerManager events
         private void PowerManager_Suspended(object? sender, EventArgs e)
         {
             NetworkChange.NetworkAddressChanged -= RespondToNetworkChange;
