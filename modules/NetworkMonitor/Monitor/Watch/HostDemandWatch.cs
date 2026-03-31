@@ -169,16 +169,17 @@ namespace MadWizard.Desomnia.Network
                 CanBeForwarded = forward
             };
 
-            foreach (var watch in this.Where(watch => request.Any(packet => watch.Service.Accepts(packet))))
+            var watch = this.FirstOrDefault(watch => request.Any(packet => watch.Service.Accepts(packet)));
+
+            @event.Service = watch?.Service;
+
+            ReportNetworkTraffic(@event);
+
+            await TriggerDemandAsync(@event);
+
+            if (watch != null)
             {
-                @event.Service = watch.Service;
-
-                ReportNetworkTraffic(@event);
-
-                await TriggerDemandAsync(@event);
                 await watch.TriggerDemandAsync(@event);
-
-                break;
             }
         }
 
