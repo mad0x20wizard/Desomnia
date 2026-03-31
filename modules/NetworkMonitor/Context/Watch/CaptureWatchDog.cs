@@ -3,7 +3,6 @@ using MadWizard.Desomnia.Network.Reachability;
 using MadWizard.Desomnia.Network.Services;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
-using SharpPcap;
 
 namespace MadWizard.Desomnia.Network.Context.Watch
 {
@@ -71,9 +70,12 @@ namespace MadWizard.Desomnia.Network.Context.Watch
                             }
                         }
 
-                        Logger.LogWarning($"Received NO packets on device '{Device.Name}' for {timeout}, reconfiguring network monitors...");
+                        Logger.LogWarning($"Received NO packets on device '{Device.Name}' for {timeout}, restarting network device...");
 
-                        await Observer.ReconfigureNetworkMonitors();
+                        Device.Restart();
+
+                        //Logger.LogWarning($"Received NO packets on device '{Device.Name}' for {timeout}, reconfiguring network monitors...");
+                        //await Observer.ReconfigureNetworkMonitors();
                     }
                 }
                 catch (TaskCanceledException)

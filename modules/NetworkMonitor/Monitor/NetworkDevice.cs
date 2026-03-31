@@ -169,14 +169,21 @@ namespace MadWizard.Desomnia.Network
 
         public void SendPacket(EthernetPacket packet)
         {
-            if (!Filters.Select(filter => filter.FilterOutgoing(packet)).Where(f => f == true).Any())
+            try
             {
-                if (Logger.IsEnabled(LogLevel.Trace))
+                if (!Filters.Select(filter => filter.FilterOutgoing(packet)).Where(f => f == true).Any())
                 {
-                    Logger.LogTrace($"SEND PACKET\n{packet.ToTraceString()}");
-                }
+                    if (Logger.IsEnabled(LogLevel.Trace))
+                    {
+                        Logger.LogTrace($"SEND PACKET\n{packet.ToTraceString()}");
+                    }
 
-                Device.SendPacket(packet);
+                    Device.SendPacket(packet);
+                }
+            }
+            catch (DeviceNotReadyException ex)
+            {
+                Logger.LogWarning(ex, "SendPacket failed:");
             }
         }
 
@@ -214,6 +221,21 @@ namespace MadWizard.Desomnia.Network
                     await Task.Delay(WAIT_TIME);
                 }
             }
+        }
+
+        internal void Restart()
+        {
+            StopCapture();
+
+            var filter = Filter;
+
+            Device.Close();
+
+            TryOpen(Device, ref IsMaxResponsiveness, ref IsNoCaptureLocal);
+
+            Filter = filter;
+
+            StartCapture();
         }
 
         public void StopCapture()
