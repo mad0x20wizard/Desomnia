@@ -54,6 +54,7 @@ namespace MadWizard.Desomnia.Network
                 builder.RegisterComposite<CompositePhysicalAddressDiscovery, IPhysicalAddressDiscovery>();
                 builder.RegisterComposite<CompositeVirtualMachineManager, IVirtualMachineManager>();
 
+                builder.RegisterComposite<CompositeDemandPacketFilter, IDemandPacketFilter>();
                 builder.RegisterComposite<CompositePacketFilter, IPacketFilter>();
                 builder.RegisterComposite<CompositeKnockFilter,  IKnockFilter>();
 
