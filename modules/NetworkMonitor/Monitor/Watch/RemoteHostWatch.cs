@@ -224,7 +224,7 @@ namespace MadWizard.Desomnia.Network
                                 udp.EnableBroadcast = true;
                                 break;
 
-                            case AddressFamily.InterNetworkV6 when Device.IPv6LinkLocalMulticast is IPAddress multicast:
+                            case AddressFamily.InterNetworkV6 when Device.IPv6LinkLocalMulticastAddress is IPAddress multicast:
                                 wakeIP = multicast;
                                 break;
 

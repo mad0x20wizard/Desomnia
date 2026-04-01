@@ -188,8 +188,8 @@ namespace MadWizard.Desomnia.Network.Address
             }
 
             var ipSource = Device.IPv6LinkLocalAddress;
-            ipTarget ??= IPAddressExt.LinkLocalMulticast;
-            macTarget ??= ipTarget.DeriveLayer2MulticastAddress();
+            ipTarget ??= Device.IPv6LinkLocalMulticastAddress;
+            macTarget ??= ipTarget?.DeriveLayer2MulticastAddress();
 
             var request = new EthernetPacket(Device.PhysicalAddress, macTarget, EthernetType.IPv6)
             {

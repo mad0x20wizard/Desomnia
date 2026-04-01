@@ -79,7 +79,7 @@ namespace MadWizard.Desomnia.Network
         public IPAddress? IPv6LinkLocalAddress => IPAddresses.Where(ip => ip.AddressFamily == AddressFamily.InterNetworkV6 && ip.IsIPv6LinkLocal).FirstOrDefault();
         public IEnumerable<IPAddress> IPv6Addresses => IPAddresses.Where(ip => ip.AddressFamily == AddressFamily.InterNetworkV6);
 
-        public IPAddress? IPv6LinkLocalMulticast
+        public IPAddress? IPv6LinkLocalMulticastAddress
         {
             get
             {
