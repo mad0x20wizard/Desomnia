@@ -203,15 +203,20 @@ namespace MadWizard.Desomnia.Network
                     IPAddress wakeIP = ip;
                     if (!wakeType.HasFlag(WakeType.Unicast))
                     {
-                        wakeIP = ip.AddressFamily switch
+                        switch (ip.AddressFamily)
                         {
-                            AddressFamily.InterNetwork => IPAddress.Broadcast,
-                            AddressFamily.InterNetworkV6 => IPAddressExt.LinkLocalMulticast,
+                            case AddressFamily.InterNetwork:
+                                wakeIP = IPAddress.Broadcast;
+                                udp.EnableBroadcast = true;
+                                break;
 
-                            _ => throw new NotImplementedException(ip.AddressFamily.ToString()),
-                        };
+                            case AddressFamily.InterNetworkV6 when Device.IPv6LinkLocalMulticast is IPAddress multicast:
+                                wakeIP = multicast;
+                                break;
 
-                        udp.EnableBroadcast = true;
+                            default:
+                                throw new NotImplementedException(ip.AddressFamily.ToString());
+                        }
                     }
 
                     Logger.LogTrace($"Wake up \"{Host.Name}\" at {Host.PhysicalAddress.ToHexString()} via {wakeIP}:{WakeOptions.Port}/udp");

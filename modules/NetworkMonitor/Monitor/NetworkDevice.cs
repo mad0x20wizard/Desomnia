@@ -1,4 +1,5 @@
 ﻿using Autofac;
+using Autofac.Core;
 using MadWizard.Desomnia.Network.Filter;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
@@ -78,6 +79,21 @@ namespace MadWizard.Desomnia.Network
         public IPAddress? IPv4Address => IPAddresses.Where(ip => ip.AddressFamily == AddressFamily.InterNetwork).FirstOrDefault();
         public IPAddress? IPv6LinkLocalAddress => IPAddresses.Where(ip => ip.AddressFamily == AddressFamily.InterNetworkV6 && ip.IsIPv6LinkLocal).FirstOrDefault();
         public IEnumerable<IPAddress> IPv6Addresses => IPAddresses.Where(ip => ip.AddressFamily == AddressFamily.InterNetworkV6);
+
+        public IPAddress? IPv6LinkLocalMulticast
+        {
+            get
+            {
+                if (IPv6Addresses.Any())
+                {
+                    int scopeId = Interface.GetIPProperties().GetIPv6Properties().Index;
+
+                    return new IPAddress(IPAddressExt.LinkLocalMulticast.GetAddressBytes(), scopeId);
+                }
+
+                return null;
+            }
+        }
 
         public event EventHandler<EthernetPacket>? EthernetCaptured;
 
