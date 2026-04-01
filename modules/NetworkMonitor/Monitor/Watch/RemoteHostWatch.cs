@@ -103,13 +103,27 @@ namespace MadWizard.Desomnia.Network
 
                 TriggerEvent(nameof(UnMagicPacket));
             }
-            else // was woken up by an external magic packet
+            else
             {
-                LastWoken = DateTime.Now;
+                LastWoken = DateTime.Now; // was woken up by an external Magic Packet
 
                 base.HandleMagicPacket(packet);
 
-                if (!WakeOptions.Silent) _ = Logger.LogEvent(null, "Observed", Host, packet);
+                if (!WakeOptions.Silent)
+                {
+                    /**
+                    * Sometimes, if we do WakeOnLAN via Layer 3, it can happen,
+                    * that we get the Magic Packet replayed back to us.
+                    */
+                    if (!HasOngoingRequests)
+                    {
+                        _ = Logger.LogEvent(LogLevel.Information, "Observed", Host, packet);
+                    }
+                    else
+                    {
+                        _ = Logger.LogEvent(LogLevel.Debug, "Observed", Host, packet);
+                    }
+                }
             }
         }
 

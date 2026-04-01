@@ -1,5 +1,4 @@
 ﻿using Autofac;
-using Autofac.Core;
 using MadWizard.Desomnia.Network.Filter;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
@@ -199,7 +198,7 @@ namespace MadWizard.Desomnia.Network
             }
             catch (DeviceNotReadyException ex)
             {
-                Logger.LogWarning(ex, "SendPacket failed:");
+                Logger.LogWarning(ex, "");
             }
         }
 
