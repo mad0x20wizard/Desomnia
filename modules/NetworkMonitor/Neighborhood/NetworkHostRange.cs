@@ -11,6 +11,8 @@ namespace MadWizard.Desomnia.Network.Neighborhood
         public event EventHandler<IPAddressRange>? AddressRangeAdded;
         public event EventHandler<IPAddressRange>? AddressRangeRemoved;
 
+        public bool AddAddress(IPAddress ip) => AddAddressRange(new(ip));
+
         public bool AddAddressRange(IPAddressRange range)
         {
             if (_ranges.Add(range))
@@ -26,6 +28,22 @@ namespace MadWizard.Desomnia.Network.Neighborhood
         public virtual bool Contains(IPAddress ip)
         {
             return _ranges.Any(range => range.Contains(ip));
+        }
+        public virtual bool RemoveAddress(IPAddress ip)
+        {
+            var ranges = _ranges.Where(range => 
+                range.AddressCount == 1 &&
+                range.Begin.Equals(ip) &&
+                range.End.Equals(ip))
+                .ToArray();
+
+            bool removed = false;
+            foreach (var range in ranges)
+            {
+                removed |= RemoveAddressRange(range);
+            }
+
+            return removed;
         }
 
         public bool RemoveAddressRange(IPAddressRange range)

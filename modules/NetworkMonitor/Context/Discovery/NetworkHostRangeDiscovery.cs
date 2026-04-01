@@ -1,4 +1,5 @@
 ﻿using Autofac;
+using MadWizard.Desomnia.Network.Configuration.Hosts;
 using MadWizard.Desomnia.Network.Configuration.Knocking;
 using MadWizard.Desomnia.Network.Neighborhood;
 using Microsoft.Extensions.Logging;
@@ -23,16 +24,21 @@ namespace MadWizard.Desomnia.Network.Context
 
                 foreach (var configChildHost in configRange.Host)
                 {
+                    var ips = configChildHost.IPAddresses;
+
                     if (configChildHost.Name is not null)
                     {
-                        // TODO add IPs and sync with auto configuration
+                        var ctx = _hostContexts.First(ctx => ctx.Host.Name == configChildHost.Name);
+
+                        ctx.Host.AddressAdded += (sender, @event) => range.AddAddress(@event.IPAddress);
+                        ctx.Host.AddressRemoved += (sender, @event) => range.RemoveAddress(@event.IPAddress);
+
+                        ips = ctx.Host.IPAddresses;
                     }
-                    else
+
+                    foreach (var ip in ips)
                     {
-                        foreach (var ip in configChildHost.IPAddresses)
-                        {
-                            range.AddAddressRange(new IPAddressRange(ip));
-                        }
+                        range.AddAddressRange(new IPAddressRange(ip));
                     }
                 }
 

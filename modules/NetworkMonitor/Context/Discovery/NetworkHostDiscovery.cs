@@ -167,27 +167,20 @@ namespace MadWizard.Desomnia.Network.Context
             }
         }
 
-        internal void CreateHost(params Parameter[] parameters)
-        {
-            try
-            {
-                var context = Scope.Resolve<NetworkHostContext>(parameters);
-
-                ConfigureNetworkMonitorWith(context);
-
-                _hostContexts.Add(context);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Failed to create host context:");
-            }
-        }
-
-        public NetworkHostContext CreateDynamicHost(params Parameter[] parameters)
+        internal NetworkHostContext CreateHost(params Parameter[] parameters)
         {
             var context = Scope.Resolve<NetworkHostContext>(parameters);
 
             ConfigureNetworkMonitorWith(context);
+
+            _hostContexts.Add(context);
+
+            return context;
+        }
+
+        public NetworkHostContext CreateDynamicHost(params Parameter[] parameters)
+        {
+            var context = CreateHost(parameters);
 
             Scope.Resolve<NetworkJanitor>().MakeHostEligibleForSweeping(context.Host);
 
