@@ -25,6 +25,8 @@ namespace MadWizard.Desomnia.Network.Demand
 
         public TimeSpan Duration => _stopwatch.Elapsed;
 
+        internal DemandResult? Result { get; set; }
+
         public DemandRequest(EthernetPacket trigger)
         {
             SourceAddress = trigger.FindSourceIPAddress() ?? throw new ArgumentException("Trigger packet does not contain a source IP address.");
@@ -40,5 +42,12 @@ namespace MadWizard.Desomnia.Network.Demand
         {
             return $"DemandRequest#{Number}";
         }
+    }
+
+    public enum DemandResult
+    {
+        Valid,
+        Filtered,
+        Timeout
     }
 }

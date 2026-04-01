@@ -93,6 +93,8 @@ namespace MadWizard.Desomnia.Network.Demand
                         if (watch.Verify(packet))
                         {
                             await watch.ReportDemand(request, forward); // TODO: discard remaining packets
+
+                            request.Result ??= DemandResult.Valid;
                         }
                     }
                     catch (IPUnicastNeededException needed)
@@ -134,8 +136,12 @@ namespace MadWizard.Desomnia.Network.Demand
                         }
                     }
 
+                    request.Result ??= DemandResult.Filtered;
+
                     break;
                 }
+
+                request.Result ??= DemandResult.Timeout;
             }
         }
 

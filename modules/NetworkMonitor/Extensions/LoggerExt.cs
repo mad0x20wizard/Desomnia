@@ -16,7 +16,8 @@ namespace Microsoft.Extensions.Logging
             {
                 Disposable.Create(() => // should be called first, so that it logs into the request scope
                 {
-                    logger.LogTrace($"END {request}; duration = {Math.Floor(request.Duration.TotalMilliseconds)} ms");
+                    logger.LogTrace($"END {request}; duration = {Math.Floor(request.Duration.TotalMilliseconds)} ms" 
+                        + (request.Result is DemandResult result ? " -> " + result.ToString().ToLower() : ""));
                 })
             };
 
