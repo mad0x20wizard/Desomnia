@@ -1,6 +1,7 @@
 ﻿using Autofac;
 using MadWizard.Desomnia.Network.HyperV.Events;
 using MadWizard.Desomnia.Network.HyperV.Manager;
+using MadWizard.Desomnia.Network.Manager;
 
 namespace MadWizard.Desomnia.Network.HyperV
 {
@@ -14,7 +15,7 @@ namespace MadWizard.Desomnia.Network.HyperV
                 .AsSelf();
 
             builder.RegisterType<HyperVVirtualMachine>()
-                .AsImplementedInterfaces()
+                .As<IVirtualMachine>()
                 .AsSelf();
             builder.RegisterType<HyperVJob>()
                 .AsImplementedInterfaces()

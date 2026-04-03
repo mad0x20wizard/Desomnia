@@ -1,17 +1,14 @@
-﻿using Autofac;
-using Autofac.Features.OwnedInstances;
+﻿using Autofac.Features.OwnedInstances;
 using MadWizard.Desomnia.Network.Manager;
-using MadWizard.Desomnia.Session.Manager;
 using Microsoft.Extensions.Logging;
 using Microsoft.Management.Infrastructure;
-using System.Net;
-using System.Xml.Linq;
 
 namespace MadWizard.Desomnia.Network.HyperV.Manager
 {
     internal class HyperVManager : IVirtualMachineManager, IDisposable
     {
         internal const string NS = @"root/virtualization/v2";
+        internal const string NS_PS = @"root/cimv2";
         internal const string DIALECT = "WQL";
 
         public required ILogger<HyperVManager> Logger { internal get; init; }

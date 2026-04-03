@@ -7,7 +7,7 @@ using System.Net.NetworkInformation;
 
 namespace MadWizard.Desomnia.Network.HyperV.Manager
 {
-    internal class HyperVVirtualMachine(HyperVManager manager, string guid) : IVirtualMachine
+    internal class HyperVVirtualMachine(HyperVManager manager, string guid) : IVirtualMachine, IInspectable
     {
         static readonly TimeSpan STATE_TTL = TimeSpan.FromSeconds(5);
 
@@ -16,6 +16,8 @@ namespace MadWizard.Desomnia.Network.HyperV.Manager
         readonly MemoryCache _cache = new(new MemoryCacheOptions());
 
         internal SemaphoreSlim Semaphore { get; } = new(1, 1);
+
+        public Guid GUID { get; set; } = new Guid(guid);
 
         public string Name              => field ??= QueryInstanceProperty<string>("ElementName");
         public PhysicalAddress Address  => field ??= QueryPhysicalAddress() ?? throw new Exception($"No MAC address found for VM '{Name}'.");
@@ -51,6 +53,16 @@ namespace MadWizard.Desomnia.Network.HyperV.Manager
         }
 
         public event EventHandler<VirtualMachineStateChangedEventArgs>? StateChanged;
+
+        #region Inspection
+        IEnumerable<UsageToken> IInspectable.Inspect(TimeSpan interval)
+        {
+            foreach (var process in this.FindConnectedProcesses())
+            {
+                yield return new HyperVMConnectionUsage(this, process);
+            }
+        }
+        #endregion
 
         #region Actions
         public async Task Start()
@@ -134,11 +146,33 @@ namespace MadWizard.Desomnia.Network.HyperV.Manager
 
             return !string.IsNullOrWhiteSpace(phy) ? PhysicalAddress.Parse(phy) : null;
         }
+
+        private IEnumerable<System.Diagnostics.Process> FindConnectedProcesses()
+        {
+            var query = "SELECT ProcessId, Name, ExecutablePath, CommandLine FROM Win32_Process WHERE Name = 'vmconnect.exe'";
+
+            var processes = manager.Session.QueryInstances(HyperVManager.NS_PS, HyperVManager.DIALECT, query);
+
+            foreach (var process in processes)
+            {
+                var commandLine = process.CimInstanceProperties["CommandLine"]?.Value as string;
+                if (string.IsNullOrWhiteSpace(commandLine))
+                    continue;
+
+                if (commandLine.Contains(guid))
+                {
+                    var pid = Convert.ToUInt32(process.CimInstanceProperties["ProcessId"]?.Value ?? 0);
+
+                    yield return System.Diagnostics.Process.GetProcessById((int)pid);
+                }
+            }
+        }
         #endregion
 
         public override string ToString()
         {
             return $"HyperVVirtualMachine[name='{Name}', mac={Address.ToHexString()}, state={State}]";
         }
+
     }
 }

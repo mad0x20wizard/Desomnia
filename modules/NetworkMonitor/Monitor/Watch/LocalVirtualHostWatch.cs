@@ -77,6 +77,28 @@ namespace MadWizard.Desomnia.Network
             return Host.PhysicalAddress;
         }
 
+        protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
+        {
+            var tokens = base.InspectResource(interval).ToHashSet();
+
+            /**
+             * On some platforms, a virtual machine can be accesses by other means
+             * than via a network socket. To prevent these from treated as idle,
+             * we also include the VM's intrinsic usage tokens.
+             */
+            if (VM is IInspectable vm && vm.Inspect(interval) is var vmTokens && vmTokens.Any())
+            {
+                // create NetworkHostUsage, if not present
+                if (tokens.OfType<NetworkHostUsage>().FirstOrDefault() is not NetworkHostUsage usage)
+                    tokens.Add(usage = new NetworkHostUsage(Host, 0));
+
+                foreach (var token in vmTokens)
+                    usage.Tokens.Add(token);
+            }
+
+            return tokens;
+        }
+
         [ActionHandler("wake")]
         public virtual async Task Wake(DemandEvent @event)
         {

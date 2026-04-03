@@ -1,6 +1,5 @@
 ﻿using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Network.Neighborhood;
-using MadWizard.Desomnia.Ressource.Events;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
 
