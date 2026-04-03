@@ -59,7 +59,7 @@ namespace MadWizard.Desomnia.Network.HyperV.Manager
         {
             foreach (var process in this.FindConnectedProcesses())
             {
-                yield return new HyperVMConnectionUsage(this, process);
+                yield return new HyperVMBusUsage(this, process);
             }
         }
         #endregion

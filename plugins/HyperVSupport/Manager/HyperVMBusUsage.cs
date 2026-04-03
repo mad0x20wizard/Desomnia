@@ -2,7 +2,7 @@
 
 namespace MadWizard.Desomnia.Network.HyperV.Manager
 {
-    internal class HyperVMConnectionUsage(HyperVVirtualMachine vm, System.Diagnostics.Process process) : VirtualMachineUsage
+    internal class HyperVMBusUsage(HyperVVirtualMachine vm, System.Diagnostics.Process process) : VirtualMachineUsage
     {
         public HyperVVirtualMachine VirtualMachine => vm;
 
