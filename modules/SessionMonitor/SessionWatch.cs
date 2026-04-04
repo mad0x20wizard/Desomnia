@@ -1,9 +1,6 @@
-﻿using Autofac.Core;
-using MadWizard.Desomnia.Network.Configuration.Options;
+﻿using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 
 namespace MadWizard.Desomnia.Session
@@ -11,7 +8,9 @@ namespace MadWizard.Desomnia.Session
     public class SessionWatch : ResourceMonitor<SessionProcessWatch>
     {
         [EventContext]
-        public ISession Session { get; private init; }
+        public required ISession Session { get; init; }
+
+        public required Func<SessionProcessWatchInfo, SessionProcessWatch> CreateProcessWatch { private get; init; }
 
         public TimeSpan? MaxIdleTime { get; private set; }
 
@@ -27,16 +26,12 @@ namespace MadWizard.Desomnia.Session
         public event EventInvocation? Lock;
         public event EventInvocation? Logout;
 
-        internal bool ShouldBeTracked => true;
-
         public SessionWatch(ISession session)
         {
-            Session = session;
-
-            Session.Connected += Session_Connected;
-            Session.Disconnected += Session_Disconnected;
-            Session.Unlocked += Session_Unlocked;
-            Session.Locked += Session_Locked;
+            session.Connected += Session_Connected;
+            session.Disconnected += Session_Disconnected;
+            session.Unlocked += Session_Unlocked;
+            session.Locked += Session_Locked;
         }
 
         private void Session_Connected(object? sender, EventArgs e)
@@ -71,7 +66,7 @@ namespace MadWizard.Desomnia.Session
 
             foreach (var info in desc.Process)
             {
-                this.StartTracking(new SessionProcessWatch(this, info));
+                this.StartTracking(CreateProcessWatch(info));
             }
         }
 
@@ -137,11 +132,6 @@ namespace MadWizard.Desomnia.Session
             Session.Connected -= Session_Connected;
 
             base.Dispose();
-        }
-
-        protected override Task TriggerEventAsync(Event @event) // TODO remove
-        {
-            return base.TriggerEventAsync(@event);
         }
     }
 }

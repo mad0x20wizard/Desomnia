@@ -1,14 +1,70 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Autofac;
+using Microsoft.Diagnostics.Tracing.Parsers;
+using Microsoft.Diagnostics.Tracing.Parsers.Kernel;
+using Microsoft.Diagnostics.Tracing.Session;
+using Microsoft.Extensions.Logging;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace MadWizard.Desomnia.Process.Manager
 {
-    public class ProcessManager : IProcessManager
+    public partial class ProcessManager : IProcessManager, IStartable, IDisposable
     {
         public required ILogger<ProcessManager> Logger { private get; init; }
 
-        private delegate IEnumerable<IProcess> ProcessFilter(IEnumerable<IProcess> processes);
+        public event EventHandler<IProcess>? ProcessStarted;
+        public event EventHandler<IProcess>? ProcessStopped;
+
+        private TraceEventSession? _traceEventSession;
+
+        public IProcess LaunchProcess(ProcessStartInfo info)
+        {
+            return new ProcessExt(System.Diagnostics.Process.Start(info) ?? throw new Exception("Process could not be started."));
+        }
+
+        void IStartable.Start()
+        {
+            _traceEventSession = new("Desomnia::ProcessManager");
+            _traceEventSession.EnableKernelProvider(KernelTraceEventParser.Keywords.Process);
+
+            _traceEventSession.Source.Kernel.ProcessStart += ETW_ProcessStart;
+            _traceEventSession.Source.Kernel.ProcessStop += ETW_ProcessStop;
+
+            Task.Factory.StartNew(() =>
+            {
+                try
+                {
+                    _traceEventSession.Source.Process();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "unexpected ETW processing failure");
+                }
+            }, TaskCreationOptions.LongRunning);
+        }
+
+        private void ETW_ProcessStart(ProcessTraceData data)
+        {
+            //Logger.LogTrace("Process started: {name} ({id})", data.ProcessName, data.ProcessID);
+
+            ProcessStarted?.Invoke(this, new ProcessExt(data.ProcessID));
+        }
+
+        private void ETW_ProcessStop(ProcessTraceData data)
+        {
+            //Logger.LogTrace("Process stopped: {name} ({id})", data.ProcessName, data.ProcessID);
+
+            ProcessStopped?.Invoke(this, new ProcessExt(data.ProcessID));
+        }
+
+        void IDisposable.Dispose()
+        {
+            _traceEventSession?.Source.StopProcessing();
+            _traceEventSession?.Stop();
+            _traceEventSession?.Dispose();
+            _traceEventSession = null;
+        }
 
         public IEnumerator<IProcess> GetEnumerator()
         {
@@ -22,11 +78,6 @@ namespace MadWizard.Desomnia.Process.Manager
             }
 
             return processList.GetEnumerator();
-        }
-
-        public IEnumerable<IProcess> WithSessionId(uint sid)
-        {
-            return new ProcessManagerView(this) { Filter = processes => processes.Where(p => p.SessionId == sid) };
         }
 
         internal class ProcessExt(System.Diagnostics.Process process) : IProcess
@@ -82,16 +133,6 @@ namespace MadWizard.Desomnia.Process.Manager
                 {
                     process.Kill(); // kill it anyway
                 }
-            }
-        }
-
-        private class ProcessManagerView(IProcessManager manager) : IIEnumerable<IProcess>
-        {
-            public required ProcessFilter Filter { private get; init; }
-
-            public IEnumerator<IProcess> GetEnumerator()
-            {
-                return Filter(manager).GetEnumerator();
             }
         }
 

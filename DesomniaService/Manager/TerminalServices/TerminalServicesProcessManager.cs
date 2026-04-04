@@ -1,16 +1,81 @@
-﻿using MadWizard.Desomnia.Session.Manager;
+﻿using MadWizard.Desomnia.Process.Manager;
 using Microsoft.Win32.SafeHandles;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
+using static MadWizard.Desomnia.Process.Manager.ProcessManager;
 
-namespace MadWizard.Desomnia.Manager.Process
+namespace MadWizard.Desomnia.Session.Manager
 {
-    public static class ProcessLauncher
+    public partial class TerminalServicesSession
     {
-        public static System.Diagnostics.Process CreateProcessInSession(ProcessStartInfo startup, uint sid, string processName = "winlogon")
+        public required IProcessManager Manager
+        {
+            private get; init
+            {
+                field = value;
+
+                field.ProcessStarted += Manager_ProcessStarted;
+                field.ProcessStopped += Manager_ProcessStopped;
+            }
+        }
+
+        private void Manager_ProcessStarted(object? sender, IProcess p)
+        {
+            if (p.SessionId == Id)
+            {
+                ProcessStarted?.Invoke(this, p);
+            }
+        }
+
+        private void Manager_ProcessStopped(object? sender, IProcess p)
+        {
+            if (p.SessionId == Id)
+            {
+                ProcessStopped?.Invoke(this, p);
+            }
+        }
+
+        public event EventHandler<IProcess>? ProcessStarted;
+        public event EventHandler<IProcess>? ProcessStopped;
+
+        public IEnumerator<IProcess> GetEnumerator()
+        {
+            return Manager.Where(p => p.SessionId == Id).GetEnumerator();
+        }
+
+        public IProcess LaunchProcess(ProcessStartInfo info)
+        {
+            const int MAX_STARTUP_DELAY = 1000;
+
+            var watch = Stopwatch.StartNew();
+
+            while (true)
+            {
+                try
+                {
+                    if (info.UserName == "SYSTEM")
+                        return CreateProcessInSession(info, Id);
+                    else
+                        return CreateProcessInSession(info, Token);
+                }
+                catch (Win32Exception ex)
+                {
+                    if (watch.ElapsedMilliseconds < MAX_STARTUP_DELAY && ex.NativeErrorCode == 340)
+                    {
+                        // try again
+                        Thread.Sleep(100);
+                        continue;
+                    }
+
+                    throw;
+                }
+            }
+        }
+
+        internal IProcess CreateProcessInSession(ProcessStartInfo startup, uint sid, string processName = "winlogon")
         {
             uint winlogonPid = (uint)System.Diagnostics.Process.GetProcessesByName(processName).Where(p => (uint)p.SessionId == sid).First().Id;
 
@@ -21,11 +86,11 @@ namespace MadWizard.Desomnia.Manager.Process
             {
                 SECURITY_ATTRIBUTES sa = new();
 
-                // obtain a handle to the access token of the winlogon process
+                // obtain a handle to the access token of the winlogon ProcessManager
                 if (!OpenProcessToken(hProcess, TOKEN_DUPLICATE, ref hProcessToken))
                     throw new Win32Exception();
 
-                // copy the access token of the winlogon process; the newly created token will be a primary token
+                // copy the access token of the winlogon ProcessManager; the newly created token will be a primary token
                 if (!DuplicateTokenEx(hProcessToken, MAXIMUM_ALLOWED, ref sa, (int)SECURITY_IMPERSONATION_LEVEL.SecurityIdentification, (int)TOKEN_TYPE.TokenPrimary, ref token))
                     throw new Win32Exception();
             }
@@ -45,7 +110,7 @@ namespace MadWizard.Desomnia.Manager.Process
             }
         }
 
-        public static System.Diagnostics.Process CreateProcessInSession(ProcessStartInfo startup, nint token)
+        internal IProcess CreateProcessInSession(ProcessStartInfo startup, nint token)
         {
             STARTUPINFO si = new STARTUPINFO(startup).OnInteractiveDesktop();
 
@@ -77,10 +142,10 @@ namespace MadWizard.Desomnia.Manager.Process
                 token,                                          // client's access token
                 startup.FileNameAsModule(),                     // file to execute
                 startup.ArgumentsAsCommandLine(),               // command line
-                SECURITY_ATTRIBUTES.EMTPY,                      // pointer to process SECURITY_ATTRIBUTES
+                SECURITY_ATTRIBUTES.EMTPY,                      // pointer to ProcessManager SECURITY_ATTRIBUTES
                 SECURITY_ATTRIBUTES.EMTPY,                      // pointer to thread SECURITY_ATTRIBUTES
                 hRead != 0,                                     // handles are not inheritable
-                startup.AsCreationFlags(),                      // flags that specify the priority and creation method of the process
+                startup.AsCreationFlags(),                      // flags that specify the priority and creation method of the ProcessManager
                 0,                                              // pointer to new environment block 
                 startup.WorkingDirectory.NullIfWhiteSpace(),    // name of current directory 
                 si,                                             // pointer to STARTUPINFO structure
@@ -94,16 +159,13 @@ namespace MadWizard.Desomnia.Manager.Process
 
             if (startup.RedirectStandardOutput)
             {
-                CloseHandle(hWrite);                // Close write handle in this process
+                CloseHandle(hWrite);                // Close write handle in this ProcessManager
 
                 process.AddStandardOutput(new StreamReader(new FileStream(new SafeFileHandle(hRead, true), FileAccess.Read)));
             }
 
-            return process;
+            return new ProcessExt(process);
         }
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool CloseHandle(nint hSnapshot);
 
         [DllImport("kernel32.dll")]
         private static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, uint dwProcessId);
@@ -179,13 +241,13 @@ namespace MadWizard.Desomnia.Manager.Process
 
             }
 
-            // By default CreateProcessAsUser creates a process on a non-interactive window station, meaning
-            // the window station has a desktop that is invisible and the process is incapable of receiving
+            // By default CreateProcessAsUser creates a ProcessManager on a non-interactive window station, meaning
+            // the window station has a desktop that is invisible and the ProcessManager is incapable of receiving
             // user input. To remedy this we set the lpDesktop parameter to indicate we want to enable user 
-            // interaction with the new process.
+            // interaction with the new ProcessManager.
             public STARTUPINFO OnInteractiveDesktop()
             {
-                this.lpDesktop = @"winsta0\default"; // interactive window station parameter; basically this indicates that the process created can display a GUI on the desktop
+                this.lpDesktop = @"winsta0\default"; // interactive window station parameter; basically this indicates that the ProcessManager created can display a GUI on the desktop
 
                 return this;
             }

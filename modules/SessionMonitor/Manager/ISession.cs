@@ -1,9 +1,8 @@
 ﻿using MadWizard.Desomnia.Process.Manager;
-using System.Diagnostics;
 
 namespace MadWizard.Desomnia.Session.Manager
 {
-    public interface ISession
+    public interface ISession : IProcessManager
     {
         public uint Id { get; }
 
@@ -20,9 +19,6 @@ namespace MadWizard.Desomnia.Session.Manager
 
         public TimeSpan? IdleTime => LastInputTime != null ? DateTime.Now - LastInputTime : null;
         public DateTime? LastInputTime => IdleTime != null ? DateTime.Now - IdleTime : null;
-
-        public IEnumerable<IProcess> Processes { get; }
-        public IProcess LaunchProcess(ProcessStartInfo info);
 
         public Task Disconnect();
         public Task Logoff();

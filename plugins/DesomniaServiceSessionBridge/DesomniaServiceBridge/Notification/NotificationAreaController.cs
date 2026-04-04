@@ -2,15 +2,8 @@
 using MadWizard.Desomnia.Pipe.Config;
 using MadWizard.Desomnia.Pipe.Messages;
 using MadWizard.Desomnia.Power.Manager;
-using MadWizard.Desomnia.Service.Bridge.Minion;
 using MadWizard.Desomnia.Session.Manager;
-using MadWizard.Desomnia.Session.Manager.Bridged;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace MadWizard.Desomnia.Service.Bridge.Notification
 {
@@ -90,7 +83,7 @@ namespace MadWizard.Desomnia.Service.Bridge.Notification
         #region Message-Handlers
         void ISessionMessageHandler<DisconnectMessage>.Handle(ISession session, DisconnectMessage message)
         {
-            manager.FindSessionByID(message.SessionID)?.Disconnect();
+            manager[message.SessionID]?.Disconnect();
         }
 
         void ISessionMessageHandler<ConnectToConsoleMessage>.Handle(ISession session, ConnectToConsoleMessage message)

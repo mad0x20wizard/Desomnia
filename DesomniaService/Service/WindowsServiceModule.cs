@@ -16,9 +16,12 @@ namespace MadWizard.Desomnia.Service.Windows
 
             builder.RegisterType<TerminalServicesManager>()
                 .OnlyIf(reg => reg.IsRegistered(new TypedService(typeof(WindowsService))))
-                .PropertiesAutowired()
                 .AsImplementedInterfaces()
                 .SingleInstance()
+                .AsSelf();
+
+            builder.RegisterType<TerminalServicesSession>()
+                .AsImplementedInterfaces()
                 .AsSelf();
         }
     }

@@ -18,7 +18,7 @@ namespace MadWizard.Desomnia.Session.Manager
         Connected,
         //
         // Zusammenfassung:
-        //     The session is in the process of connecting to a client.
+        //     The session is in the ProcessManager of connecting to a client.
         ConnectQuery,
         //
         // Zusammenfassung:

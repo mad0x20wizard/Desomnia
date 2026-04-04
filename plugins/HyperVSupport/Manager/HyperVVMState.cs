@@ -16,7 +16,7 @@ namespace MadWizard.Desomnia.Network.HyperV.Manager
         ///<summary>The virtual machine is turned off.</summary>
         Off = 3,
 
-        ///<summary>The virtual machine is in the process of turning off.</summary>
+        ///<summary>The virtual machine is in the ProcessManager of turning off.</summary>
         ShuttingDown = 4,
 
         ///<summary>The virtual machine does not support being started or turned off.</summary>
@@ -34,7 +34,7 @@ namespace MadWizard.Desomnia.Network.HyperV.Manager
         ///<summary>The virtual machine is running but in a restricted mode. The behavior of the virtual machine is similar to the Running state, but it processes only a restricted set of commands. All other requests are queued.</summary>
         Quiesce = 9,
 
-        ///<summary>The virtual machine is in the process of starting. New requests are queued.</summary>
+        ///<summary>The virtual machine is in the ProcessManager of starting. New requests are queued.</summary>
         Starting = 10
     }
 

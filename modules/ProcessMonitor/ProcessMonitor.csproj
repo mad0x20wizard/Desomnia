@@ -4,7 +4,9 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>MadWizard.Desomnia.Process</RootNamespace>
+	  <LangVersion>preview</LangVersion>
+
+	  <RootNamespace>MadWizard.Desomnia.Process</RootNamespace>
     <AssemblyName>DesomniaProcessMonitor</AssemblyName>
   </PropertyGroup>
 

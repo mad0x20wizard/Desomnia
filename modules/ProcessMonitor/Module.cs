@@ -17,6 +17,8 @@ namespace MadWizard.Desomnia.Process
                     .AsImplementedInterfaces()
                     .SingleInstance()
                     .AsSelf();
+
+                builder.RegisterType<ProcessWatch>().AsSelf();
             }
         }
     }

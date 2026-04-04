@@ -65,7 +65,7 @@ namespace MadWizard.Desomnia.Session.Manager
 
                     while (watch.ElapsedMilliseconds < MAX_TOKEN_CREATION_DELAY)
                     {
-                        if (!WTSQueryUserToken(id, out var token))
+                        if (!WTSQueryUserToken(Id, out var token))
                             throw new Win32Exception();
 
                         //if ((token) != 0)
@@ -81,7 +81,7 @@ namespace MadWizard.Desomnia.Session.Manager
             }
         }
 
-        private WTSINFO WTSInfo => QuerySessionInformation<WTSINFO>(id, WTS_INFO_CLASS.WTSSessionInfo);
+        private WTSINFO WTSInfo => QuerySessionInformation<WTSINFO>(Id, WTS_INFO_CLASS.WTSSessionInfo);
 
         public virtual void Dispose()
         {

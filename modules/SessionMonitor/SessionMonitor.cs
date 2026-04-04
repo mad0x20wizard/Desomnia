@@ -1,4 +1,5 @@
 ﻿using Autofac;
+using MadWizard.Desomnia.Process.Manager;
 using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
 using Microsoft.Extensions.Logging;
@@ -9,10 +10,16 @@ namespace MadWizard.Desomnia.Session
     {
         public required ILogger<SessionMonitor> Logger { get; set; }
 
+        public required ILifetimeScope Scope { private get; init; }
+
+        readonly Dictionary<ISession, ILifetimeScope> _sessionScopes = [];
+
         public void Start()
         {
+            manager.ToString();
+
             foreach (ISession session in manager)
-                MayBeTrackSession(session);
+                TrackSession(session);
 
             manager.UserLogon += SessionManager_UserLogin;
             manager.UserLogoff += SessionManager_UserLogout;
@@ -20,39 +27,53 @@ namespace MadWizard.Desomnia.Session
             Logger.LogDebug("Startup complete");
         }
 
+        #region SessionManager events
         private void SessionManager_UserLogin(object? sender, ISession session)
         {
-            MayBeTrackSession(session, true);
+            TrackSession(session, true);
         }
         private void SessionManager_UserLogout(object? sender, ISession session)
         {
-            foreach (var watch in this.Where(w => w.Session == session))
+            foreach (var scope in _sessionScopes.Where(w => w.Key == session).Select(w => w.Value))
             {
-                watch.TriggerLogout();
+                if (scope.Resolve<SessionWatch>() is SessionWatch watch)
+                {
+                    watch.TriggerLogout();
 
-                this.StopTracking(watch);
+                    this.StopTracking(watch);
+                }
 
-                watch.Dispose();
+                _sessionScopes.Remove(session);
+
+                scope.Dispose();
             }
         }
+        #endregion
 
-        private void MayBeTrackSession(ISession session, bool logon = false)
+        private void TrackSession(ISession session, bool logon = false)
         {
-            var watch = new SessionWatch(session);
-
-            config.Configure(session, watch.ApplyConfiguration);
-
-            if (watch.ShouldBeTracked)
+            var scope = Scope.BeginLifetimeScope("Session", builder =>
             {
+                builder.RegisterType<SessionWatch>().AsSelf().SingleInstance();
+
+                builder.RegisterType<SessionProcessWatch>().AsSelf();
+
+                builder.RegisterInstance(session)
+                    .As<IProcessManager>()
+                    .As<ISession>();
+            });
+
+            if (scope.Resolve<SessionWatch>() is SessionWatch watch)
+            {
+                config.Configure(session, watch.ApplyConfiguration);
+
                 if (this.StartTracking(watch) && logon)
                 {
                     watch.TriggerLogon();
                 }
             }
-            else
-            {
-                watch.Dispose();
-            }
+
+            _sessionScopes[session] = scope;
         }
     }
 }

@@ -1,15 +1,11 @@
-﻿using MadWizard.Desomnia.Manager.Process;
-using MadWizard.Desomnia.Process.Manager;
-using System.ComponentModel;
-using System.Diagnostics;
+﻿using System.ComponentModel;
 using System.Security.Principal;
-using static MadWizard.Desomnia.Process.Manager.ProcessManager;
 
 namespace MadWizard.Desomnia.Session.Manager
 {
-    public partial class TerminalServicesSession(uint id) : ISession
+    public partial class TerminalServicesSession : ISession
     {
-        public uint Id => id;
+        public required uint Id { get; init; }
 
         public string UserName => !WTSInfo.UserName.IsWhiteSpace() ? field = WTSInfo.UserName : field ?? "?";
         public string DomainName => WTSInfo.Domain;
@@ -19,7 +15,7 @@ namespace MadWizard.Desomnia.Session.Manager
 
         public string? SID => (UserAccount?.Translate(typeof(SecurityIdentifier)) as SecurityIdentifier)?.Value;
 
-        public string? ClientName => QuerySessionInformation<string>(id, WTS_INFO_CLASS.WTSClientName)?.NullIfWhiteSpace();
+        public string? ClientName => QuerySessionInformation<string>(Id, WTS_INFO_CLASS.WTSClientName)?.NullIfWhiteSpace();
 
         public bool IsConnected => IsConsoleConnected || IsRemoteConnected;
         public bool IsConsoleConnected => WTSGetActiveConsoleSessionId() == Id;
@@ -61,7 +57,7 @@ namespace MadWizard.Desomnia.Session.Manager
                         UseShellExecute = false,
                         RedirectStandardOutput = true,
                         CreateNoWindow = true
-                    }, runAsSystem: false);
+                    }).NativeProcess;
 
                     using (process.StandardOutput)
                     {
@@ -75,8 +71,6 @@ namespace MadWizard.Desomnia.Session.Manager
             }
         }
 
-        public required IEnumerable<IProcess> Processes { get; init; }
-
         public virtual async Task Lock()
         {
             throw new NotImplementedException();
@@ -85,7 +79,7 @@ namespace MadWizard.Desomnia.Session.Manager
         {
             await Task.Run(() =>
             {
-                if (!WTSConnectSession(id, WTSGetActiveConsoleSessionId(), "", true))
+                if (!WTSConnectSession(Id, WTSGetActiveConsoleSessionId(), "", true))
                     throw new Win32Exception();
             });
         }
@@ -93,7 +87,7 @@ namespace MadWizard.Desomnia.Session.Manager
         {
             await Task.Run(() =>
             {
-                if (!WTSDisconnectSession(0, id, true))
+                if (!WTSDisconnectSession(0, Id, true))
                     throw new Win32Exception();
             });
         }
@@ -101,7 +95,7 @@ namespace MadWizard.Desomnia.Session.Manager
         {
             await Task.Run(() =>
             {
-                if (!WTSLogoffSession(0, id, true))
+                if (!WTSLogoffSession(0, Id, true))
                     throw new Win32Exception();
             });
         }
@@ -133,41 +127,7 @@ namespace MadWizard.Desomnia.Session.Manager
                     state.Add("Unlocked");
             }
 
-            return $"WTSSession[id={id}, name={name}, state={string.Join('|', state)}]";
-        }
-
-        public IProcess LaunchProcess(ProcessStartInfo info)
-        {
-            return new ProcessExt(LaunchProcess(info, false));
-        }
-
-        public System.Diagnostics.Process LaunchProcess(ProcessStartInfo info, bool runAsSystem)
-        {
-            const int MAX_STARTUP_DELAY = 1000;
-
-            var watch = Stopwatch.StartNew();
-
-            while (true)
-            {
-                try
-                {
-                    if (runAsSystem)
-                        return ProcessLauncher.CreateProcessInSession(info, Id);
-                    else
-                        return ProcessLauncher.CreateProcessInSession(info, Token);
-                }
-                catch (Win32Exception ex)
-                {
-                    if (watch.ElapsedMilliseconds < MAX_STARTUP_DELAY && ex.NativeErrorCode == 340)
-                    {
-                        // try again
-                        Thread.Sleep(100);
-                        continue;
-                    }
-
-                    throw;
-                }
-            }
+            return $"WTSSession[id={Id}, name={name}, state={string.Join('|', state)}]";
         }
     }
 }

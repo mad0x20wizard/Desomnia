@@ -1,7 +1,6 @@
 ﻿using MadWizard.Desomnia.Pipe;
 using MadWizard.Desomnia.Pipe.Config;
 using MadWizard.Desomnia.Pipe.Messages;
-using MadWizard.Desomnia.Session.Manager.Bridged;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Pipes;
@@ -19,7 +18,7 @@ namespace MadWizard.Desomnia.Service.Bridge.Minion
 
         private MinionConfig _config;
 
-        private BridgedTerminalServicesSession _session;
+        private Session _session;
 
         private System.Diagnostics.Process _process;
 
@@ -29,7 +28,7 @@ namespace MadWizard.Desomnia.Service.Bridge.Minion
 
         private ConcurrentQueue<UserMessage> _queueUntilReady = [];
 
-        internal SessionMinion(MinionConfig config, BridgedTerminalServicesSession session)
+        internal SessionMinion(MinionConfig config, Session session)
         {
             _config = config;
 
@@ -91,7 +90,7 @@ namespace MadWizard.Desomnia.Service.Bridge.Minion
             if (!Debugger.IsAttached) startup.ArgumentList.Add("/WaitForDebugger");
             //#endif
 
-            return _session.LaunchProcess(startup, RUN_AS_SYSTEM);
+            return _session.LaunchProcess(startup).NativeProcess;
         }
 
         private void SessionMinion_Ready(object? sender, EventArgs e)
@@ -104,7 +103,7 @@ namespace MadWizard.Desomnia.Service.Bridge.Minion
 
         private void Pipe_Connected(object? sender, EventArgs e)
         {
-            if (_pipe.ClientProcessId == _process.Id) // only accept messages from our own process
+            if (_pipe.ClientProcessId == _process.Id) // only accept messages from our own ProcessManager
             {
                 _status = SessionMinionStatus.Startup;
 
