@@ -10,8 +10,6 @@ $components = "./components"
 
 Remove-Item -Path $components -Recurse -Force
 
-Remove-Item -Path $components -Recurse -Force
-
 exit 0
 
 #Start-Sleep -Seconds 1;
