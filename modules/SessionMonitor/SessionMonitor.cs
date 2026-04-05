@@ -2,30 +2,18 @@
 using MadWizard.Desomnia.Process.Manager;
 using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia.Session
 {
-    public class SessionMonitor(SessionMonitorConfig config, ISessionManager manager) : ResourceMonitor<SessionWatch>, IStartable
+    public class SessionMonitor(SessionMonitorConfig config, ISessionManager manager) : ResourceMonitor<SessionWatch>, IHostedService
     {
         public required ILogger<SessionMonitor> Logger { get; set; }
 
         public required ILifetimeScope Scope { private get; init; }
 
         readonly Dictionary<ISession, ILifetimeScope> _sessionScopes = [];
-
-        public void Start()
-        {
-            manager.ToString();
-
-            foreach (ISession session in manager)
-                TrackSession(session);
-
-            manager.UserLogon += SessionManager_UserLogin;
-            manager.UserLogoff += SessionManager_UserLogout;
-
-            Logger.LogDebug("Startup complete");
-        }
 
         #region SessionManager events
         private void SessionManager_UserLogin(object? sender, ISession session)
@@ -50,6 +38,17 @@ namespace MadWizard.Desomnia.Session
         }
         #endregion
 
+        async Task IHostedService.StartAsync(CancellationToken cancellationToken)
+        {
+            foreach (ISession session in manager)
+                TrackSession(session);
+
+            manager.UserLogon += SessionManager_UserLogin;
+            manager.UserLogoff += SessionManager_UserLogout;
+
+            Logger.LogDebug("Startup complete");
+        }
+
         private void TrackSession(ISession session, bool logon = false)
         {
             var scope = Scope.BeginLifetimeScope("Session", builder =>
@@ -73,7 +72,18 @@ namespace MadWizard.Desomnia.Session
                 }
             }
 
+            Scope.Disposer.AddInstanceForDisposal(scope);
+
             _sessionScopes[session] = scope;
+        }
+
+        async Task IHostedService.StopAsync(CancellationToken cancellationToken)
+        {
+            manager.UserLogon -= SessionManager_UserLogin;
+            manager.UserLogoff -= SessionManager_UserLogout;
+
+            foreach (var watch in this.ToArray())
+                StopTracking(watch);
         }
     }
 }

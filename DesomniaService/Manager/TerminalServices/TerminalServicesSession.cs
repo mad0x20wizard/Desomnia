@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
 
 namespace MadWizard.Desomnia.Session.Manager
@@ -107,6 +108,31 @@ namespace MadWizard.Desomnia.Session.Manager
 
         internal WindowsIdentity Identity => new(Token);
         internal WindowsPrincipal Principal => new(Identity);
+
+        internal MessageBoxResult? SendMessage(string title, string text,
+            MessageBoxStyle style = MessageBoxStyle.OK | MessageBoxStyle.IconInformation, 
+            bool wait = false, TimeSpan timeout = default)
+        {
+            if (!WTSSendMessage(
+                WTS_CURRENT_SERVER_HANDLE,
+                (int)Id,
+                title,
+                title.Length * 2, // Unicode: size in bytes
+                text,
+                text.Length * 2, // Unicode: size in bytes
+                (int)style,
+                (int)timeout.TotalSeconds, // timeout in seconds
+                out int response,
+                wait // wait for user response or timeout
+            )) throw new Win32Exception(Marshal.GetLastWin32Error());
+
+            if (response == 32000) // IDTIMEOUT
+                throw new TimeoutException();
+            if (response == 32001) // IDASYNC 
+                return null;
+
+            return (MessageBoxResult)response;
+        }
 
         public override string ToString()
         {

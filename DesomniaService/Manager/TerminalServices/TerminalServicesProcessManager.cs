@@ -5,13 +5,12 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
-using static MadWizard.Desomnia.Process.Manager.ProcessManager;
 
 namespace MadWizard.Desomnia.Session.Manager
 {
-    public partial class TerminalServicesSession
+    public partial class TerminalServicesSession : IProcessManager
     {
-        public required IProcessManager Manager
+        public required ProcessManager Manager
         {
             private get; init
             {
@@ -164,7 +163,7 @@ namespace MadWizard.Desomnia.Session.Manager
                 process.AddStandardOutput(new StreamReader(new FileStream(new SafeFileHandle(hRead, true), FileAccess.Read)));
             }
 
-            return new ProcessExt(process);
+            return Manager.RememberProcess(process)!;
         }
 
         [DllImport("kernel32.dll")]

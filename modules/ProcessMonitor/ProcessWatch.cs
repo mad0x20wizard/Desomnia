@@ -94,6 +94,10 @@ namespace MadWizard.Desomnia.Process
                     yield return new ProcessUsage(info.Name, usage);
                 }
             }
+            else if (_watchedProcesses.Count > 0)
+            {
+                yield return new ProcessUsage(info.Name);
+            }
         }
         #endregion
 

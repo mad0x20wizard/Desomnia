@@ -21,7 +21,7 @@ namespace MadWizard.Desomnia.Service.Windows
                 .AsSelf();
 
             builder.RegisterType<TerminalServicesSession>()
-                .AsImplementedInterfaces()
+                .As<ISession>().As<IDisposable>() // NOT .As<IProcessManager>() !!!
                 .AsSelf();
         }
     }

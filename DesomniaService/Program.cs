@@ -9,7 +9,7 @@ using NLog;
 using System.Diagnostics;
 using System.Reflection;
 
-await MadWizard.Desomnia.Test.Debugger.UntilAttached();
+//await MadWizard.Desomnia.Test.Debugger.UntilAttached();
 
 LogManager.Setup().SetupExtensions(ext => ext.RegisterLayoutRenderer<SleepTimeLayoutRenderer>("sleep-duration")); // FIXME
 LogManager.Setup().SetupExtensions(ext => ext.RegisterLayoutRenderer<NetworkHostLayoutRenderer>()); // FIXME

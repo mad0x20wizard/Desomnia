@@ -139,6 +139,21 @@ namespace MadWizard.Desomnia.Session.Manager
         private static extern bool WTSLogoffSession(nint server, uint sessionId, bool wait);
         [DllImport("wtsapi32.dll")]
         private static extern void WTSFreeMemory(nint memory);
+
+        [DllImport("wtsapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        public static extern bool WTSSendMessage(
+            IntPtr hServer,
+            int sessionId,
+            string pTitle,
+            int titleLength,
+            string pMessage,
+            int messageLength,
+            int style,
+            int timeout,
+            out int pResponse,
+            bool bWait
+        );
+
         [DllImport("kernel32.dll")]
         private static extern bool CloseHandle(nint handle);
 
@@ -225,7 +240,7 @@ namespace MadWizard.Desomnia.Session.Manager
             int bufferLength,
             out int returnedLength);
 
-        static readonly IntPtr WTS_CURRENT_SERVER_HANDLE = IntPtr.Zero;
+        static readonly nint WTS_CURRENT_SERVER_HANDLE = nint.Zero;
 
         enum WINSTATIONINFOCLASS
         {
@@ -249,6 +264,68 @@ namespace MadWizard.Desomnia.Session.Manager
                 out int returned);
         }
 
+    }
+
+    [Flags]
+    // MessageBox styles from WinUser.h
+    internal enum MessageBoxStyle : uint
+    {
+        // Buttons
+        OK = 0x00000000,
+        OkCancel = 0x00000001,
+        AbortRetryIgnore = 0x00000002,
+        YesNoCancel = 0x00000003,
+        YesNo = 0x00000004,
+        RetryCancel = 0x00000005,
+        CancelTryContinue = 0x00000006,
+
+        // Icons
+        IconHand = 0x00000010,          // Stop / Error
+        IconQuestion = 0x00000020,
+        IconExclamation = 0x00000030,   // Warning
+        IconAsterisk = 0x00000040,      // Information
+
+        // Synonyms
+        IconWarning = IconExclamation,
+        IconError = IconHand,
+        IconInformation = IconAsterisk,
+        IconStop = IconHand,
+
+        // Default button
+        DefaultButton1 = 0x00000000,
+        DefaultButton2 = 0x00000100,
+        DefaultButton3 = 0x00000200,
+        DefaultButton4 = 0x00000300,
+
+        // Modality
+        ApplicationModal = 0x00000000,
+        SystemModal = 0x00001000,
+        TaskModal = 0x00002000,
+
+        // Misc options
+        Help = 0x00004000,
+        NoFocus = 0x00008000,
+        SetForeground = 0x00010000,
+        DefaultDesktopOnly = 0x00020000,
+        TopMost = 0x00040000,
+        Right = 0x00080000,
+        RtlReading = 0x00100000,
+        ServiceNotification = 0x00200000
+    }
+
+    internal enum MessageBoxResult : int
+    {
+        Ok = 1,            // IDOK
+        Cancel = 2,        // IDCANCEL
+        Abort = 3,         // IDABORT
+        Retry = 4,         // IDRETRY
+        Ignore = 5,        // IDIGNORE
+        Yes = 6,           // IDYES
+        No = 7,            // IDNO
+        Close = 8,         // IDCLOSE
+        Help = 9,          // IDHELP
+        TryAgain = 10,     // IDTRYAGAIN
+        Continue = 11,     // IDCONTINUE
     }
 
     public static class APIConverters

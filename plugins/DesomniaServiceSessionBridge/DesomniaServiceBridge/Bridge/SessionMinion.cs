@@ -77,7 +77,7 @@ namespace MadWizard.Desomnia.Service.Bridge.Minion
 
         private System.Diagnostics.Process LaunchProcess()
         {
-            var dir = new FileInfo(Assembly.GetExecutingAssembly().Locati‌​on).Directory!;
+            var dir = new FileInfo(Assembly.GetExecutingAssembly().Locati‌on).Directory!;
 
             var startup = new ProcessStartInfo()
             {
@@ -85,10 +85,9 @@ namespace MadWizard.Desomnia.Service.Bridge.Minion
                 WorkingDirectory = Directory.GetCurrentDirectory()
             };
 
-
-            //#if DEBUG
-            if (!Debugger.IsAttached) startup.ArgumentList.Add("/WaitForDebugger");
-            //#endif
+            ////#if DEBUG
+            //if (!Debugger.IsAttached) startup.ArgumentList.Add("/WaitForDebugger");
+            ////#endif
 
             return _session.LaunchProcess(startup).NativeProcess;
         }

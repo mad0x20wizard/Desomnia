@@ -3,6 +3,7 @@ using Microsoft.Diagnostics.Tracing.Parsers;
 using Microsoft.Diagnostics.Tracing.Parsers.Kernel;
 using Microsoft.Diagnostics.Tracing.Session;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -13,49 +14,129 @@ namespace MadWizard.Desomnia.Process.Manager
     {
         public required ILogger<ProcessManager> Logger { private get; init; }
 
+        private TraceEventSession _traceEventSession = new("Desomnia::ProcessManager");
+
+        readonly ConcurrentDictionary<int, IProcess> _processes = [];
+
         public event EventHandler<IProcess>? ProcessStarted;
         public event EventHandler<IProcess>? ProcessStopped;
 
-        private TraceEventSession? _traceEventSession;
-
-        public IProcess LaunchProcess(ProcessStartInfo info)
+        IProcess IProcessManager.LaunchProcess(ProcessStartInfo info)
         {
-            return new ProcessExt(System.Diagnostics.Process.Start(info) ?? throw new Exception("Process could not be started."));
+            var proc = System.Diagnostics.Process.Start(info) ?? throw new Exception("Process could not be started.");
+
+            return RememberProcess(proc)!;
         }
 
         void IStartable.Start()
         {
-            _traceEventSession = new("Desomnia::ProcessManager");
-            _traceEventSession.EnableKernelProvider(KernelTraceEventParser.Keywords.Process);
+            Task.Factory.StartNew(ETW_Process, TaskCreationOptions.LongRunning);
 
-            _traceEventSession.Source.Kernel.ProcessStart += ETW_ProcessStart;
-            _traceEventSession.Source.Kernel.ProcessStop += ETW_ProcessStop;
-
-            Task.Factory.StartNew(() =>
+            foreach (var p in System.Diagnostics.Process.GetProcesses())
             {
-                try
-                {
-                    _traceEventSession.Source.Process();
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogError(ex, "unexpected ETW processing failure");
-                }
-            }, TaskCreationOptions.LongRunning);
+                RememberProcess(pid: p.Id);
+            }
+        }
+
+        #region Event Tracing for Windows callbacks
+        private void ETW_Process()
+        {
+            try
+            {
+                _traceEventSession.EnableKernelProvider(KernelTraceEventParser.Keywords.Process);
+                _traceEventSession.Source.Kernel.ProcessStart += ETW_ProcessStart;
+                _traceEventSession.Source.Kernel.ProcessStop += ETW_ProcessStop;
+
+                _traceEventSession!.Source.Process();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "ETW_Process"); // TODO maybe try to restart processing?
+            }
         }
 
         private void ETW_ProcessStart(ProcessTraceData data)
         {
-            //Logger.LogTrace("Process started: {name} ({id})", data.ProcessName, data.ProcessID);
+            Logger.LogTrace("Process started: {name} ({id})", data.ProcessName, data.ProcessID);
 
-            ProcessStarted?.Invoke(this, new ProcessExt(data.ProcessID));
+            try
+            {
+                if (RememberProcess(pid: data.ProcessID) is IProcess process)
+                {
+                    ProcessStarted?.Invoke(this, process);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "ETW_ProcessStart");
+            }
         }
 
         private void ETW_ProcessStop(ProcessTraceData data)
         {
-            //Logger.LogTrace("Process stopped: {name} ({id})", data.ProcessName, data.ProcessID);
+            Logger.LogTrace("Process stopped: {name} ({id})", data.ProcessName, data.ProcessID);
 
-            ProcessStopped?.Invoke(this, new ProcessExt(data.ProcessID));
+            try
+            {
+                if (ForgetProcess(data.ProcessID) is IProcess process)
+                {
+                    ProcessStopped?.Invoke(this, process);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "ETW_ProcessStop");
+            }
+        }
+        #endregion
+
+        #region Internal Process Management
+        internal IProcess? RememberProcess(System.Diagnostics.Process? process = null, int pid = default)
+        {
+            try
+            {
+                process ??= System.Diagnostics.Process.GetProcessById(pid);
+
+                pid = process.Id;
+
+                IProcess? parent = null;
+                if (GetParentProcessId(process) is int parentId)
+                {
+                    parent = RememberProcess(pid: parentId);
+                }
+
+                _processes.TryAdd(pid, new ProcessWrapper(process) { Parent = parent });
+
+                return _processes[pid];
+            }
+            catch (ArgumentException ex)
+            {
+                Logger.LogTrace(ex.Message); // probably not running (any more)
+
+                return null;
+            }
+        }
+
+        private IProcess? ForgetProcess(int pid)
+        {
+            try
+            {
+                _processes.TryRemove(pid, out IProcess? process);
+
+                return process;
+            }
+            catch (ArgumentException ex)
+            {
+                Logger.LogTrace(ex.Message); // probably not running (any more)
+
+                return null;
+            }
+        }
+        #endregion
+
+        public IEnumerator<IProcess> GetEnumerator()
+        {
+            return _processes.Values.GetEnumerator();
         }
 
         void IDisposable.Dispose()
@@ -64,76 +145,6 @@ namespace MadWizard.Desomnia.Process.Manager
             _traceEventSession?.Stop();
             _traceEventSession?.Dispose();
             _traceEventSession = null;
-        }
-
-        public IEnumerator<IProcess> GetEnumerator()
-        {
-            var processList = new List<IProcess>();
-
-            foreach (var process in System.Diagnostics.Process.GetProcesses())
-            {
-                var p = new ProcessExt(process) { Cache = processList };
-
-                processList.Add(p);
-            }
-
-            return processList.GetEnumerator();
-        }
-
-        internal class ProcessExt(System.Diagnostics.Process process) : IProcess
-        {
-            internal ProcessExt(int id) : this(System.Diagnostics.Process.GetProcessById(id)) { }
-
-            public int Id => process.Id;
-            public int SessionId => process.SessionId;
-            public string Name => process.ProcessName;
-
-            public System.Diagnostics.Process NativeProcess => process;
-
-            public IEnumerable<IProcess>? Cache { private get; init; }
-
-            public IProcess? Parent
-            {
-                get
-                {
-                    var id = GetParentProcessId(this.NativeProcess);
-
-                    if (id != null)
-                    {
-                        if (Cache != null)
-                        {
-                            return Cache.Where(proc => proc.Id == id).FirstOrDefault();
-                        }
-
-                        return new ProcessExt((int)id);
-                    }
-
-                    return null;
-                }
-            }
-
-            public async Task Stop(TimeSpan timeout = default)
-            {
-                // try gracefull shutdown
-                process.CloseMainWindow();
-
-                if (timeout.TotalMilliseconds > 0)
-                {
-                    try
-                    {
-                        await process.WaitForExitAsync(new CancellationTokenSource((int)timeout.TotalMilliseconds).Token);
-                    }
-                    catch (TimeoutException)
-                    {
-                        // too late
-                    }
-                }
-
-                if (!process.HasExited)
-                {
-                    process.Kill(); // kill it anyway
-                }
-            }
         }
 
         #region Windows-API
