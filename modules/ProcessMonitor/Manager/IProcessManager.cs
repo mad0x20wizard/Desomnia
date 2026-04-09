@@ -4,9 +4,11 @@ namespace MadWizard.Desomnia.Process.Manager
 {
     public interface IProcessManager : IIEnumerable<IProcess>
     {
-        public event EventHandler<IProcess> ProcessStarted;
-        public event EventHandler<IProcess> ProcessStopped;
+        IProcess this[int pid] { get; }
 
-        public IProcess LaunchProcess(ProcessStartInfo info);
+        IProcess LaunchProcess(ProcessStartInfo info);
+
+        event EventHandler<IProcess> ProcessStarted;
+        event EventHandler<IProcess> ProcessStopped;
     }
 }

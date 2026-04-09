@@ -14,7 +14,7 @@ namespace MadWizard.Desomnia.Network.HyperV
                 .SingleInstance()
                 .AsSelf();
 
-            builder.RegisterType<HyperVVirtualMachine>()
+            builder.RegisterType<HyperVM>()
                 .As<IVirtualMachine>()
                 .AsSelf();
             builder.RegisterType<HyperVJob>()

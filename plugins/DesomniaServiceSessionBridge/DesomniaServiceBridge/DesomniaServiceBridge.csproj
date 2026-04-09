@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>MadWizard.Desomnia.Service.Bridge</RootNamespace>
     <SupportedOSPlatformVersion>8.0</SupportedOSPlatformVersion>
+	<LangVersion>preview</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>

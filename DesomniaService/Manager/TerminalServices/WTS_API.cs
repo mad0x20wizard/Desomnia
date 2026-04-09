@@ -263,7 +263,6 @@ namespace MadWizard.Desomnia.Session.Manager
                 Marshal.SizeOf<LASTINPUTINFO>(),
                 out int returned);
         }
-
     }
 
     [Flags]

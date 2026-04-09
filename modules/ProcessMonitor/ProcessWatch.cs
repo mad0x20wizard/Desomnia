@@ -19,13 +19,14 @@ namespace MadWizard.Desomnia.Process
             {
                 field = value;
 
+                // always subscribe event before iterating
+                field.ProcessStarted += Manager_ProcessStarted;
+                field.ProcessStopped += Manager_ProcessStopped;
+
                 foreach (var process in Manager.Where(WatchProcess))
                 {
                     _watchedProcesses.Add(process);
                 }
-
-                field.ProcessStarted += Manager_ProcessStarted;
-                field.ProcessStopped += Manager_ProcessStopped;
             }
         }
 

@@ -168,7 +168,9 @@ namespace MadWizard.Desomnia.Session.Manager
         public virtual void Dispose()
         {
             foreach (var session in Sessions.Values)
+            {
                 session.Dispose();
+            }
         }
     }
 }

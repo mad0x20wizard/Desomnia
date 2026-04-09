@@ -20,7 +20,7 @@ namespace MadWizard.Desomnia.Service.Bridge
                 .AsImplementedInterfaces().AsSelf()
                 .SingleInstance();
 
-            builder.RegisterType<Session>().As<TerminalServicesSession>().As<ISession>()
+            builder.RegisterType<Session>().As<TerminalServicesSession>().As<ISession>().As<IDisposable>()
                 .ConfigurePipeline(p => p.Use(PipelinePhase.Activation, (context, next) =>
                 {
                     next(context);

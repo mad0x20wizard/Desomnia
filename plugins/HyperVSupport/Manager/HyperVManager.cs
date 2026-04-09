@@ -13,7 +13,7 @@ namespace MadWizard.Desomnia.Network.HyperV.Manager
 
         public required ILogger<HyperVManager> Logger { internal get; init; }
 
-        public required Func<string, HyperVVirtualMachine>  CreateVirtualMachine { private get; init; }
+        public required Func<string, HyperVM>  CreateVirtualMachine { private get; init; }
         public required Func<CimInstance, Owned<HyperVJob>> CreateJob { private get; init; }
 
         internal CimSession Session
@@ -41,13 +41,13 @@ namespace MadWizard.Desomnia.Network.HyperV.Manager
             }
         }
 
-        internal Dictionary<string, HyperVVirtualMachine> Machines
+        internal Dictionary<string, HyperVM> Machines
         {
             get
             {
                 if (field == null)
                 {
-                    field = new Dictionary<string, HyperVVirtualMachine>(StringComparer.OrdinalIgnoreCase);
+                    field = new Dictionary<string, HyperVM>(StringComparer.OrdinalIgnoreCase);
 
                     LoadMachines();
                 }
@@ -77,7 +77,7 @@ namespace MadWizard.Desomnia.Network.HyperV.Manager
             }
         }
 
-        internal async Task RequestStateChange(HyperVVirtualMachine vm, RequestedHyperVVMState requested)
+        internal async Task RequestStateChange(HyperVM vm, RequestedHyperVVMState requested)
         {
             var instance = vm.QueryInstance(); // Msvm_ComputerSystem
 

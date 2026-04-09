@@ -25,6 +25,8 @@
             return false;
         }
 
+        bool HasStopped { get; }
         Task Stop(TimeSpan timeout = default);
+        event EventHandler Stopped;
     }
 }

@@ -65,13 +65,6 @@ namespace MadWizard.Desomnia.Service.Bridge
                 .Invoke(this, [session, message]);
         }
 
-        private void Minion_Terminated(object? sender, EventArgs e)
-        {
-            var minion = (SessionMinion)sender!;
-
-            Logger.LogDebug("Minion terminated: {SessionID}", minion.SessionID);
-        }
-
         private void Minion_HandleMessage<T>(ISession session, T message) where T : UserMessage
         {
             var handlers = ComponentContext.Resolve<IEnumerable<ISessionMessageHandler<T>>>();
@@ -88,7 +81,14 @@ namespace MadWizard.Desomnia.Service.Bridge
                     }
         }
 
-        public Task StartAsync(CancellationToken cancellationToken)
+        private void Minion_Terminated(object? sender, EventArgs e)
+        {
+            var minion = (SessionMinion)sender!;
+
+            Logger.LogDebug("Minion terminated: {SessionID}", minion.SessionID);
+        }
+
+        Task IHostedService.StartAsync(CancellationToken cancellationToken)
         {
             return Task.CompletedTask;
         }
@@ -96,22 +96,16 @@ namespace MadWizard.Desomnia.Service.Bridge
         /**
          * Initiates async shutdown of all minions, so that the service waits for them to terminate.
          */
-        public Task StopAsync(CancellationToken cancellationToken)
+        public async Task StopAsync(CancellationToken cancellationToken)
         {
             var tasks = new List<Task>();
 
-            foreach (var session in manager)
+            foreach (var session in manager.OfType<Session>())
             {
-                if (session is Session bridged)
-                {
-                    if (bridged.Minion != null)
-                    {
-                        tasks.Add(bridged.Minion!.Terminate(TimeSpan.FromSeconds(5)));
-                    }
-                }
+                tasks.Add(session.Minion?.Shutdown(TimeSpan.FromSeconds(5)) ?? Task.CompletedTask);
             }
 
-            return Task.WhenAll(tasks);
+            await Task.WhenAll(tasks);
         }
     }
 

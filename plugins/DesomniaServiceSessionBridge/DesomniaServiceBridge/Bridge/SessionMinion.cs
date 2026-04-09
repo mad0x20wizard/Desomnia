@@ -1,6 +1,7 @@
 ﻿using MadWizard.Desomnia.Pipe;
 using MadWizard.Desomnia.Pipe.Config;
 using MadWizard.Desomnia.Pipe.Messages;
+using MadWizard.Desomnia.Process.Manager;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Pipes;
@@ -20,7 +21,7 @@ namespace MadWizard.Desomnia.Service.Bridge.Minion
 
         private Session _session;
 
-        private System.Diagnostics.Process _process;
+        private IProcess _process;
 
         private MessagePipeServer _pipe;
 
@@ -62,7 +63,7 @@ namespace MadWizard.Desomnia.Service.Bridge.Minion
             _pipe.Start(); // TODO timeout!
 
             _process = LaunchProcess();
-            _process.Exited += Process_Exited;
+            _process.Stopped += Process_Stopped;
 
             _status = SessionMinionStatus.Launched;
 
@@ -75,9 +76,9 @@ namespace MadWizard.Desomnia.Service.Bridge.Minion
         public event EventHandler<UserMessage>? MessageReceived;
         public event EventHandler? Terminated;
 
-        private System.Diagnostics.Process LaunchProcess()
+        private IProcess LaunchProcess()
         {
-            var dir = new FileInfo(Assembly.GetExecutingAssembly().Locati‌on).Directory!;
+            var dir = new FileInfo(Assembly.GetExecutingAssembly().Location).Directory!;
 
             var startup = new ProcessStartInfo()
             {
@@ -89,7 +90,7 @@ namespace MadWizard.Desomnia.Service.Bridge.Minion
             //if (!Debugger.IsAttached) startup.ArgumentList.Add("/WaitForDebugger");
             ////#endif
 
-            return _session.LaunchProcess(startup).NativeProcess;
+            return _session.LaunchProcess(startup);
         }
 
         private void SessionMinion_Ready(object? sender, EventArgs e)
@@ -102,7 +103,7 @@ namespace MadWizard.Desomnia.Service.Bridge.Minion
 
         private void Pipe_Connected(object? sender, EventArgs e)
         {
-            if (_pipe.ClientProcessId == _process.Id) // only accept messages from our own ProcessManager
+            if (_pipe.ClientProcessId == _process.Id) // only accept messages from our own WindowsProcessManager
             {
                 _status = SessionMinionStatus.Startup;
 
@@ -131,13 +132,13 @@ namespace MadWizard.Desomnia.Service.Bridge.Minion
 
         private void Pipe_Disconnected(object? sender, EventArgs e)
         {
-            if (!_process.HasExited)
+            if (!_process.HasStopped)
             {
-                _process.Kill();
+                _process.Stop();
             }
         }
 
-        private void Process_Exited(object? sender, EventArgs e)
+        private void Process_Stopped(object? sender, EventArgs e)
         {
             _status = SessionMinionStatus.Stopped;
 
@@ -156,37 +157,6 @@ namespace MadWizard.Desomnia.Service.Bridge.Minion
             return source.Task;
         }
 
-        internal Task Terminate(TimeSpan? timeout = null)
-        {
-            if (_process.HasExited)
-                return Task.CompletedTask;
-
-            _status = SessionMinionStatus.Terminating;
-
-            var taskSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            if (timeout != null)
-            {
-                var timer = new Timer(timeout.Value) { AutoReset = false };
-
-                timer.Elapsed += (timer, e) =>
-                {
-                    if (!_process.HasExited)
-                    {
-                        _process.Kill();
-                    }
-                };
-
-                timer.Start();
-            }
-
-            Terminated += (s, e) => taskSource.SetResult(true);
-
-            _pipe.SendMessage(new TerminateMessage());
-
-            return taskSource.Task;
-        }
-
         public void Send(UserMessage message)
         {
             if (_status != SessionMinionStatus.Ready)
@@ -195,9 +165,45 @@ namespace MadWizard.Desomnia.Service.Bridge.Minion
                 _pipe.SendMessage(message);
         }
 
+        internal Task Shutdown(TimeSpan timeout)
+        {
+            if (_process.HasStopped)
+                return Task.CompletedTask;
+
+            _status = SessionMinionStatus.Shutdown;
+
+            var taskSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var timer = new Timer(timeout) { AutoReset = false };
+
+            timer.Elapsed += (timer, e) =>
+            {
+                if (!_process.HasStopped)
+                {
+                    _process.Stop();
+                }
+            };
+
+            timer.Start();
+
+            Terminated += (s, e) => taskSource.SetResult(true);
+
+            _pipe.SendMessage(new TerminateMessage());
+
+            return taskSource.Task;
+        }
+
+        internal void Terminate()
+        {
+            if (!_process.HasStopped)
+            {
+                _process.Stop();
+            }
+        }
+
         public void Dispose()
         {
-            Terminate(TimeSpan.FromSeconds(5));//.Wait();
+            Terminate();
 
             _pipe.Dispose();
         }
@@ -210,7 +216,7 @@ namespace MadWizard.Desomnia.Service.Bridge.Minion
         Launched,
         Startup,
         Ready,
-        Terminating,
+        Shutdown,
         Stopped
     }
 }

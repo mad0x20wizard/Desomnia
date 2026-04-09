@@ -5,10 +5,11 @@ using MadWizard.Desomnia.NetworkSession.Manager;
 using MadWizard.Desomnia.Power.Manager;
 using MadWizard.Desomnia.Process.Manager;
 using MadWizard.Desomnia.Service.Actions;
+using MadWizard.Desomnia.Service.Configuration;
 
 namespace MadWizard.Desomnia.Service
 {
-    internal class PlatformModule : Desomnia.Module
+    internal class PlatformModule : Desomnia.ConfigurableModule<ServiceConfig>
     {
         protected override void Load(ContainerBuilder builder)
         {
@@ -18,10 +19,14 @@ namespace MadWizard.Desomnia.Service
                 .SingleInstance()
                 .AsSelf();
 
-            builder.RegisterType<ProcessManager>()
-                .AsImplementedInterfaces()
-                .SingleInstance()
-                .AsSelf();
+            if (Config.ProcessMonitor?.PollInterval is not TimeSpan)
+            {
+                builder.RegisterType<TraceEventProcessManager>()
+                    .AsImplementedInterfaces()
+                    .As<ProcessManager>()
+                    .SingleInstance()
+                    .AsSelf();
+            }
 
             builder.RegisterType<WindowsNeighborCache>()
                 .AsImplementedInterfaces()

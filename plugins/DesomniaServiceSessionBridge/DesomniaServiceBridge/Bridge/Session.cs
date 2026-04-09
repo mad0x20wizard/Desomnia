@@ -8,7 +8,7 @@ namespace MadWizard.Desomnia.Service.Bridge
 {
     internal class Session : TerminalServicesSession
     {
-        private DateTime? _lastInputTime;
+        DateTime? _lastInputTime;
 
         internal SessionMinion? Minion { get; private set; }
 
@@ -35,14 +35,13 @@ namespace MadWizard.Desomnia.Service.Bridge
 
         private void Minion_Terminated(object? sender, EventArgs e)
         {
-            Minion?.Dispose();
             Minion = null;
         }
 
         internal SessionMatcher SessionControl { get; set; } = SessionMatcher.None;
         internal bool PowerControl { get; set; } = false;
 
-        public override DateTime? LastInputTime => _lastInputTime ?? base.LastInputTime;
+        public override DateTime? LastInputTime { get => _lastInputTime ?? base.LastInputTime; }
 
         public override async Task Lock()
         {
@@ -58,8 +57,12 @@ namespace MadWizard.Desomnia.Service.Bridge
 
         public override void Dispose()
         {
-            Minion?.Dispose();
-            Minion = null;
+            if (Minion is not null)
+            {
+                Minion.Dispose();
+
+                Minion = null;
+            }
 
             base.Dispose();
         }

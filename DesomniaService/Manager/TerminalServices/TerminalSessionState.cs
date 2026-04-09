@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace MadWizard.Desomnia.Session.Manager
+﻿namespace MadWizard.Desomnia.Session.Manager
 {
     public enum TerminalSessionState
     {
@@ -18,7 +12,7 @@ namespace MadWizard.Desomnia.Session.Manager
         Connected,
         //
         // Zusammenfassung:
-        //     The session is in the ProcessManager of connecting to a client.
+        //     The session is in the process of connecting to a client.
         ConnectQuery,
         //
         // Zusammenfassung:
