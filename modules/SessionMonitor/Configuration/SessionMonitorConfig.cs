@@ -1,6 +1,5 @@
 ﻿using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Options;
-using MadWizard.Desomnia.Process.Configuration;
 using MadWizard.Desomnia.Session.Manager;
 
 namespace MadWizard.Desomnia.Session.Configuration
@@ -21,8 +20,7 @@ namespace MadWizard.Desomnia.Session.Configuration
             var self = (TConfig)this; // safe if inheritance is correct
 
             if (this.Everyone is TDesc desc)
-                if (desc.Name?.Match(session.UserName) ?? true)
-                    configure(self, desc);
+                configure(self, desc);
 
             if (session.IsUser)
                 foreach (var userDesc in this.User)
@@ -31,8 +29,7 @@ namespace MadWizard.Desomnia.Session.Configuration
 
             if (session.IsAdministrator)
                 if (this.Administrator is TDesc adminDesc)
-                    if (adminDesc.Name?.Match(session.UserName) ?? true)
-                        configure(self, adminDesc);
+                    configure(self, adminDesc);
         }
     }
 
