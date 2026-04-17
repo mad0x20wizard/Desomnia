@@ -1,4 +1,4 @@
-﻿using MadWizard.Desomnia.Session.Manager;
+﻿using MadWizard.Desomnia.Process.Manager;
 using Microsoft.Win32.SafeHandles;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -6,11 +6,83 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
 
-namespace MadWizard.Desomnia.Manager.Process
+namespace MadWizard.Desomnia.Session.Manager
 {
-    public static class ProcessLauncher
+    public partial class TerminalServicesSession : IProcessManager
     {
-        public static System.Diagnostics.Process CreateProcessInSession(ProcessStartInfo startup, uint sid, string processName = "winlogon")
+        public required ProcessManager Manager { private get; init; }
+
+        IProcess IProcessManager.this[int pid] => Manager[pid] is IProcess process && process.SessionId == Id ? process 
+            : throw new KeyNotFoundException("Process with pid = " + pid + " and sid = " + Id + " not found");
+
+        #region Event filtering
+        readonly Dictionary<EventHandler<IProcess>, EventHandler<IProcess>> _handlers = [];
+
+        private EventHandler<IProcess> FilterEventHandler(EventHandler<IProcess> handler)
+        {
+            void filter(object? s, IProcess p) { if (p.SessionId == Id) handler(s, p); }
+
+            _handlers.TryAdd(handler, filter);
+
+            return _handlers[handler];
+        }
+        private EventHandler<IProcess>? UnFilterEventHandler(EventHandler<IProcess> handler)
+        {
+            if (_handlers.Remove(handler, out var filter))
+            {
+                return filter;
+            }
+
+            return null;
+        }
+
+        public event EventHandler<IProcess> ProcessStarted
+        {
+            add     { Manager.ProcessStarted += FilterEventHandler(value); }
+            remove  { Manager.ProcessStarted -= UnFilterEventHandler(value); }
+        }
+        public event EventHandler<IProcess> ProcessStopped
+        {
+            add     { Manager.ProcessStopped += FilterEventHandler(value); }
+            remove  { Manager.ProcessStopped -= UnFilterEventHandler(value); }
+        }
+        #endregion
+
+        public IProcess LaunchProcess(ProcessStartInfo info)
+        {
+            const int MAX_STARTUP_DELAY = 1000;
+
+            var watch = Stopwatch.StartNew();
+
+            while (true)
+            {
+                try
+                {
+                    if (info.UserName == "SYSTEM")
+                        return CreateProcessInSession(info, Id);
+                    else
+                        return CreateProcessInSession(info, Token);
+                }
+                catch (Win32Exception ex)
+                {
+                    if (watch.ElapsedMilliseconds < MAX_STARTUP_DELAY && ex.NativeErrorCode == 340)
+                    {
+                        // try again
+                        Thread.Sleep(100);
+                        continue;
+                    }
+
+                    throw;
+                }
+            }
+        }
+
+        public IEnumerator<IProcess> GetEnumerator()
+        {
+            return Manager.Where(p => p.SessionId == Id).GetEnumerator();
+        }
+
+        private IProcess CreateProcessInSession(ProcessStartInfo startup, uint sid, string processName = "winlogon")
         {
             uint winlogonPid = (uint)System.Diagnostics.Process.GetProcessesByName(processName).Where(p => (uint)p.SessionId == sid).First().Id;
 
@@ -45,7 +117,7 @@ namespace MadWizard.Desomnia.Manager.Process
             }
         }
 
-        public static System.Diagnostics.Process CreateProcessInSession(ProcessStartInfo startup, nint token)
+        private IProcess CreateProcessInSession(ProcessStartInfo startup, nint token)
         {
             STARTUPINFO si = new STARTUPINFO(startup).OnInteractiveDesktop();
 
@@ -80,7 +152,7 @@ namespace MadWizard.Desomnia.Manager.Process
                 SECURITY_ATTRIBUTES.EMTPY,                      // pointer to process SECURITY_ATTRIBUTES
                 SECURITY_ATTRIBUTES.EMTPY,                      // pointer to thread SECURITY_ATTRIBUTES
                 hRead != 0,                                     // handles are not inheritable
-                startup.AsCreationFlags(),                      // flags that specify the priority and creation method of the process
+                startup.AsCreationFlags(),                      // flags that specify the priority and creation method of the WindowsProcessManager
                 0,                                              // pointer to new environment block 
                 startup.WorkingDirectory.NullIfWhiteSpace(),    // name of current directory 
                 si,                                             // pointer to STARTUPINFO structure
@@ -90,21 +162,19 @@ namespace MadWizard.Desomnia.Manager.Process
             CloseHandle(pi.hProcess);
             CloseHandle(pi.hThread);
 
-            var process = System.Diagnostics.Process.GetProcessById((int)pi.dwProcessId);
+            var process = Manager[(int)pi.dwProcessId];
 
             if (startup.RedirectStandardOutput)
             {
-                CloseHandle(hWrite);                // Close write handle in this process
+                CloseHandle(hWrite); // Close write handle in this process
 
-                process.AddStandardOutput(new StreamReader(new FileStream(new SafeFileHandle(hRead, true), FileAccess.Read)));
+                process.NativeProcess.AddStandardOutput(new StreamReader(new FileStream(new SafeFileHandle(hRead, true), FileAccess.Read)));
             }
 
             return process;
         }
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool CloseHandle(nint hSnapshot);
-
+        #region Windows-API
         [DllImport("kernel32.dll")]
         private static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, uint dwProcessId);
 
@@ -232,37 +302,38 @@ namespace MadWizard.Desomnia.Manager.Process
                 CloseHandle(handle);
             }
         }
-
+        #endregion
     }
 
-    internal static class Arguments
+    internal static class ProcessExtension
     {
-        private const int CREATE_NO_WINDOW      = 0x08000000;
-        private const int CREATE_NEW_CONSOLE    = 0x00000010;
+        private const int CREATE_NO_WINDOW = 0x08000000;
+        private const int CREATE_NEW_CONSOLE = 0x00000010;
 
-        public static int AsCreationFlags(this ProcessStartInfo startup)
+        internal static int AsCreationFlags(this ProcessStartInfo startup)
         {
             int flags = 0;
             if (startup.CreateNoWindow)
                 flags |= CREATE_NO_WINDOW;
             else
                 flags |= CREATE_NEW_CONSOLE;
+
             return flags;
         }
 
-        public static string? FileNameAsModule(this ProcessStartInfo startup)
+        internal static string? FileNameAsModule(this ProcessStartInfo startup)
         {
             if (File.Exists(startup.FileName))
                 return startup.FileName;
-            else
-                return null;
+
+            return null;
         }
 
-        public static string ArgumentsAsCommandLine(this ProcessStartInfo startup)
+        internal static string ArgumentsAsCommandLine(this ProcessStartInfo startup)
         {
             MethodInfo? internalMethod = typeof(ProcessStartInfo)
                 .GetMethod("BuildArguments", BindingFlags.NonPublic | BindingFlags.Instance);
-            
+
             string arguments = Path.GetFileName(startup.FileName);
             if (internalMethod != null)
                 arguments += " " + internalMethod.Invoke(startup, null) as string;
@@ -273,7 +344,7 @@ namespace MadWizard.Desomnia.Manager.Process
             return arguments;
         }
 
-        public static string ArgumentsToQuotedString(this ProcessStartInfo start)
+        internal static string ArgumentsToQuotedString(this ProcessStartInfo start)
         {
             if (start.ArgumentList.Count > 0)
                 return "[" + string.Join(", ", start.ArgumentList.Select(a => $"'{a}'")) + "]";
@@ -281,17 +352,14 @@ namespace MadWizard.Desomnia.Manager.Process
                 return "'" + start.Arguments + "'";
         }
 
-        public static void AddArguments(this ProcessStartInfo startInfo, params string[] arguments)
+        internal static void AddArguments(this ProcessStartInfo startInfo, params string[] arguments)
         {
             foreach (var argument in arguments)
             {
                 startInfo.ArgumentList.Add(argument);
             }
         }
-    }
 
-    internal static class ProcessExtension
-    {
         internal static System.Diagnostics.Process AddStandardOutput(this System.Diagnostics.Process proc, StreamReader output)
         {
             // Use reflection to set the private _standardOutput field
@@ -307,5 +375,4 @@ namespace MadWizard.Desomnia.Manager.Process
             return proc;
         }
     }
-
 }

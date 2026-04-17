@@ -6,7 +6,6 @@ using MadWizard.Desomnia.Pipe.Messages;
 using MadWizard.Desomnia.Process;
 using MadWizard.Desomnia.Session;
 using MadWizard.Desomnia.Session.Manager;
-using MadWizard.Desomnia.Session.Manager.Bridged;
 using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia.Service.Bridge.Notification

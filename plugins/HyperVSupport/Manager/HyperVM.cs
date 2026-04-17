@@ -7,11 +7,11 @@ using System.Net.NetworkInformation;
 
 namespace MadWizard.Desomnia.Network.HyperV.Manager
 {
-    internal class HyperVVirtualMachine(HyperVManager manager, string guid) : IVirtualMachine, IInspectable
+    internal class HyperVM(HyperVManager manager, string guid) : IVirtualMachine, IInspectable
     {
         static readonly TimeSpan STATE_TTL = TimeSpan.FromSeconds(5);
 
-        public required ILogger<HyperVVirtualMachine> Logger { private get; init; }
+        public required ILogger<HyperVM> Logger { private get; init; }
 
         readonly MemoryCache _cache = new(new MemoryCacheOptions());
 
@@ -120,7 +120,7 @@ namespace MadWizard.Desomnia.Network.HyperV.Manager
 
         internal VirtualMachineState QueryState(TimeSpan ttl = default)
         {
-            return ((HyperVVMState)QueryInstanceProperty<ushort>("EnabledState", ttl)).ToVMState();
+            return ((HyperVMState)QueryInstanceProperty<ushort>("EnabledState", ttl)).ToVMState();
         }
 
         internal PhysicalAddress? QueryPhysicalAddress()

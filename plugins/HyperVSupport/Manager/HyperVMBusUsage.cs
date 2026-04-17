@@ -2,9 +2,9 @@
 
 namespace MadWizard.Desomnia.Network.HyperV.Manager
 {
-    internal class HyperVMBusUsage(HyperVVirtualMachine vm, System.Diagnostics.Process process) : VirtualMachineUsage
+    internal class HyperVMBusUsage(HyperVM vm, System.Diagnostics.Process process) : VirtualMachineUsage
     {
-        public HyperVVirtualMachine VirtualMachine => vm;
+        public HyperVM VirtualMachine => vm;
 
         public override string ToString()
         {

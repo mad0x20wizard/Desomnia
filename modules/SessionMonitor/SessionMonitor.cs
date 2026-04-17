@@ -1,18 +1,47 @@
 ﻿using Autofac;
+using MadWizard.Desomnia.Process.Manager;
 using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia.Session
 {
-    public class SessionMonitor(SessionMonitorConfig config, ISessionManager manager) : ResourceMonitor<SessionWatch>, IStartable
+    public class SessionMonitor(SessionMonitorConfig config, ISessionManager manager) : ResourceMonitor<SessionWatch>, IHostedService
     {
         public required ILogger<SessionMonitor> Logger { get; set; }
 
-        public void Start()
+        public required ILifetimeScope Scope { private get; init; }
+
+        readonly Dictionary<ISession, ILifetimeScope> _sessionScopes = [];
+
+        #region SessionManager events
+        private void SessionManager_UserLogin(object? sender, ISession session)
+        {
+            TrackSession(session, true);
+        }
+        private void SessionManager_UserLogout(object? sender, ISession session)
+        {
+            foreach (var scope in _sessionScopes.Where(w => w.Key == session).Select(w => w.Value))
+            {
+                if (scope.Resolve<SessionWatch>() is SessionWatch watch)
+                {
+                    watch.TriggerLogout();
+
+                    this.StopTracking(watch);
+                }
+
+                _sessionScopes.Remove(session);
+
+                scope.Dispose();
+            }
+        }
+        #endregion
+
+        async Task IHostedService.StartAsync(CancellationToken cancellationToken)
         {
             foreach (ISession session in manager)
-                MayBeTrackSession(session);
+                TrackSession(session);
 
             manager.UserLogon += SessionManager_UserLogin;
             manager.UserLogoff += SessionManager_UserLogout;
@@ -20,39 +49,41 @@ namespace MadWizard.Desomnia.Session
             Logger.LogDebug("Startup complete");
         }
 
-        private void SessionManager_UserLogin(object? sender, ISession session)
+        private void TrackSession(ISession session, bool logon = false)
         {
-            MayBeTrackSession(session, true);
-        }
-        private void SessionManager_UserLogout(object? sender, ISession session)
-        {
-            foreach (var watch in this.Where(w => w.Session == session))
+            var scope = Scope.BeginLifetimeScope("Session", builder =>
             {
-                watch.TriggerLogout();
+                builder.RegisterType<SessionWatch>().AsSelf().SingleInstance();
 
-                this.StopTracking(watch);
+                builder.RegisterType<SessionProcessWatch>().AsSelf();
 
-                watch.Dispose();
-            }
-        }
+                builder.RegisterInstance(session)
+                    .As<IProcessManager>()
+                    .As<ISession>();
+            });
 
-        private void MayBeTrackSession(ISession session, bool logon = false)
-        {
-            var watch = new SessionWatch(session);
-
-            config.Configure(session, watch.ApplyConfiguration);
-
-            if (watch.ShouldBeTracked)
+            if (scope.Resolve<SessionWatch>() is SessionWatch watch)
             {
+                config.Configure(session, watch.ApplyConfiguration);
+
                 if (this.StartTracking(watch) && logon)
                 {
                     watch.TriggerLogon();
                 }
             }
-            else
-            {
-                watch.Dispose();
-            }
+
+            Scope.Disposer.AddInstanceForDisposal(scope);
+
+            _sessionScopes[session] = scope;
+        }
+
+        async Task IHostedService.StopAsync(CancellationToken cancellationToken)
+        {
+            manager.UserLogon -= SessionManager_UserLogin;
+            manager.UserLogoff -= SessionManager_UserLogout;
+
+            foreach (var watch in this.ToArray())
+                StopTracking(watch);
         }
     }
 }

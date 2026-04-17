@@ -2,7 +2,7 @@
 
 namespace MadWizard.Desomnia.Network.HyperV.Manager
 {
-    internal enum HyperVVMState : ushort
+    internal enum HyperVMState : ushort
     {
         ///<summary>The state of the virtual machine could not be determined.</summary>
         Unknown = 0,
@@ -72,11 +72,11 @@ namespace MadWizard.Desomnia.Network.HyperV.Manager
 
     internal static class HyperVMStateHelper
     {
-        internal static VirtualMachineState ToVMState(this HyperVVMState state) => state switch
+        internal static VirtualMachineState ToVMState(this HyperVMState state) => state switch
         {
-            HyperVVMState.Running => VirtualMachineState.Running,
-            HyperVVMState.Off => VirtualMachineState.Stopped,
-            HyperVVMState.EnabledButOffline => VirtualMachineState.Suspended,
+            HyperVMState.Running => VirtualMachineState.Running,
+            HyperVMState.Off => VirtualMachineState.Stopped,
+            HyperVMState.EnabledButOffline => VirtualMachineState.Suspended,
 
             _ => VirtualMachineState.Unknown
         };

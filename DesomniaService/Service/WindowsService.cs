@@ -84,7 +84,7 @@ namespace MadWizard.Desomnia.Service
         }
 
         #region ServiceStatus
-        private void ReportServiceStatus(ServiceState state, TimeSpan waitHint)
+        private void ReportServiceStatus(ServiceState state, TimeSpan waitHint = default)
         {
             ServiceStatus status = new()
             {

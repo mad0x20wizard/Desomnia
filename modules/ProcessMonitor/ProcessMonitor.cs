@@ -1,28 +1,23 @@
 ﻿using Autofac;
 using MadWizard.Desomnia.Process.Configuration;
-using MadWizard.Desomnia.Process.Manager;
 using Microsoft.Extensions.Logging;
-
 
 namespace MadWizard.Desomnia.Process
 {
-    public class ProcessMonitor(ProcessMonitorConfig config, IProcessManager manager) : ResourceMonitor<ProcessWatch>, IStartable
+    public class ProcessMonitor(ProcessMonitorConfig config) : ResourceMonitor<ProcessWatch>, IStartable
     {
         public required ILogger<ProcessMonitor> Logger { get; set; }
+
+        public required Func<ProcessWatchInfo, ProcessWatch> CreateWatch { private get; init; }
 
         void IStartable.Start()
         {
             foreach (var info in config.Process)
             {
-                StartTracking(new SystemProcessWatch(manager, info));
+                StartTracking(CreateWatch(info));
             }
 
             Logger.LogDebug("Startup complete");
-        }
-
-        private class SystemProcessWatch(IProcessManager manager, ProcessWatchInfo info) : ProcessWatch(info)
-        {
-            protected override IEnumerable<IProcess> EnumerateProcesses() => manager;
         }
     }
 }

@@ -39,7 +39,7 @@ namespace MadWizard.Desomnia.Network.HyperV.Events
         {
             if (args.EventException is null && args.EventRecord is EventRecord record)
             {
-                if (FindMachine(record) is HyperVVirtualMachine vm && vm.Semaphore.Wait(0))
+                if (FindMachine(record) is HyperVM vm && vm.Semaphore.Wait(0))
                 {
                     using (Logger.BeginScope(new Dictionary<string, object> { ["VM"] = vm.Name, ["Event"] = record.Id }))
                     {
@@ -72,7 +72,7 @@ namespace MadWizard.Desomnia.Network.HyperV.Events
             }
         }
 
-        private HyperVVirtualMachine? FindMachine(EventRecord record)
+        private HyperVM? FindMachine(EventRecord record)
         {
             foreach (var prop in record.Properties.Where(prop => prop.Value is string))
             {

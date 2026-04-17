@@ -1,4 +1,4 @@
-﻿using MadWizard.Desomnia.Manager.Process;
+﻿using MadWizard.Desomnia.Process.Manager;
 using MadWizard.Desomnia.Session.Manager;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
@@ -12,6 +12,8 @@ namespace MadWizard.Desomnia.Service.Actions
         private const string SYSTEM_PROFILE_PATH = @"C:\WINDOWS\system32\config\systemprofile";
 
         public required ILogger<CommandExecutor> Logger { protected get; init; }
+
+        public required IProcessManager ProcessManager { protected get; init; }
 
         [ActionHandler("exec")]
         internal void HandleActionExec(string command, string? arguments = null, ISession? session = null)
@@ -43,7 +45,7 @@ namespace MadWizard.Desomnia.Service.Actions
             }
             else
             {
-                System.Diagnostics.Process.Start(start);
+                ProcessManager.LaunchProcess(start);
             }
         }
 

@@ -9,14 +9,23 @@ namespace MadWizard.Desomnia.Process
     {
         protected override void Load(ContainerBuilder builder)
         {
+            var manager = Config.ProcessMonitor as ProcessManagerConfig;
+
+            // fallback, if no better ProcessManager is available
+            builder.RegisterType<PollingProcessManager>().As<ProcessManager>().AsImplementedInterfaces().AsSelf()
+                .WithParameter(TypedParameter.From(manager?.PollInterval ?? ProcessManagerConfig.DefaultPollInterval))
+                .OnlyIf(reg => !reg.IsRegistered(new TypedService(typeof(IProcessManager))))
+                .SingleInstance();
+
             if (Config.ProcessMonitor is ProcessMonitorConfig config)
             {
                 builder.RegisterType<ProcessMonitor>()
-                    .OnlyIf(reg => reg.IsRegistered(new TypedService(typeof(IProcessManager))))
                     .WithParameter(new TypedParameter(typeof(ProcessMonitorConfig), config))
                     .AsImplementedInterfaces()
                     .SingleInstance()
                     .AsSelf();
+
+                builder.RegisterType<ProcessWatch>().AsSelf();
             }
         }
     }

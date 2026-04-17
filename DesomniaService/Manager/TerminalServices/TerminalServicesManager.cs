@@ -1,5 +1,5 @@
 ﻿using Autofac;
-using MadWizard.Desomnia.Process.Manager;
+using Autofac.Features.OwnedInstances;
 using MadWizard.Desomnia.Service;
 using Microsoft.Extensions.Logging;
 using System.ServiceProcess;
@@ -9,42 +9,37 @@ namespace MadWizard.Desomnia.Session.Manager
 {
     public partial class TerminalServicesManager : ISessionManager, IDisposable
     {
-        private Dictionary<uint, TerminalServicesSession>? _sessions; // lazy init
-
         public required ILogger<TerminalServicesManager> Logger { protected get; init; }
 
-        public required ProcessManager ProcessManager { protected get; init; }
+        public required Func<uint, Owned<TerminalServicesSession>> ConfigureSession { private get; init; }
 
-        public TerminalServicesManager(WindowsService? service = null)
+        public TerminalServicesManager(WindowsService service)
         {
-            if (service != null)
-            {
-                service.SessionChanged += Service_SessionChanged;
-            }
+            service.SessionChanged += Service_SessionChanged;
         }
 
-        protected Dictionary<uint, TerminalServicesSession> Sessions
+        protected Dictionary<uint, Owned<TerminalServicesSession>> Sessions
         {
             get
             {
-                if (_sessions == null )
+                if (field == null )
                 {
-                    _sessions = EnumerateSessionIDs()
+                    field = EnumerateSessionIDs()
                         .Select(MaybeConfigureSession)
                         .Where(s => s != null).Select(s => s!)
-                        .ToDictionary(s => s.Id);
+                        .ToDictionary(s => s.Value.Id);
 
                     Logger.LogDebug($"Enumerating existing user sessions:");
 
-                    foreach (var session in _sessions.Values)
+                    foreach (var owned in field.Values)
                     {
-                        Logger.LogDebug($"{session}");
+                        Logger.LogDebug($"{owned.Value}");
                     }
 
                     Logger.LogDebug($"Startup of {GetType().Name} complete.");
                 }
 
-                return _sessions;
+                return field;
             }
         }
 
@@ -55,7 +50,7 @@ namespace MadWizard.Desomnia.Session.Manager
         public event EventHandler<ISession>? ConsoleDisconnect;
         public event EventHandler<ISession>? UserLogoff;
 
-        public ISession this[uint sid] => Sessions[sid];
+        public ISession this[uint sid] => Sessions[sid].Value;
 
         public ISession? ConsoleSession
         {
@@ -63,7 +58,7 @@ namespace MadWizard.Desomnia.Session.Manager
             {
                 var consoleSID = WTSGetActiveConsoleSessionId();
 
-                return Sessions.TryGetValue(consoleSID, out var session) ? session : null;
+                return Sessions.TryGetValue(consoleSID, out var session) ? session.Value : null;
             }
 
             set
@@ -79,27 +74,23 @@ namespace MadWizard.Desomnia.Session.Manager
             }
         }
 
-        public ISession? FindSessionByID(uint sid)
+        public IEnumerable<ISession> FindSessionsByUserName(string user)
         {
-            return Sessions.TryGetValue(sid, out var session) ? session : null;
-        }
-        public ISession? FindSessionByUserName(string user)
-        {
-            return Sessions.Values.Where(s => s.UserName.Equals(user, StringComparison.InvariantCultureIgnoreCase)).SingleOrDefault();
+            return Sessions.Values.Where(s => s.Value.UserName.Equals(user, StringComparison.InvariantCultureIgnoreCase)).Select(o => o.Value);
         }
 
         public IEnumerator<ISession> GetEnumerator()
         {
-            return Sessions.Values.GetEnumerator();
+            return Sessions.Values.Select(o => o.Value).GetEnumerator();
         }
 
         private async void Service_SessionChanged(object? sender, SessionChangeDescription desc)
         {
             uint sid = (uint)desc.SessionId;
 
-            Sessions.TryGetValue(sid, out var session);
+            Sessions.TryGetValue(sid, out var owned);
 
-            if (session != null)
+            if (owned != null && owned.Value is var session)
             {
                 Logger.LogDebug($"{session} -> {desc.Reason}");
 
@@ -144,11 +135,12 @@ namespace MadWizard.Desomnia.Session.Manager
             {
                 switch (desc.Reason)
                 {
-                    case SessionChangeReason.SessionLogon when MaybeConfigureSession(sid) is TerminalServicesSession configured:
-                        Logger.LogDebug($"{configured} -> {desc.Reason}");
+                    case SessionChangeReason.SessionLogon when MaybeConfigureSession(sid) is Owned<TerminalServicesSession> configured:
+                        Logger.LogDebug($"{configured.Value} -> {desc.Reason}");
 
                         Sessions[sid] = configured;
-                        UserLogon?.Invoke(this, configured);
+
+                        UserLogon?.Invoke(this, configured.Value);
 
                         break;
 
@@ -159,7 +151,7 @@ namespace MadWizard.Desomnia.Session.Manager
             }
         }
 
-        protected TerminalServicesSession? MaybeConfigureSession(uint sid)
+        protected Owned<TerminalServicesSession>? MaybeConfigureSession(uint sid)
         {
             var info = QuerySessionInformation<WTSINFO>(sid, WTS_INFO_CLASS.WTSSessionInfo);
 
@@ -170,23 +162,15 @@ namespace MadWizard.Desomnia.Session.Manager
             if (string.IsNullOrEmpty(info.UserName))
                 return null;
 
-            var session = ConfigureSession(sid);
-
-            return session;
-        }
-
-        protected virtual TerminalServicesSession ConfigureSession(uint sid)
-        {
-            return new TerminalServicesSession(sid)
-            {
-                Processes = ProcessManager.WithSessionId(sid)
-            };
+            return ConfigureSession(sid);
         }
 
         public virtual void Dispose()
         {
             foreach (var session in Sessions.Values)
+            {
                 session.Dispose();
+            }
         }
     }
 }

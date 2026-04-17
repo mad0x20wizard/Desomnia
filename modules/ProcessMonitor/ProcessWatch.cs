@@ -4,49 +4,64 @@ using MadWizard.Desomnia.Process.Manager;
 
 namespace MadWizard.Desomnia.Process
 {
-    public abstract class ProcessWatch(ProcessWatchInfo info) : Resource
+    public class ProcessWatch : Resource
     {
+        readonly ProcessWatchInfo info;
+
+        readonly HashSet<IProcess> _watchedProcesses = [];
+
         private DateTime _lastMeasureTime;
         private TimeSpan _lastProcessorTime;
 
-        protected string Name => info.Name;
-
-        protected abstract IEnumerable<IProcess> EnumerateProcesses();
-
-        protected virtual ProcessUsage CreateUsageToken(double usage) => new(Name, usage);
-        protected virtual ProcessUsage CreateUsageToken(TimeSpan time) => new(Name, time);
-
-        protected IEnumerable<IProcess> SelectProcesses()
+        public required IProcessManager Manager
         {
-            IEnumerable<IProcess> processes = EnumerateProcesses();
-
-            var parents = new HashSet<IProcess>();
-            foreach (var process in processes)
+            private get; init
             {
-                if (info.Pattern.Matches(process.Name).Count == 0)
-                    continue;
+                field = value;
 
-                if (parents.Add(process))
-                    yield return process;
-            }
+                // always subscribe event before iterating
+                field.ProcessStarted += Manager_ProcessStarted;
+                field.ProcessStopped += Manager_ProcessStopped;
 
-            if (info.WatchChildren)
-                foreach (var process in processes)
+                foreach (var process in Manager.Where(WatchProcess))
                 {
-                    if (parents.Contains(process))
-                        continue;
-
-                    foreach (var parent in parents)
-                        if (process.HasParent(parent))
-                            yield return process;
+                    _watchedProcesses.Add(process);
                 }
+            }
         }
 
+        public event EventInvocation? Started;
+        public event EventInvocation? Stopped;
+
+        public ProcessWatch(ProcessWatchInfo info)
+        {
+            this.info = info;
+
+            AddEventAction(nameof(Started), info.OnStart);
+            AddEventAction(nameof(Stopped), info.OnStop);
+        }
+
+        protected virtual bool WatchProcess(IProcess process)
+        {
+            if (info.Pattern.Matches(process.Name).Count > 0)
+                return true;
+
+            if (info.WatchChildren)
+            {
+                foreach (var watched in _watchedProcesses)
+                    if (process.HasParent(watched))
+                        return true;
+            }
+
+            return false;
+        }
+
+        #region Inspection
         private double MeasureUsage(out TimeSpan time)
         {
             DateTime measureTime = DateTime.UtcNow;
 
-            var processorTime = SelectProcesses().Aggregate(TimeSpan.Zero, (time, process) => time + process.NativeProcess.TotalProcessorTime);
+            var processorTime = _watchedProcesses.Aggregate(TimeSpan.Zero, (time, process) => time + process.NativeProcess.TotalProcessorTime);
 
             try
             {
@@ -70,25 +85,70 @@ namespace MadWizard.Desomnia.Process
             {
                 if (time > minTime)
                 {
-                    yield return CreateUsageToken(time);
+                    yield return new ProcessUsage(info.Name, time);
                 }
             }
             else if (info.MinCPU.RelativeUsage is double minUsage)
             {
                 if (usage > minUsage)
                 {
-                    yield return CreateUsageToken(usage);
+                    yield return new ProcessUsage(info.Name, usage);
+                }
+            }
+            else if (_watchedProcesses.Count > 0)
+            {
+                yield return new ProcessUsage(info.Name);
+            }
+        }
+        #endregion
+
+        #region Process events
+        private void Manager_ProcessStarted(object? sender, IProcess process)
+        {
+            if (WatchProcess(process))
+            {
+                var stopped = _watchedProcesses.Count == 0;
+
+                _watchedProcesses.Add(process);
+
+                if (stopped)
+                {
+                    TriggerEvent(nameof(Started));
                 }
             }
         }
 
+        private void Manager_ProcessStopped(object? sender, IProcess process)
+        {
+            if (_watchedProcesses.Where(watched => watched.Id == process.Id).FirstOrDefault() is IProcess stopped)
+            {
+                _watchedProcesses.Remove(stopped);
+
+                if (_watchedProcesses.Count == 0)
+                {
+                    TriggerEvent(nameof(Stopped));
+                }
+            }
+        }
+        #endregion
+
+        #region Action handlers
         [ActionHandler("stop")]
         internal void HandleActionStop(TimeSpan timeout = default) // TODO implement passing of timeout
         {
-            foreach (var process in SelectProcesses())
+            foreach (var process in _watchedProcesses)
             {
                 process.Stop(timeout);
             }
+        }
+        #endregion
+
+        public override void Dispose()
+        {
+            Manager.ProcessStopped -= Manager_ProcessStopped;
+            Manager.ProcessStarted -= Manager_ProcessStarted;
+
+            base.Dispose();
         }
     }
 }
