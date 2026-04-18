@@ -3,13 +3,13 @@ Homebrew
 
 :OS: 🐧 *Linux* 🍎 *macOS*
     
-The easiest way to set up Desomnia on Linux or macOS is to use `Homebrew`_, which enables you to get everything up and running in under a minute:
+The easiest way to set up Desomnia on Linux or macOS is to use `Homebrew`_. It enables you to get everything up and running easily, with the following command:
 
 .. code:: bash
 
    brew install mad0x20wizard/tools/desomnia
 
-The software will be installed according to the standard Homebrew filesystem layout. The root of this layout will be different, depending on the platform you are using. To find out you actual *Homebrew prefix*, you can execute the following command:
+The software will be installed according to the standard Homebrew filesystem layout. The root of this layout will be different, depending on the platform you are using. To find your actual *Homebrew prefix*, you can execute the following command:
 
 .. code:: bash
 
@@ -30,7 +30,7 @@ When you install software via Homebrew, the source code is downloaded and the pr
 Filesystem layout
 -----------------
 
-Use these locations to customize your installation of Desomnia, relative to you Hombrew installation:
+Use these locations to customize your installation of Desomnia, relative to your Hombrew installation:
 
 .. include:: ./paths.rst
 
@@ -93,10 +93,14 @@ Linux
 Uninstallation
 --------------
 
-If you don't like Desomnia, you can install everything easily with the following command:
+If you don't like Desomnia, you can install it with the following command:
 
 .. code:: bash
 
     brew uninstall mad0x20wizard/tools/desomnia
+
+.. note::
+
+   Please note that this doesn't remove either the configuration, custom plugins or logfiles. You will have to remove them manually from their respective directories.
 
 .. _`Homebrew`: https://brew.sh/

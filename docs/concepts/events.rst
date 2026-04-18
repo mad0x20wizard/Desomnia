@@ -82,7 +82,7 @@ This hierarchical model enables:
 - Centralized definition of shared behavior
 - Flexible composition of actions at different levels of the tree
 
-As a result, even deeply nested resources can leverage higher-level logic, either to use global actions (like `èxec``) or to short-circuit the idle detection pipeline for specific use cases.
+As a result, even deeply nested resources can leverage higher-level logic, either to use global actions (like ``exec``) or to short-circuit the idle detection pipeline for specific use cases.
 
 Summary
 -------

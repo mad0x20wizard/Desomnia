@@ -9,38 +9,50 @@ namespace MadWizard.Desomnia.Power.Watch
     {
         public required ILogger<SleepWatch> Logger { private get; set; }
 
-        private static Stopwatch ClockSleep { get; set; } = new Stopwatch();
-        private Stopwatch ClockNap { get; set; } = new Stopwatch();
+        public static SleepWatch? Instance { get; private set; }
+
+        private DateTime LastSleepTime { get; set; } = DateTime.Now;
+        private TimeSpan SleepDuration { get; set; } = TimeSpan.Zero;
+
+        private Stopwatch ClockSleep { get; set; } = new Stopwatch();
 
         void IStartable.Start()
         {
             power.Suspended += PowerManager_Suspend;
             power.ResumeSuspended += PowerManager_ResumeSuspend;
+
+            Instance = this;
         }
 
         private void PowerManager_Suspend(object? sender, EventArgs e)
         {
-            ClockNap.Restart();
-            ClockSleep.Start();
+            LastSleepTime = DateTime.Now;
+
+            ClockSleep.Restart();
         }
 
         private void PowerManager_ResumeSuspend(object? sender, EventArgs e)
         {
             ClockSleep.Stop();
-            ClockNap.Stop();
 
-            Logger.LogInformation($"{ClockNap.Elapsed:h':'mm} h");
+            SleepDuration += ClockSleep.Elapsed;
+
+            Logger.LogInformation($"{ClockSleep.Elapsed:h':'mm} h");
         }
 
-        internal static TimeSpan CollectSleepTime()
+        internal TimeSpan CollectSleepTime(bool preserveToday = false)
         {
+            TimeSpan preserve = TimeSpan.Zero;
+            if (preserveToday && LastSleepTime.Date != DateTime.Today)
+                preserve = DateTime.Now.TimeOfDay;
+
             try
             {
-                return ClockSleep.Elapsed;
+                return SleepDuration - preserve;
             }
             finally
             {
-                ClockSleep.Reset();
+                SleepDuration = preserve;
             }
         }
     }

@@ -16,7 +16,7 @@ This mode focuses on two primary aspects:
 
 Each monitored remote host is represented as a **resource** within the system. If a remote host is considered active (i.e., not idle), it contributes to the overall system state.
 
-If *local resource monitoring* is enabled, active remote hosts will prevent the local system from transitioning into an idle state or entering sleep mode.
+If *local resource monitoring* is enabled, active connections to (configured) remote hosts will prevent the local system from transitioning into an idle state or entering sleep mode.
 
 Promiscuous Mode (Wake Proxy)
 -----------------------------

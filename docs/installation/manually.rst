@@ -3,7 +3,7 @@ Manually
 
 :OS: 🐧 *Linux*
 
-Follow this guide to learn how to use Desomnia on your Linux based OS and setup everything by yourself.
+Follow this guide to learn how to use Desomnia on your Linux-based operating system and set everything up yourself.
 
 Prerequisites
 -------------
@@ -60,13 +60,11 @@ Starting and stopping
 
 After you created or changed the configuration file, you have to reload systemd with ``systemctl daemon-reload``. If you want that Desomnia is started with the system, you can enable it with ``systemctl enable desomnia``. In any case you will start Desomnia with ``systemctl start desomnia`` and stop it gracefully with ``systemctl stop desomnia``.
 
-Logging
+Journal
 +++++++
 
 .. include:: ./journal.rst
 
 .. _`libpcap`: https://github.com/the-tcpdump-group/libpcap
 
-.. _'Filesystem Hierarchy Standard': https://en.wikipedia.org/wiki/Filesystem_Hierarchy_Standard
-
-.. _'Releases': 
+.. _`Filesystem Hierarchy Standard`: https://en.wikipedia.org/wiki/Filesystem_Hierarchy_Standard
