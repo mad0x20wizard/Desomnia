@@ -6,7 +6,7 @@ Local Resource Management
 Where are the limits?
 ---------------------
 
-Windows already has a feature that allows it to check if it is in an idle state and to suspend itself if it detects this. As a part of this, individual system components and user processes can request that the system should stay awake. You can check this 
+Windows includes a built-in idle detection mechanism that can suspend the system automatically. Individual processes and kernel drivers can participate by issuing power requests — instructions to the system to stay awake. You can inspect active requests at any time:
 
 .. code:: PowerShell
 
@@ -20,20 +20,17 @@ Windows already has a feature that allows it to check if it is in an idle state 
     DISPLAY:
     None.
 
-There user processes will show up with their location on your hard drive, so you could theoretically stop them or change something about their configuration, if you do not want your system to stay awake for this reason. But more often than not, kernel drivers use APIs to register such requests, that will provide no useful information about why this request was created in the first place.
+User processes appear with their executable path, which at least identifies what is keeping the system awake. Kernel drivers, however, typically use low-level APIs that carry no useful information about the reason for the request.
 
-Although you can instruct Windows to ignore requests from specific sources (with ``powercfg /requestsoverride``), this won't help if a driver uses one of the legacy APIs. And since these overrides don't survive a reboot, they need to be installed again after every restart.
+Windows does allow you to override power requests from specific sources using ``powercfg /requestsoverride``, but this does not work for all API types and overrides do not survive a reboot — they must be re-applied after every restart.
 
-As you can see, your control over this is very limited:
+The limitations of the built-in approach are:
 
-- Power requests cannot be filtered in a reliable way.
-- Overrides have to be installed after every reboot.
+- Power requests cannot be filtered reliably.
+- Overrides must be re-applied after every reboot.
 - It is not possible to allow only specific requests and ignore the rest.
 
-What lies beyond.
-+++++++++++++++++
-
-Desomnia attempts to overcome these limitations by suppressing the built-in behaviour first. You can then use a set of fine-grained rules and filters to customize your system's sleep behaviour exactly to your needs. In the following sections we will explore the metrics that can be monitored to determine whether the system is idle or not. You will also learn how individual system components can be stopped or started in response to changing demands.
+Desomnia addresses these limitations by replacing the built-in sleep management with a configurable set of monitors. You define exactly which activity should keep the system awake, and what actions to take when everything goes quiet.
 
 Timing is everything
 --------------------
@@ -47,30 +44,30 @@ Timing is everything
 
     </SystemMonitor>
 
-To minimize the load on your system, Desomnia uses a time-based approach to check the monitored resources. Each time the configured ``timeout`` elapses, it asks every configured monitor wheather any of the watched resources are currently in use or have been used during the previous timeframe.
+Desomnia uses a polling approach to check for activity. Each time the configured ``timeout`` elapses, it queries every active monitor to determine whether any watched resources are currently in use or were active since the last check.
 
-Without further configuration, only the used resources will be logged. In some cases, this may be all you need to know. If you want Desomnia to actively change the sleep behaviour, continue reading.
+Without further configuration, Desomnia only logs which resources are active. In some cases this may be sufficient. To have Desomnia actively manage sleep behaviour, continue reading.
 
 Monitoring resources
 --------------------
 
-Desomnia organizes your system into a tree structure of logical resources. The root-level resource is the ``<SystemMonitor>``, representing the system as a whole, and this will be divided into monitors and resources with a decreasing scope. Each resource has a state that determines whether it is idle and can trigger one or more events, which enable you to manipulate their lifecycle.
+Desomnia organises your system into a tree of logical resources. The root is the ``<SystemMonitor>``, representing the system as a whole. You divide this into monitors and resources of decreasing scope, each tracking a specific type of activity. Every resource has an idle state, and state changes can trigger configured actions.
 
 Common events
 -------------
 
-You can recognize the attributes, that define how Desomnia should respond to different events, by their ``on`` prefix. This is followed by the name of the event and an action, configured by the value of the attribute.
+Attributes that control how Desomnia responds to state changes are identified by their ``on`` prefix, followed by the event name. The attribute value specifies the action to take.
 
-Some events allow you to delay the execution of an action, which can be useful if you don't want a state change to trigger an immediate response.
+Some events support a delay, so that a brief state change does not immediately trigger a response.
 
 onIdle
 ++++++
 
 :⚡️ event:
 
-Most resources allow you to configure the ``onIdle`` action, which always triggers during the *timeout phase*. The available actions vary depending on the type of resource and the contextual monitor.
+The ``onIdle`` event fires during the timeout phase when a resource has been idle for the full timeout duration. Most resources support this event; the available actions depend on the resource type and its parent monitor.
 
-For example: In order to control the sleep behaviour of your system, you may use the ``sleep`` action for the ``onIdle`` event on the ``<SystemMonitor>``.
+To put the system to sleep when idle, configure the ``sleep`` action on the ``<SystemMonitor>``:
 
 .. code:: xml
 
@@ -81,20 +78,18 @@ For example: In order to control the sleep behaviour of your system, you may use
 
     </SystemMonitor>
 
-This will instruct Desomnia to suspend your system as soon as no resources have been used for the configured timeout period.
-
 .. note::
 
-    We also configured to delay the ``sleep`` action for **10 minutes**. The action will only be executed if the system remains in the idle state for that length of time; otherwise, it will be cancelled. If it then switches to the idle state again, the delay starts again from the beginning.
+    The ``+10min`` suffix adds a **10-minute delay** to the ``sleep`` action. The action executes only if the system remains idle for the full delay period. If activity resumes beforehand, the delay is cancelled and restarts the next time idle state is reached.
 
 onDemand
 ++++++++
 
 :⚡️ event:
 
-Many resources also allow you to specify an action for the ``onDemand`` event. This action will be executed by no later than the next timeout check, but some resource monitors will occasionally support to take immediate action. 
+The ``onDemand`` event fires when a resource transitions from idle to active. The action runs no later than the next timeout check; some monitors also support firing it immediately when activity is detected.
 
-The ``<SystemMonitor>`` triggers this event, when it detects, that some resource in the system is in use. The most idiomatic action, that you can configure here, would be ``sleepless``, which instructs Desomnia to create a power request, to prevent the system from suspending itself in accordance with the built-in power management settings. The power request will be released, when the system switches to the idle state again.
+The most common use on the ``<SystemMonitor>`` is the ``sleepless`` action, which issues a power request to prevent the system from suspending itself. The request is released automatically when the system returns to idle:
 
 .. code:: xml
 
@@ -105,12 +100,12 @@ The ``<SystemMonitor>`` triggers this event, when it detects, that some resource
 
     </SystemMonitor>
 
-By specifying both attributes, you can effectively bypass the built-in behaviour. This is the recommended configuration when using Desomnia as a full replacement for OS power management.
+Configuring both ``onIdle`` and ``onDemand`` together is the recommended setup when using Desomnia as a full replacement for the built-in power management.
 
 Start from here
 ---------------
 
-If you are new to this, it would be advisable to familiarize yourself with how to configure Desomnia to mimic the default behaviour of the built-in power management system, and then customize it to your individual needs from there:
+A good starting point is to configure Desomnia to replicate the behaviour of the built-in power management system, then refine it from there:
 
 .. code:: xml
 
@@ -123,41 +118,41 @@ If you are new to this, it would be advisable to familiarize yourself with how t
 
     </SystemMonitor>
 
-Windows' built-in power management system monitors these sources by default, so configuring Desomnia like this should make your system behave roughly the same as before. However, unlike with the built-in system, you can now add various rules and filters to accommodate even very specific use cases. Desomnia also includes additonal sources, that can extend your control ofter the sleep cycle of your system even further.
+The built-in power management monitors these same sources by default, so this configuration should produce roughly the same behaviour as before. From here you can add rules and filters to accommodate specific requirements, and bring in additional monitors that the built-in system does not support at all.
 
 Exploring the core modules
 --------------------------
 
-The following monitors can be used without the need to install additional plugins. Each of these has it's own chapter in the documentation, so we will only briefly describe their purpose and how they relate to the built-in power management:
+The following monitors are available without any additional plugins. Each has its own reference page; this section briefly describes their purpose and their relation to the built-in power management.
 
 SystemMonitor
 +++++++++++++
 
-This monitor acts as a meta-monitor and container for the actual usage monitors. It provides events and actions that enable you to customise your system’s sleep behaviour. Read more about the :doc:`/modules/system/monitor` to understand its role in Desomnia’s basic architecture.
+The root container for all resource monitors. It provides the events and actions that control system-level sleep behaviour. See :doc:`/modules/system/monitor` to understand its role in Desomnia's architecture.
 
 SessionMonitor
 ++++++++++++++
 
-Usually the system will be be considered non-idle and stay awake for as long as an actual user is interacting with the computer. Windows uses various indicators to determine this, such as mouse and keyboard activity.
+The built-in power management keeps the system awake for as long as a user is interacting with it, based on input activity such as mouse and keyboard movement.
 
-If you activate this monitor, it will track the activity of user sessions and their idle time will contribute to the system's overall idle state. Read more about how to configure the :doc:`/modules/session/monitor` to constrain this behaviour to individual user accounts, and how to use session events. For example, you can set it up to automatically log out idle sessions or to stop idle processes.
+Enabling this monitor makes user session activity contribute to the system's overall idle state. See :doc:`/modules/session/monitor` to learn how to filter by user account and how to use session events — for example, to automatically log out idle sessions or stop idle processes.
 
 NetworkSessionMonitor
 +++++++++++++++++++++
 
-You can configure this monitor if you want the system to stay awake while someone uses its shared files and folders remotely. Any network session will be considered as non-idle. If you want more control over which access should be considered non-idle, read more about how to configure the :doc:`/modules/network_session/monitor` to filter the connected sessions.
+Keeps the system awake while remote clients have open SMB sessions — for example, while someone is actively accessing shared files or folders. See :doc:`/modules/network_session/monitor` to learn how to filter which sessions should count as activity.
 
 PowerRequestMonitor
 +++++++++++++++++++
 
-Any process or system driver can request the system to stay awake. If you configure this monitor, active power requests will render the system as non-idle. Read more about how to configure the :doc:`/modules/power/monitor` to add filters that either exclude requests or allow specific ones only.
+Keeps the system awake while any process or driver has an active power request outstanding. See :doc:`/modules/power/monitor` to learn how to selectively exclude or allow specific requests.
 
 ProcessMonitor
 ++++++++++++++
 
-The built-in power management system does not provide any means to keep the system awake by the mere presence of a process. You have to read about how to configure the :doc:`/modules/process/monitor` in order to monitor individual processes or whole groups of them and set CPU thresholds by which they should keep the system awake. You can use this monitor, to give any process the ability to issue power requests, even if they originally were not intended to do so.
+The built-in power management has no concept of process presence — a process cannot keep the system awake simply by running. This monitor fills that gap. See :doc:`/modules/process/monitor` to learn how to watch individual processes or process groups, set CPU thresholds for activity detection, and effectively grant any process the ability to issue power requests.
 
 NetworkMonitor
 ++++++++++++++
 
-The features of this monitor go beyond basic idle checks and enable you to orchestrate entire network infrastructures. It achieves this by using packet-capturing techniques to dynamically detect when local or remote services are accessed, enabling you to switch their hosts on and off as required. There is a dedicated guide explaining how to do :doc:`wake`. Alternatively you can learn more about how to configure the :doc:`/modules/network/monitor` in order to watch local network services and prevent the system from going to sleep while they are in use.
+Beyond basic idle detection, this monitor can watch local network services and keep the system awake while they are in use. It also integrates with the Wake-on-LAN functionality to wake remote hosts on demand. See :doc:`/modules/network/monitor` for the full reference, or the :doc:`wol-client` and :doc:`wol-proxy` guides for practical Wake-on-LAN setup.

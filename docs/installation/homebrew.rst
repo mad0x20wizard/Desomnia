@@ -2,48 +2,50 @@ Homebrew
 ========
 
 :OS: 🐧 *Linux* 🍎 *macOS*
-    
-The easiest way to set up Desomnia on Linux or macOS is to use `Homebrew`_. It enables you to get everything up and running easily, with the following command:
+
+The easiest way to set up Desomnia on Linux or macOS is to use `Homebrew`_. Install it with the following command:
 
 .. code:: bash
 
    brew install mad0x20wizard/tools/desomnia
 
-The software will be installed according to the standard Homebrew filesystem layout. The root of this layout will be different, depending on the platform you are using. To find your actual *Homebrew prefix*, you can execute the following command:
+The software will be installed according to the standard Homebrew filesystem layout. The root of this layout differs by platform. To find your Homebrew prefix, run:
 
 .. code:: bash
 
    brew --prefix
 
-For example on macOS running on Apple Silicon, this will result in the path ``/opt/homebrew``. All the following paths will be relative to this base path.
+On macOS running on Apple Silicon, this is ``/opt/homebrew``. All paths below are relative to this base path.
 
 Binary distribution
 -------------------
 
-When you install software via Homebrew, the source code is downloaded and the project is built locally by default. The maintainer can also provide pre-built binaries, known as "bottles", which can be downloaded and installed without the need for a build. Desomnia comes `bottled <https://github.com/mad0x20wizard/homebrew-tools/pkgs/container/tools%2Fdesomnia>`__ for the following platforms:
+Homebrew normally downloads source code and builds the project locally. Desomnia also provides pre-built binaries (known as "bottles") for the following platforms:
 
 - ``linux/x64``
 - ``linux/arm64``
 - ``macos/sequoia/arm64``
 - ``macos/tahoe/arm64``
 
+The availability of pre-built bottles can be checked `here <https://github.com/mad0x20wizard/homebrew-tools/pkgs/container/tools%2Fdesomnia>`__.
+
 Filesystem layout
 -----------------
 
-Use these locations to customize your installation of Desomnia, relative to your Hombrew installation:
+Use these locations to customise your installation of Desomnia, relative to your Homebrew installation:
 
 .. include:: ./paths.rst
 
 Running as background service
 -----------------------------
 
-Desomnia can only reach its full potential when run as a background service. Homebrew provides a platform-agnostic method of installing the software as an auto-started service using the following command:
+Desomnia can only reach its full potential when run as a background service. Homebrew provides a platform-agnostic way to install and auto-start it:
 
 .. code:: bash
 
    sudo brew services start mad0x20wizard/tools/desomnia
 
-If you want to stop the Homebrew service and unregister it from auto-start, you can do so using the following command:
+To stop the service and remove it from auto-start:
 
 .. code:: bash
 
@@ -51,30 +53,30 @@ If you want to stop the Homebrew service and unregister it from auto-start, you 
 
 .. attention::
 
-    You need to use ``sudo`` here so that Desomnia will be installed and uninstalled as a system service with root privileges.
+    ``sudo`` is required so that Desomnia is installed and run as a system service with root privileges.
 
 .. note::
 
-   Although Homebrew suggests to install and run the service the same way on both platforms, a couple of problems can arise, while doing this on 🐧 **Linux**:
-   
-   - Running the brew command with sudo can fail, if brew is not on the default path of the root user. You can get around this by specifying an absolute path instead:
+   A couple of problems can arise when running this on 🐧 **Linux**:
+
+   - Running the brew command with ``sudo`` can fail if brew is not on the default path of the root user. Specify an absolute path to work around this:
 
       .. code:: bash
 
          sudo /home/linuxbrew/.linuxbrew/bin/brew services start mad0x20wizard/tools/desomnia
 
-   - On some platforms, it seems necessary to configure sudo to preserve the ``HOME`` environment variable in order to run the brew command as root:
+   - On some platforms, it is necessary to configure sudo to preserve the ``HOME`` environment variable:
 
       .. code:: bash
 
          sudo --preserve-env=HOME brew services start mad0x20wizard/tools/desomnia
 
-   Please use either of these fixes or both, to successfully configure Desomnia as a root service on your system.
+   Use either or both of these workarounds as needed.
 
 Plugins included
 ----------------
 
-If you install Desomnia via Homebrew, it comes with all the plugins of the main repository already included. To install additional plugins, just drop the ZIP file of your plugin into ``.../var/lib/desomnia/plugins``. The file must be in the format ``plugin-*.zip``, with an optional version specifier, separated from the name by ``_``.
+Desomnia installed via Homebrew includes all plugins from the main repository. To install additional plugins, place the ZIP file in ``.../var/lib/desomnia/plugins``. The file must follow the naming convention ``plugin-*.zip``, with an optional version specifier separated from the name by ``_``.
 
 Logging
 -------
@@ -82,18 +84,17 @@ Logging
 macOS
 +++++
 
-You can find the **StandardOutput** and **-Error** logs at ``.../var/log/desomnia``. In order for Desomnia to write additional log files, you must create a :doc:`log configuration </concepts/logging>` at ``.../etc/desomnia/NLog.config``.
+The standard output and error logs are written to ``.../var/log/desomnia``. To enable additional file-based logging, create a :doc:`log configuration </concepts/logging>` at ``.../etc/desomnia/NLog.config``.
 
 Linux
 +++++
 
 .. include:: ./journal.rst
 
-
 Uninstallation
 --------------
 
-If you don't like Desomnia, you can install it with the following command:
+To remove Desomnia from your system:
 
 .. code:: bash
 
@@ -101,6 +102,6 @@ If you don't like Desomnia, you can install it with the following command:
 
 .. note::
 
-   Please note that this doesn't remove either the configuration, custom plugins or logfiles. You will have to remove them manually from their respective directories.
+   This does not remove the configuration, custom plugins, or log files. Those must be deleted manually from their respective directories.
 
 .. _`Homebrew`: https://brew.sh/

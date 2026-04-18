@@ -1,7 +1,7 @@
 Interface selection
 ===================
 
-Desomnia can be configured to monitor one or more network interfaces installed in your system. Upon service startup and everytime your network configuration changes, the configuration of all connected interfaces are compared for a match with one of your ``<NetworkMonitor>`` configurations. To determine which configuration should be used for which interface, there are several options:
+Desomnia can be configured to monitor one or more network interfaces installed in your system. Upon service startup and every time your network configuration changes, the configurations of all connected interfaces are compared against your ``<NetworkMonitor>`` configurations. There are several ways to control which configuration applies to which interface:
 
 Automatic selection
 -------------------
@@ -12,7 +12,7 @@ Automatic selection
         <!-- hosts, etc. -->
     </NetworkMonitor>
 
-If you do not specify a value for either ``interface`` or ``network``, Desomnia will automatically monitor all interfaces configured with a standard gateway. This is usually the interface connected to your local network, and, unless you have multiple interfaces up at the same time, it is typically the only interface with this description. In that case, all interfaces will be monitored using the same configuration. This could be exactly what you want if you have wired and wireless links to the same network, at the same time.
+If you specify neither ``interface`` nor ``network``, Desomnia monitors all interfaces that have a standard gateway configured. This is typically the interface connected to your local network. If multiple interfaces with a gateway are present — for example, an active wired and wireless connection to the same network — all of them will be monitored using this single configuration, which may be exactly what you want in that situation.
 
 By network
 ----------
@@ -23,7 +23,7 @@ By network
         <!-- hosts, etc. -->
     </NetworkMonitor>
 
-When you specify a network in CIDR notation, the ``<NetworkMonitor>`` will only be configured for interfaces that have joined that particular network. This is determined by the IP address and netmask, or prefix length, of the interface itself, and applies to both IPv4 and IPv6 networks. Alternatively, you can use a single concrete IP address to configure it to bind to a very specific link only.
+When you specify a network in CIDR notation, the ``<NetworkMonitor>`` is activated only for interfaces that have joined that particular network, as determined by the interface's IP address and prefix length. This applies to both IPv4 and IPv6 networks. You can also use a single concrete IP address to bind to a specific link.
 
 By interface name
 -----------------
@@ -34,14 +34,14 @@ By interface name
         <!-- hosts, etc. -->
     </NetworkMonitor>
 
-When you specify an interface name, the ``<NetworkMonitor>`` will only be configured for interfaces with a matching name. The name will be compared for equality with the name of the interface or if the ID of the interface contains the specified string. There are differences, in how network interfaces are identified between the different operating systems:
+When you specify an interface name, the ``<NetworkMonitor>`` is activated only for interfaces with a matching name. The value is matched both by exact name and by whether the interface ID contains the specified string. How interfaces are identified differs between operating systems:
 
 Windows
 +++++++
 
 :OS: 🪟
 
-On Windows every network interfaces is assigned a unique GUID and a human readable name. The name can actually be changed inside the system settings, but the GUID always stays unambiguously the same. You can query this information yourself, using PowerShell:
+On Windows, every network interface is assigned a unique GUID and a human-readable name. The name can be changed in the system settings, but the GUID always remains the same. You can query both using PowerShell:
 
 .. code:: PowerShell
 
@@ -56,14 +56,26 @@ On Windows every network interfaces is assigned a unique GUID and a human readab
     WLAN                         MediaTek Wi-Fi 6E MT7922 (RZ616) 160MHz Wireless LAN Card {44ECA482-24F2-4362-99F8-88A17A450B45}
     Ethernet                     Intel(R) Ethernet Controller (3) I225-V                   {1BD73899-523C-4911-967A-FE797ACF6C44}
 
-So when you want to use the name of the interface, you have to specify the exact same string. If you want to use the ID instead, you can choose to include or omit the curly braces.
+To match by name, use the exact string shown in the ``Name`` column. To match by GUID, the curly braces are optional.
 
 Linux and macOS
 +++++++++++++++
 
 :OS: 🐧 🍎
 
-On Linux and macOS you always use the device or BSD name of the interface, which will usually be something like ``eth0`` or ``eth1``, depending on the number of installed interfaces in your system. Depending on the actual OS and distribution it can also be something like ``en12`` or ``wlan0``. Check ``ifconfig`` for a enumeration of all interfaces by their name.
+On Linux and macOS, interfaces are identified by their device name — typically something like ``eth0``, ``eth1``, ``en0``, or ``wlan0``, depending on the OS, distribution, and number of installed interfaces.
+
+To list all interfaces and their names, use ``ip link show`` on Linux:
+
+.. code:: bash
+
+    ip link show
+
+On older systems or macOS, ``ifconfig`` shows the same information:
+
+.. code:: bash
+
+    ifconfig
 
 By interface name and network
 -----------------------------
@@ -74,9 +86,9 @@ By interface name and network
         <!-- hosts, etc. -->
     </NetworkMonitor>
 
-It is also allowed to combine both ways of identification to monitor the interface only in the most specific situation. If multiple configurations match the same interface, the first one will be used to initialize the ``<NetworkMonitor>``. Each interface will be monitored no more than once.
+You can combine both attributes to activate a configuration only when a specific interface has joined a specific network. If multiple configurations match the same interface, the first matching one in the configuration file is used. Each interface is monitored at most once.
 
 Hot plugging
 ------------
 
-You can add, remove, connect or disconnect network interfaces at runtime without the need to restart Desomnia.
+You can add, remove, connect, or disconnect network interfaces at runtime without restarting Desomnia.

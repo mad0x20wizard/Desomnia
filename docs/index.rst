@@ -4,27 +4,32 @@
 
 .. toctree::
    :maxdepth: 2
+
+   /start
+
+.. toctree::
+   :maxdepth: 2
    :caption: Installation
 
    /installation/manually
    /installation/homebrew
    /installation/docker
    /installation/installer
-   /installation/winget
 
 .. toctree::
    :maxdepth: 2
    :caption: Guides
 
-   /guides/wake
    /guides/sleep
+   /guides/wol-client
+   /guides/wol-proxy
+   /guides/remote-access
 
 .. toctree::
    :maxdepth: 2
    :caption: Basic Concepts
 
    /concepts/resources
-   /concepts/events
    /concepts/logging
 
 .. toctree::

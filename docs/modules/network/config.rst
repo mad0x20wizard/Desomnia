@@ -104,22 +104,7 @@ Desomnia can try to automatically discover the shape of your network. The values
 
 The following entities are available for auto-configuration:
 
-``MAC``
-  try to discover the MAC address of the configured hosts and routers
-``IPv4``
-   try to discover the IPv4 address of the configured hosts and routers
-``IPv6``
-  try to discover the IPv6 address(es) of the configured hosts and routers
-``Router``
-  try to discover the network routers
-🚧 ``VPN``
-  try to discover the available VPN devices, connected to your router (if possible)
-🚧 ``SleepProxy``
-  try to discover the sleep proxies on the network, to register the local services before sleep
-🚧 ``Services``
-  try to discover services of the remote hosts
-
-Alternatively you may specify either ``nothing`` or ``everything`` in order to disable auto-configuration or to try to discover as much as possible.
+.. include:: ./attributes/auto.rst
 
 autoTimeout
 +++++++++++
