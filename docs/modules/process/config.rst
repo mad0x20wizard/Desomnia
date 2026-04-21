@@ -19,6 +19,10 @@ You can configure any number of ``<Process>`` to watch OS processes or groups of
 
   </SystemMonitor>
 
+.. include:: attributes/poll.rst
+  
+See :doc:`performance`.
+
 Process
 -------
 

@@ -24,7 +24,7 @@ watchPassive
 
 :default: ``true``
 
-This option determines, if sessions with no open files or folders should be considered as actual usage.
+This option determines, if sessions with no open files or folders should also be considered as usage.
 
 FilterRule
 ----------
@@ -45,16 +45,26 @@ FilterRule
 userName
 ++++++++
 
+The Windows account name of the connected user. Matched case-insensitively.
+
 clientName
 ++++++++++
+
+The NetBIOS or DNS host name of the connecting client machine. Matched case-insensitively.
 
 clientIP
 ++++++++
 
+The IP address of the connecting client. Must be an exact address — CIDR ranges are not supported.
+
 shareName
 +++++++++
+
+The name of the SMB share being accessed. Matched case-insensitively. This criterion is only evaluated for sessions that have open files; it has no effect on passive sessions.
 
 filePath
 ++++++++
 
-:regex:
+:🔍 regex:
+
+A regular expression matched against the path of each open file within the session. This criterion is only evaluated for sessions that have open files; it has no effect on passive sessions.

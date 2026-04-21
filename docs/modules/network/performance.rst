@@ -8,6 +8,8 @@ Internally, Desomnia uses `SharpPcap <https://github.com/chmorgan/sharppcap>`__ 
 Berkeley Packet Filter
 -----------------------
 
+:OS: 🪟 *Windows* 🐧 *Linux* 🍎 *macOS*
+
 The most significant performance optimisation in the NetworkMonitor is its use of `Berkeley Packet Filter <https://en.wikipedia.org/wiki/Berkeley_Packet_Filter>`__ (BPF) rules. BPF allows Desomnia to declare its filtering criteria directly inside the kernel's packet capture module, so that packets it does not need are discarded before they are ever copied to user space. Only packets that pass the filter are handed to the application.
 
 This matters because copying packets from kernel space to user space has a cost regardless of whether the application ultimately uses them. By keeping the filter as tight as possible, Desomnia avoids imposing any overhead from traffic it has no interest in.

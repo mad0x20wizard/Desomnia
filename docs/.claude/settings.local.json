@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Read(//c/Users/Wizard/Projekte/Desomnia/modules/NetworkSessionMonitor/Configuration/**)",
+      "Read(//c/Users/Wizard/Projekte/Desomnia/modules/NetworkSessionMonitor/Configuration/Options/**)"
     ]
   }
 }

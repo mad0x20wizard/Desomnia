@@ -7,8 +7,18 @@ In proxy mode, Desomnia runs on an **always-on device** — such as a Raspberry 
 
 If you do not have a suitable always-on device, the :doc:`wol-client` guide describes an alternative that achieves the same result by running Desomnia on each machine you connect from.
 
-.. note::
+.. hint::
    The configuration for both modes is nearly identical. The only structural difference is a single attribute on the ``<NetworkMonitor>`` element. If you have already worked through the client mode guide, everything you have learned applies here as well.
+
+.. attention::
+
+   Only one Desomnia instance may run in proxy mode on a given local subnet at a time. On startup, Desomnia broadcasts a discovery packet to detect any running proxy instance. If another instance in proxy mode is present, it responds, and the starting instance exits with an error that includes the MAC address of the conflicting instance.
+
+   Two Desomnia instances operating on different subnets, or where only one is in proxy mode, are not affected by this restriction.
+
+   .. admonition:: Work in progress
+
+      Running two proxy instances for redundancy requires a more involved coordination mechanism — both instances would continuously respond to each other's address resolution queries, making each appear permanently online to the other. This is tracked for a future release.
 
 Before you begin
 ----------------
@@ -41,7 +51,7 @@ The configuration for proxy mode is identical to client mode, with one addition:
 
 Replace ``00:1A:2B:3C:4D:5E`` with the MAC address of your target host and ``192.168.1.10`` with its IP address.
 
-Setting ``watchMode="promiscuous"`` switches Desomnia from monitoring only outgoing traffic of the local machine to monitoring connection attempts between *any* two hosts on the network. When a client tries to reach a sleeping host, Desomnia detects the attempt and sends the Magic Packet on its behalf. Read more about how this works in :doc:`/modules/network/promiscuous` and :doc:`/modules/network/spoofing`.
+Setting ``watchMode="promiscuous"`` switches Desomnia from monitoring only outgoing traffic of the local machine to monitoring connection attempts between *any* two hosts on the network. When a client tries to reach a sleeping host, Desomnia detects the attempt and sends the Magic Packet on its behalf. Read more about how this works in :doc:`/modules/network/promiscuous`.
 
 As in client mode, the ``<NetworkMonitor>`` element without an ``interface`` or ``network`` attribute automatically binds to all interfaces with a default gateway configured. See :doc:`/modules/network/interface` if you need to target a specific interface, and :doc:`/modules/network/auto` to learn how to remove static address mappings from your configuration once you have a working baseline.
 
@@ -69,7 +79,7 @@ Filtering unwanted wake-ups
 .. include:: _wol/service-filtering.rst
 
 .. caution::
-   When using a ``<PingFilterRule>`` in promiscuous mode, Desomnia needs to :ref:`spoof the addresses of watched hosts <network-monitor-spoofing>` in order to intercept and inspect ping requests. Read about the implications before using this in a network where address spoofing may cause issues. Note that if you have already configured ``type="Must"`` service filters (or ``<Service>`` declarations), a ``<PingFilterRule>`` is not needed — ping traffic is excluded automatically.
+   When using a ``<PingFilterRule>`` in promiscuous mode, Desomnia needs to :ref:`spoof the addresses of watched hosts <network-monitor-spoofing>` in order to intercept and inspect ping requests. If you have already configured ``type="Must"`` service filters (or ``<Service>`` declarations), a ``<PingFilterRule>`` is not needed — ping traffic is excluded automatically.
 
 .. include:: _wol/host-filtering.rst
 

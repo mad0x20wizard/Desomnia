@@ -164,7 +164,7 @@ But consider you want your network to be a more open and less restricted place. 
 
 Let's imagine ``"morpheus"`` to be a linux host with SSH access enabled and you want to access it once in a while, to do some terminal administration tasks (or with an accordingly configured SSH server basically anything). Usually you don't access a SSH server by accident. It is rather more likely that you started a SSH client of your choice and entered the address of the host to connect to. This would be a most deliberate choice. If we could detect the destination port of such a connection attempt, we could narrow down the possibilities of waking the target host dramatically, without the need to explicitly configure each client host individually.
 
-Fortunately, Desomnia supports this use case in both normal and promiscuous modes – the latter made possible by a little :doc:`address spoofing </modules/network/spoofing>`. So if we only want ``"morpheus"`` to be woken up, when someone tries to open a connection to the SSH server on port 22, the configuration could look like this:
+Fortunately, Desomnia supports this use case in both normal and promiscuous modes. So if we only want ``"morpheus"`` to be woken up, when someone tries to open a connection to the SSH server on port 22, the configuration could look like this:
 
 .. code:: xml
 
@@ -203,7 +203,7 @@ Ping requests are a special type of ICMP packet, that operates on top of the IP 
    </NetworkMonitor>
 
 .. caution::
-  Be careful if you configure it this way while in promiscuous mode, as the addresses of all your watched hosts will be :doc:`spoofed </modules/network/spoofing>` constantly in order to rule out ping requests. Read more about why this has to be done and what possible consequences this can have for your network. Also keep in mind that you don't need to use any ``PingFilterRule``\, if you have a ``ServiceFilterRule`` with ``type="Must"`` already in place.
+  Be careful if you configure it this way while in promiscuous mode, as the addresses of all your watched hosts will be spoofed constantly in order to intercept and rule out ping requests. Also keep in mind that you don't need to use any ``PingFilterRule``\, if you have a ``ServiceFilterRule`` with ``type="Must"`` already in place.
 
 Compound filters
 ~~~~~~~~~~~~~~~~

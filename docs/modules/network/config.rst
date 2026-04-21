@@ -118,6 +118,8 @@ autoRefresh
 
 If you define this attribute, Desomnia will scan repeatedly for a changed configuration, waiting for the specified duration each time.
 
+.. _option-advertise:
+
 .. include:: ./options/demand.rst
 
 deviceTimeout
