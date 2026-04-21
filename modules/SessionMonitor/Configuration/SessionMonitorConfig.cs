@@ -8,6 +8,9 @@ namespace MadWizard.Desomnia.Session.Configuration
         where TConfig : SessionMonitorConfig<TConfig, TDesc>
         where TDesc : SessionDescriptor
     {
+        public DelayedAction? OnIdle { get; set; }
+        public DelayedAction? OnDemand { get; set; }
+
         public delegate void ConfigureWithDescriptior(TConfig config, TDesc desc);
 
         public TDesc? Everyone { get; set; }
