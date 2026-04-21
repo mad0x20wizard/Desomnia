@@ -89,6 +89,8 @@ namespace MadWizard.Desomnia.Network.Context
                     .PropertiesAutowired(PropertyWiringOptions.AllowCircularDependencies)
                     .OnActivated(args =>
                     {
+                        args.Instance.AddEventAction(nameof(NetworkMonitor.Idle), config.OnIdle);
+                        args.Instance.AddEventAction(nameof(NetworkMonitor.Demand), config.OnDemand);
                         args.Instance.AddEventAction(nameof(NetworkMonitor.Connected), config.OnConnect);
                         args.Instance.AddEventAction(nameof(NetworkMonitor.Disconnected), config.OnDisconnect);
                     })

@@ -23,6 +23,8 @@ namespace MadWizard.Desomnia.Network.Configuration
         public TimeSpan?        DeviceTimeout   { get; set; } = TimeSpan.FromMinutes(1); //= null; // TODO: safety net, but why?
 
         // Actions
+        public DelayedAction?   OnIdle          { get; set; }
+        public DelayedAction?   OnDemand        { get; set; }
         public DelayedAction?   OnConnect       { get; set; }
         public NamedAction?     OnDisconnect    { get; set; }
 
@@ -58,6 +60,10 @@ namespace MadWizard.Desomnia.Network.Configuration
 
         internal AddressAdvertisment Advertise          { get; set; } = AddressAdvertisment.Lazy;
         internal bool               AdvertiseIfStopped  { get; set; } = true;
+        #endregion
+
+        #region                     YieldOptions
+        internal TimeSpan           YieldTimeout        { get; set; } = TimeSpan.FromSeconds(5);
         #endregion
 
         #region Network :: KnockOptions

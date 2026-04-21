@@ -25,8 +25,9 @@ namespace MadWizard.Desomnia.Network
         public required AddressMappingService AddressMapping { private get; init; }
         public required KnockService Knocking { private get; init; }
 
-        public required PingOptions PingOptions { get; init; }
-        public required WakeOptions WakeOptions { get; init; }
+        public required PingOptions     PingOptions     { get; init; }
+        public required YieldOptions    YieldOptions    { get; init; }
+        public required WakeOptions     WakeOptions     { get; init; }
 
         public bool IsSuspended { get; private set; } = false;
 
@@ -375,7 +376,7 @@ namespace MadWizard.Desomnia.Network
 
             _ = Task.Run(async() =>
             {
-                await Task.Delay(DemandOptions.Timeout);
+                await Task.Delay(YieldOptions.Timeout);
 
                 await DetermineIfHostCanBeSeen(true);
             });
