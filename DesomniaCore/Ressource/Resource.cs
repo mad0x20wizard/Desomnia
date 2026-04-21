@@ -1,6 +1,4 @@
 ﻿using MadWizard.Desomnia.Configuration;
-using MadWizard.Desomnia.Ressource.Events;
-using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
 namespace MadWizard.Desomnia
@@ -24,7 +22,7 @@ namespace MadWizard.Desomnia
         public event EventInvocation? Idle;
         public event EventInvocation? Demand;
 
-        internal void StartTrackingBy(ResourceMonitor monitor, bool adopt)
+        protected internal virtual void StartTrackingBy(ResourceMonitor monitor, bool adopt)
         {
             if (adopt)
             {
@@ -82,7 +80,7 @@ namespace MadWizard.Desomnia
 
         protected abstract IEnumerable<UsageToken> InspectResource(TimeSpan interval);
 
-        internal void StopTrackingBy(ResourceMonitor monitor)
+        protected internal virtual void StopTrackingBy(ResourceMonitor monitor)
         {
             Monitors.Remove(monitor);
         }
