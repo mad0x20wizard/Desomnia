@@ -1,10 +1,8 @@
-﻿using System.Numerics;
-using static System.Runtime.InteropServices.JavaScript.JSType;
-
-namespace MadWizard.Desomnia.Network.Configuration.Options
+﻿namespace MadWizard.Desomnia.Network.Configuration.Options
 {
     public readonly struct ClockOptions
     {
+        public bool Time { get; init; }
         public bool Remote { get; init; }
         public bool Disconnected { get; init; }
 
@@ -13,7 +11,8 @@ namespace MadWizard.Desomnia.Network.Configuration.Options
             return new ClockOptions()
             {
                 Disconnected = left.Disconnected || right.Disconnected,
-                Remote = left.Remote || right.Remote
+                Remote = left.Remote || right.Remote,
+                Time = left.Time && right.Time
             };
         }
     }

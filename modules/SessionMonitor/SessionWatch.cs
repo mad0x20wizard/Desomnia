@@ -83,15 +83,18 @@ namespace MadWizard.Desomnia.Session
 
         private bool HadUsageSince(TimeSpan interval)
         {
-            if (Session.IsRemoteConnected && !Clock.Remote)
+            if (Clock.Time)
             {
-                return true;
-            }
-            else if ((Clock.Disconnected || Session.IsConnected) && Session.IdleTime is TimeSpan time)
-            {
-                if (time < (MaxIdleTime ?? interval))
+                if (Session.IsRemoteConnected && !Clock.Remote)
                 {
                     return true;
+                }
+                else if ((Clock.Disconnected || Session.IsConnected) && Session.IdleTime is TimeSpan time)
+                {
+                    if (time < (MaxIdleTime ?? interval))
+                    {
+                        return true;
+                    }
                 }
             }
 

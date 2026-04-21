@@ -46,11 +46,13 @@ namespace MadWizard.Desomnia.Session.Configuration
         public TimeSpan? MaxIdleTime { get; set; }
 
         #region Session :: ClockOptions
+        private bool? ClockTime { get; set; }
         private bool? ClockRemote { get; set; }
         private bool? ClockDisconnected { get; set; }
 
         public virtual ClockOptions MakeClockOptions(SessionMonitorConfig monitor) => new()
         {
+            Time = this.ClockTime ?? monitor.ClockTime,
             Remote = this.ClockRemote ?? monitor.ClockRemote,
             Disconnected = this.ClockDisconnected ?? monitor.ClockDisconnected,
         };
@@ -73,6 +75,7 @@ namespace MadWizard.Desomnia.Session.Configuration
     public class SessionMonitorConfig : SessionMonitorConfig<SessionMonitorConfig, SessionWatchDescriptor>
     {
         #region SessionMonitor :: ClockOptions
+        internal bool ClockTime { get; set; } = true;
         internal bool ClockRemote { get; set; } = false;
         internal bool ClockDisconnected { get; set; } = false;
         #endregion
