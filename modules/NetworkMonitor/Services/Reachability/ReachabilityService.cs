@@ -220,7 +220,7 @@ namespace MadWizard.Desomnia.Network.Reachability
             ping.SendPingAsync(ip, TimeSpan.FromMilliseconds(100), options: new(64, true));
         }
 
-        internal void SendARPRequest(IPAddress ip)
+        internal void SendARPRequest(IPAddress ip, PhysicalAddress? mac = null)
         {
             if (ip.AddressFamily != AddressFamily.InterNetwork)
                 throw new ArgumentException($"Only IPv4 is supported; got '{ip}'");
@@ -229,7 +229,7 @@ namespace MadWizard.Desomnia.Network.Reachability
 
             Logger.LogTrace($"Sending ARP request for {ip}");
 
-            var request = new EthernetPacket(Device.PhysicalAddress, PhysicalAddressExt.Broadcast, EthernetType.Arp)
+            var request = new EthernetPacket(Device.PhysicalAddress, mac ?? PhysicalAddressExt.Broadcast, EthernetType.Arp)
             {
                 PayloadPacket = new ArpPacket(ArpOperation.Request,
                 PhysicalAddressExt.Empty, ip, // target
@@ -239,7 +239,7 @@ namespace MadWizard.Desomnia.Network.Reachability
             Device.SendPacket(request);
         }
 
-        internal void SendNDPNeighborSolicitation(IPAddress ip)
+        internal void SendNDPNeighborSolicitation(IPAddress ip, PhysicalAddress? mac = null)
         {
             if (ip.AddressFamily != AddressFamily.InterNetworkV6)
                 throw new ArgumentException($"Only IPv6 is supported; got '{ip}'");
@@ -251,7 +251,7 @@ namespace MadWizard.Desomnia.Network.Reachability
             var ipSource = Device.IPv6LinkLocalAddress;
             var ipTarget = ip.DeriveIPv6SolicitedNodeMulticastAddress();
 
-            var request = new EthernetPacket(Device.PhysicalAddress, ipTarget.DeriveLayer2MulticastAddress(), EthernetType.IPv6)
+            var request = new EthernetPacket(Device.PhysicalAddress, mac ?? ipTarget.DeriveLayer2MulticastAddress(), EthernetType.IPv6)
             {
                 PayloadPacket = new IPv6Packet(ipSource, ipTarget).WithNDPNeighborSolicitation(ip, Device.PhysicalAddress)
             };
