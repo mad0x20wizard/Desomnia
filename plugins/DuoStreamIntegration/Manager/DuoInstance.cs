@@ -1,8 +1,6 @@
-using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Service.Duo.Configuration;
 using MadWizard.Desomnia.Service.Duo.Sunshine;
 using MadWizard.Desomnia.Session.Manager;
-using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager
@@ -114,7 +112,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
         private async Task NetworkService_Demand(Event @event)
         {
-            if (@event is Network.Demand.DemandEvent) // don't trigger for inspection events
+            if (@event is not InspectionEvent) // don't trigger for inspection events
             {
                 await TriggerDemandAsync();
             }

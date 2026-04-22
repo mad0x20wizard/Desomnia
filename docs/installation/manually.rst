@@ -3,40 +3,40 @@ Manually
 
 :OS: 🐧 *Linux*
 
-Follow this guide to learn how to use Desomnia on your Linux-based operating system and set everything up yourself.
+Follow this guide to set up Desomnia on Linux manually, with full control over the binary placement and service configuration.
 
 Prerequisites
 -------------
 
-In order to be able to run Desomnia on your system, you will need the .NET Runtime (< 100 MB in size). You can use the official script, to download everything you need into the default location, where the runtime environment will be found automatically::
+Desomnia requires the .NET Runtime. Use the official script to download and install it into the default location, where it will be found automatically::
 
     curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 10.0 -runtime dotnet --install-dir /usr/share/dotnet
 
-For the monitoring of network services the `libpcap`_ library is used, which is usually already installed on most distributions. If you find it missing, please install it with the package manager of your system. On a Debian-based distribution (Ubuntu, Raspbian, etc.), you can do this via::
+For monitoring network services, the `libpcap`_ library is required. It is usually already present on most distributions. If it is missing, install it via your package manager. On Debian-based distributions (Ubuntu, Raspbian, etc.)::
 
     apt-get install libpcap-dev
 
 Portable mode
 -------------
 
-To see if Desomnia is compatible with your system and network infrastructure, you can try using the application in portable mode.
+To verify that Desomnia is compatible with your system and network infrastructure before committing to a full installation, you can run it in portable mode.
 
-First go to the `GitHub Releases <https://github.com/mad0x20wizard/Desomnia/releases>`_ page and download the appropriate version for your platform. Set the necessary executable permission on the binary with ``chmod +x ./desomniad``. Then create an suitable configuration file and place it next to the binary. Additional plugin archives can be downloaded into a subdirectory ``plugins``. You can then test the application by running ``./desomniad`` as root.
+Download the appropriate binary for your platform from the `GitHub Releases <https://github.com/mad0x20wizard/Desomnia/releases>`_ page. Set the executable permission with ``chmod +x ./desomniad``, then create a suitable configuration file and place it next to the binary. Additional plugin archives can be placed in a subdirectory named ``plugins``. Run the application as root with ``./desomniad``.
 
 Filesystem layout
 -----------------
 
-If you aim for a more persistent installation, you are encouraged to use these locations in alignment with the `Filesystem Hierarchy Standard`_ (FHS) on Unix systems:
+For a persistent installation, use the following locations in alignment with the `Filesystem Hierarchy Standard`_ (FHS):
 
 /usr/sbin
-    Drop the appropriate executable for your platform and architecture into this location, so it can automatically be found. Don't forget to set the necessary executable permission on the file with ``chmod +x /usr/sbin/desomniad``.
+    Drop the binary for your platform and architecture here so it can be found automatically. Set the executable permission with ``chmod +x /usr/sbin/desomniad``.
 
 .. include:: ./paths.rst
 
 Service configuration
 ---------------------
 
-In order for systemd to manage the automatic start and stop of the service, we need to create a service unit, describing how to start the service.
+Create a systemd service unit to manage automatic start and stop:
 
 /etc/systemd/system/desomnia.service
     .. code:: ini
@@ -53,12 +53,12 @@ In order for systemd to manage the automatic start and stop of the service, we n
         [Install]
         WantedBy=multi-user.target
 
-    You can use that ``ExecStartPre`` statement, to make sure that the log folder is cleaned every time when the application starts. I use this mostly for debugging purposes.
+    The ``ExecStartPre`` statement clears the log folder on each start, which is useful for debugging.
 
 Starting and stopping
 +++++++++++++++++++++
 
-After you created or changed the configuration file, you have to reload systemd with ``systemctl daemon-reload``. If you want that Desomnia is started with the system, you can enable it with ``systemctl enable desomnia``. In any case you will start Desomnia with ``systemctl start desomnia`` and stop it gracefully with ``systemctl stop desomnia``.
+After creating or modifying the configuration file, reload systemd with ``systemctl daemon-reload``. To start Desomnia automatically with the system, enable it with ``systemctl enable desomnia``. Start the service with ``systemctl start desomnia`` and stop it gracefully with ``systemctl stop desomnia``.
 
 Journal
 +++++++

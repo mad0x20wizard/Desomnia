@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Logging;
-using System.Diagnostics;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -28,7 +27,7 @@ namespace MadWizard.Desomnia.Network.Manager
 
         private void exec(string arguments)
         {
-            Process command = new()
+            System.Diagnostics.Process command = new()
             {
                 StartInfo = new()
                 {

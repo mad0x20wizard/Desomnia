@@ -3,20 +3,19 @@ Docker container
 
 :OS: 🐧 *Linux*
 
-Desomnia can be run inside a `Docker container`_, which isolates the service from the rest of the system and improves portability. It's also the easiest way to get an instance up and running on Linux, as it comes packaged with all the necessary libraries and tools. Only two additional capabilities need to be granted explicitly, as Desomnia requires raw network access in order to function correctly, something that Docker usually prohibits.
+Desomnia can be run inside a `Docker container`_, which isolates the service from the rest of the system and improves portability. It is also the easiest way to get an instance running on Linux, as it comes packaged with all necessary libraries and plugins. Only two additional capabilities need to be granted explicitly, as Desomnia requires raw network access — something Docker restricts by default.
 
-There are a couple of directories, that you have to bind mount, to provide the service with your individual configuration and to see what's going on:
+Filesystem layout
+-----------------
+
+The following directories inside the container must be bind-mounted from the host to provide your configuration and access log output:
 
 .. include:: ./paths.rst
-
-.. note::
-
-  All compatible plugins from the main repository are included by default. You only have to provide versions of your own custom plugins.
 
 Configuration
 -------------
 
-This is an example ``docker-compose.yaml`` file, which contains all the configuration settings needed to boot up the Docker container:
+The following ``docker-compose.yaml`` contains all the settings needed to start the container:
 
 .. code:: yaml
 
@@ -37,6 +36,6 @@ This is an example ``docker-compose.yaml`` file, which contains all the configur
         - NET_RAW
         - NET_ADMIN
 
-Place this in the current directory and run ``docker compose up`` to start the container.
+Place this file in the current directory and run ``docker compose up`` to start the container. The host paths on the left side of each volume mapping (e.g. ``./config``) are relative to the directory where the compose file lives; the right side shows the path inside the container.
 
 .. _`Docker container`: https://hub.docker.com/r/mad0x20wizard/desomnia

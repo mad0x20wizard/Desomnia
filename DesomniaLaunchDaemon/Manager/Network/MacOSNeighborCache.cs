@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Logging;
-using System.Diagnostics;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -47,7 +46,7 @@ namespace MadWizard.Desomnia.Network.Manager
 
         private void arp(string arguments)
         {
-            Process command = new()
+            System.Diagnostics.Process command = new()
             {
                 StartInfo = new()
                 {
@@ -74,7 +73,7 @@ namespace MadWizard.Desomnia.Network.Manager
 
         private void ndp(string arguments)
         {
-            Process command = new()
+            System.Diagnostics.Process command = new()
             {
                 StartInfo = new()
                 {

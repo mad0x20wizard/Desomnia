@@ -76,5 +76,14 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
             Silent = WakeSilent,
         };
         #endregion
+
+        #region         YieldOptions
+        TimeSpan?       YieldTimeout { get; set; }
+
+        public virtual YieldOptions MakeYieldOptions(NetworkMonitorConfig network) => new()
+        {
+            Timeout = YieldTimeout ?? network.YieldTimeout,
+        };
+        #endregion
     }
 }

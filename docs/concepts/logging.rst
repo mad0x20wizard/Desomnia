@@ -6,7 +6,7 @@ If you do not provide a ``NLog.config`` file, Desomnia will only write **INFO**-
 Example
 -------
 
-This is a example configuration, that I use for debugging Desomnia. To make it easier to follow the stream of events from various sources, different monitors are written to different log files.
+This is an example configuration for debugging purposes. It splits events from different monitors into separate log files to make the stream of events easier to follow.
 
 .. code:: xml
 
@@ -76,7 +76,7 @@ Due to the nature of network traffic, events processed by the :doc:`/modules/net
 ``${host:withSource=true|false:withRequest=true|false}``
     This will output the name of the contextual NetworkHost, while producing the output. If the event happened outside the scope of a single host, the output will be empty. Use ``:whenEmpty="network"`` to route these events into a single log file, called "network". There are two optional parameters, which values default to ``false``:
     
-    - Using ``withSource=true`` will append the source host (either IP or hostname) to the filename, so that each source will have it's own logfile in a directory with the name of the target host.
+    - Using ``withSource=true`` will append the source host (either IP or hostname) to the filename, so that each source will have its own logfile in a directory with the name of the target host.
     - Using ``withRequest=true`` will append the number of the demand request to the filename, so that each request will have it's own logfile in a directory with the name of the target host, source host or both. Only use this, if you expect a high level of concurrency, since this will create many individual files.
 
 

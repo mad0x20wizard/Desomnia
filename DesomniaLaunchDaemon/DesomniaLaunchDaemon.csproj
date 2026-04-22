@@ -18,6 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="..\DesomniaCore\DesomniaCore.csproj" />
     <ProjectReference Include="..\modules\NetworkMonitor\NetworkMonitor.csproj" />
+    <ProjectReference Include="..\modules\ProcessMonitor\ProcessMonitor.csproj" />
   </ItemGroup>
 
 </Project>

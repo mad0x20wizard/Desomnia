@@ -35,6 +35,9 @@ namespace MadWizard.Desomnia.Service.Duo
                 SessionMonitor.Filters += SessionMonitor_Filter;
             }
 
+            AddEventAction(nameof(Idle), config.OnIdle);
+            AddEventAction(nameof(Demand), config.OnDemand);
+
             sessionManager.UserLogon += SessionManager_UserLogon;
             sessionManager.UserLogoff += SessionManager_UserLogoff;
 

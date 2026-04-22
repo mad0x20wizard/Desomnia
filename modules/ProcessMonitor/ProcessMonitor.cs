@@ -12,6 +12,9 @@ namespace MadWizard.Desomnia.Process
 
         void IStartable.Start()
         {
+            AddEventAction(nameof(Idle), config.OnIdle);
+            AddEventAction(nameof(Demand), config.OnDemand);
+
             foreach (var info in config.Process)
             {
                 StartTracking(CreateWatch(info));

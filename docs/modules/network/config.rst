@@ -54,7 +54,7 @@ Desomnia provides support for monitoring any number of installed network interfa
       watchYield="false"
       
       onConnect="..."
-      onDisconect="...">
+      onDisconnect="...">
 
       <!-- network entities -->
 
@@ -104,22 +104,7 @@ Desomnia can try to automatically discover the shape of your network. The values
 
 The following entities are available for auto-configuration:
 
-``MAC``
-  try to discover the MAC address of the configured hosts and routers
-``IPv4``
-   try to discover the IPv4 address of the configured hosts and routers
-``IPv6``
-  try to discover the IPv6 address(es) of the configured hosts and routers
-``Router``
-  try to discover the network routers
-🚧 ``VPN``
-  try to discover the available VPN devices, connected to your router (if possible)
-🚧 ``SleepProxy``
-  try to discover the sleep proxies on the network, to register the local services before sleep
-🚧 ``Services``
-  try to discover services of the remote hosts
-
-Alternatively you may specify either ``nothing`` or ``everything`` in order to disable auto-configuration or to try to discover as much as possible.
+.. include:: ./attributes/auto.rst
 
 autoTimeout
 +++++++++++
@@ -133,10 +118,15 @@ autoRefresh
 
 If you define this attribute, Desomnia will scan repeatedly for a changed configuration, waiting for the specified duration each time.
 
+.. _option-advertise:
+
 .. include:: ./options/demand.rst
 
 deviceTimeout
 +++++++++++++
+
+:⏱️ duration:
+:default: ``1min``
 
 The packet capture device can sometimes become unresponsive. If you select this option, the Network Monitor will restart if no packets have been captured for the specified duration.
 
@@ -683,10 +673,10 @@ This rule configures the embedded packet filter to either include or exclude req
 
   <HostRangeFilterRule name="anything" type="MustNot"
     network="192.168.178.0/24"
-    firstIP="192.168.178.10" 
+    firstIP="192.168.178.10"
     lastIP="192.168.178.20">
 
-  </HostFilterRule>
+  </HostRangeFilterRule>
 
 .. include:: /attributes/filtertype.rst
 
@@ -869,7 +859,7 @@ When you configure a ``<Service>`` you can configure all the attributes of a ``<
     <HostFilterRule ... />
     <HostRangeFilterRule ... />
 
-  </ServiceFilterRule>
+  </Service>
 
 serviceName
 +++++++++++
@@ -921,4 +911,4 @@ When you configure a ``<HTTPService>`` you can configure all the attributes of a
 
     <RequestFilterRule ... />
 
-  </ServiceFilterRule>
+  </HTTPService>

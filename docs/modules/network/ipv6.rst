@@ -1,39 +1,41 @@
 IPv6 support
 ============
 
-Reading through the :doc:`/guides/wake` guide you may have wondered, if Desomnia can handle IPv6 traffic, too. It may be shocking for you to hear, but since we're living in the 21th century, of course it can! But since IPv6 addresses are somewhat more clumsy to handle, we will dedicate an own little chapter for them. Also, as a matter of fact, in some networks you won't notice any difference, even if you don't configure it. Hope you still find it an interesting read.
+Desomnia supports IPv6 alongside IPv4. In many networks no special configuration is needed — if your router advertises IPv6 addresses via DNS and you have :doc:`auto-configuration <auto>` enabled, Desomnia will pick them up automatically. This page covers the cases where you want to be explicit.
 
 Notation
 --------
 
-As you might expect, wherever you can specify an IPv4 address, you can also declare a corresponding IPv6 address:
+Wherever you can specify an IPv4 address, you can also declare an IPv6 address. The same applies to network ranges in CIDR notation:
 
 .. code:: xml
 
   <NetworkMonitor interface="eth0" network="2a02:8071:51e0:71e0::/59">
 
-    <HostFilterRule name="neo" IPv6="2a02:8071:51e0:71e0:c43f:bb3f:b00c:faf5">
+    <HostFilterRule name="neo" IPv6="2a02:8071:51e0:71e0:c43f:bb3f:b00c:faf5" />
 
     <RemoteHost name="morpheus" MAC="00:1A:2B:3C:4D:5E"
-      IPv4="192.168.178.10" 
+      IPv4="192.168.178.10"
       IPv6="2a02:8071:51e0:71e0:1048:a52:b322:dc4f" />
 
-    <HostRange name="range" network="2a02:8071:51e0:71e0::/59">
+    <HostRange name="range" network="2a02:8071:51e0:71e0::/59" />
 
-    <HostRange name="range" 
+    <HostRange name="range"
       firstIP="2a02:8071:51e0:71e0:0000:0000:0000:0000"
-      lastIP="2a02:8071:51e0:71ff:ffff:ffff:ffff:ffff">
+      lastIP="2a02:8071:51e0:71ff:ffff:ffff:ffff:ffff" />
 
   </NetworkMonitor>
 
-However, bearing in mind the transient nature of IPv6 addresses, this will rarely be necessary. Contrary to the tradition of assigning each of your hosts a well-crafted static IPv4 address and marvelling at their numerology, IPv6 addresses are pulled from a practically endless pool. Given their validity within the scope of the global address space, they are changed periodically to prevent them from becoming your new personal ID.
-
-In order to enable your devices to wake in response to IPv6-based requests, the addresses will most likely be gathered via one of the available :doc:`auto` methods. You see, manual configuration of IPv6 addresses is mainly included for symmetry's sake. Please send me an email, if you find that feature actually useful and explain to me (at length) why that's so.
+In practice, static IPv6 addresses are rarely useful. Unlike IPv4, where hosts are typically assigned fixed addresses, IPv6 addresses are drawn from a large pool and rotated periodically to limit long-term tracking. Static configuration is supported for completeness, but auto-configuration is the expected approach for IPv6.
 
 Behind the scenes
 -----------------
 
-Just as `ARP`_ is used to resolve IPv4 addresses to their corresponding MAC addresses, `NDP`_ is used to resolve IPv6 addresses. Besides being quite a bit more sophisticated protocol than it's predecessor, really nothing much changed. Thankfully, network nodes still don't complain when the MAC address of another node changes rapidly, occasionally some hundred times an hour. There are of course some attempts to secure NDP, but you probably won't find them anywhere near consumer devices, anytime soon. The simple fact is the following: basically you will have to configure your IP to MAC address mappings statically on every switch and router on the network, to successfully mitigate these kind of "attack" vectors. Beyond that each application sending sensitive information over any kind of network needs to protect itself from man-in-the-middle attacks anyway, which is why we use HTTPS nowadays on a per default basis. So the probability of such attacks actually being successful in the first place is quite low. That's good for us, as it means nobody will be suspicious of what we're doing for the foreseeable future.
+Just as `ARP`_ resolves IPv4 addresses to MAC addresses, `NDP`_ does the same for IPv6. The underlying principle is the same: when a host wants to communicate with an IP address on the local network, it broadcasts a resolution request and the owner of that address replies with its MAC address.
+
+Desomnia relies on this mechanism when advertising IP addresses on behalf of a sleeping host. A natural question is whether this is safe to do — specifically, whether a third party could exploit the same mechanism maliciously.
+
+NDP does include security extensions (SEND), but these are rarely deployed outside of managed enterprise networks and are not present on typical consumer hardware. In practice, the exposure is limited: any application handling sensitive data is expected to use transport-layer encryption regardless of the network it runs on, so the ability to intercept traffic at the link layer does not bypass meaningful security boundaries. Desomnia's use of NDP advertisement is consistent with this model.
 
 .. _`ARP`: https://en.wikipedia.org/wiki/Address_Resolution_Protocol
 .. _`NDP`: https://en.wikipedia.org/wiki/Neighbor_Discovery_Protocol

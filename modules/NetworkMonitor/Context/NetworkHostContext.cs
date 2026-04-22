@@ -125,6 +125,7 @@ namespace MadWizard.Desomnia.Network.Context
                     .WithParameter(TypedParameter.From(config.MakeDemandOptions(networkConfig)))
                     .WithParameter(TypedParameter.From(config.MakePingOptions(networkConfig)))
                     .WithParameter(TypedParameter.From(config.MakeWakeOptions(networkConfig)))
+                    .WithParameter(TypedParameter.From(config.MakeYieldOptions(networkConfig)))
                     .SingleInstance()
                     .AsSelf();
             });
@@ -154,6 +155,7 @@ namespace MadWizard.Desomnia.Network.Context
                     .WithParameter(TypedParameter.From(config.MakeDemandOptions(networkConfig)))
                     .WithParameter(TypedParameter.From(config.MakePingOptions(networkConfig)))
                     .WithParameter(TypedParameter.From(config.MakeWakeOptions(networkConfig)))
+                    .WithParameter(TypedParameter.From(config.MakeYieldOptions(networkConfig)))
                     .SingleInstance()
                     .AsSelf();
 

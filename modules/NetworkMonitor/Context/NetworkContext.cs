@@ -1,6 +1,7 @@
 ﻿using Autofac;
 using Autofac.Features.Metadata;
 using MadWizard.Desomnia.Network.Configuration;
+using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Context.Watch;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
@@ -83,12 +84,23 @@ namespace MadWizard.Desomnia.Network.Context
 
                 RegisterContextAwareLogger(parent, builder);
 
+                if (config.WatchMode == WatchMode.Promiscuous)
+                {
+                    builder.RegisterType<PromiscuousModeMutex>()
+                        .WithParameter(TypedParameter.From(config.PingTimeout))
+                        .AsImplementedInterfaces()
+                        .InstancePerNetwork()
+                        .AsSelf();
+                }
+
                 builder.RegisterType<NetworkMonitor>()
                     .WithParameter(TypedParameter.From(Name))
                     .WithParameter(TypedParameter.From(config.MakeWatchOptions()))
                     .PropertiesAutowired(PropertyWiringOptions.AllowCircularDependencies)
                     .OnActivated(args =>
                     {
+                        args.Instance.AddEventAction(nameof(NetworkMonitor.Idle), config.OnIdle);
+                        args.Instance.AddEventAction(nameof(NetworkMonitor.Demand), config.OnDemand);
                         args.Instance.AddEventAction(nameof(NetworkMonitor.Connected), config.OnConnect);
                         args.Instance.AddEventAction(nameof(NetworkMonitor.Disconnected), config.OnDisconnect);
                     })
@@ -134,13 +146,13 @@ namespace MadWizard.Desomnia.Network.Context
 
                 if (config.DeviceTimeout is TimeSpan timeout)
                 {
-                    builder.RegisterType<CaptureWatchDog>().AutoActivate()
+                    var reg = builder.RegisterType<CaptureWatchDog>().AutoActivate()
                         .WithParameter(TypedParameter.From(timeout))
                         .AsImplementedInterfaces()
                         .InstancePerNetwork()
-                        .AsSelf()
+                        .AsSelf();
 
-                        .OnActivated(x => x.Instance.GatewayTimeout = config.PingTimeout);
+                    reg.OnActivated(x => x.Instance.GatewayTimeout = config.PingTimeout);
                 }
 
                 if (config.Hosts.Any(h => h.Trace))

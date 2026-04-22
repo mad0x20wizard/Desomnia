@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep *)",
+      "Read(//c/Users/Wizard/Projekte/Desomnia/modules/NetworkSessionMonitor/Configuration/**)",
+      "Read(//c/Users/Wizard/Projekte/Desomnia/modules/NetworkSessionMonitor/Configuration/Options/**)",
+      "WebFetch(domain:github.com)"
+    ]
+  }
+}

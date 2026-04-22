@@ -7,5 +7,8 @@ namespace MadWizard.Desomnia.Session.Configuration
     {
         public DelayedAction? OnSessionIdle { get; set; }
         public DelayedAction? OnSessionDemand { get; set; }
+        public DelayedAction? OnSessionConsoleConnect { get; set; }
+        public DelayedAction? OnSessionRemoteConnect { get; set; }
+        public DelayedAction? OnSessionDisconnect { get; set; }
     }
 }

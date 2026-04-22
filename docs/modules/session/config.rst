@@ -11,6 +11,7 @@ You can configure any number of selectors to watch OS user sessions. If multiple
   <SystemMonitor>
 
     <SessionMonitor
+      clockTime="true"
       clockRemote="false"
       clockDisconnected="false">
 
@@ -35,6 +36,7 @@ All users, identified by their name, will be matched by this selector.
 
   <User name="Smith" 
 
+    clockTime="true"
     clockRemote="false"
     clockDisconnected="false"
 
@@ -76,7 +78,7 @@ onIdle
 
 :⚡️ event:
 
-This event is triggered if the processing time used since the last timeout is less than the configured ``minCPU`` value. If no CPU threshold is configured, this event will not be triggered.
+This event is triggered when the session has been idle — that is, when no user input has been detected for longer than the configured ``maxIdleTime``, or the global ``timeout`` if ``maxIdleTime`` is not set.
 
 onLogin
 +++++++
@@ -176,7 +178,7 @@ This event is triggered when the session is disconnected.
 Administrator
 -------------
 
-Only users with administrative permissions will be matched by this selector.
+All users with administrative permissions will be matched by this selector, so you cannot configure the ``name`` attribute here.
 
 Apart from that everything is configured exactly the same as ``<User>``.
 

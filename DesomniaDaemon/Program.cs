@@ -46,6 +46,7 @@ try
             builder.RegisterModule<MadWizard.Desomnia.CoreModule>();
             builder.RegisterModule<MadWizard.Desomnia.Daemon.PlatformModule>();
             builder.RegisterModule<MadWizard.Desomnia.Network.Module>();
+            builder.RegisterModule<MadWizard.Desomnia.Process.Module>();
 
             builder.RegisterPluginModules();
 

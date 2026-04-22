@@ -14,7 +14,7 @@ namespace MadWizard.Desomnia.Session
 
         public TimeSpan? MaxIdleTime { get; private set; }
 
-        private ClockOptions Clock { get; set; }
+        private ClockOptions Clock { get; set; } = new() { Time = true };
 
         public event EventInvocation? Login;
         public event EventInvocation? RemoteLogin;
@@ -83,15 +83,18 @@ namespace MadWizard.Desomnia.Session
 
         private bool HadUsageSince(TimeSpan interval)
         {
-            if (Session.IsRemoteConnected && !Clock.Remote)
+            if (Clock.Time)
             {
-                return true;
-            }
-            else if ((Clock.Disconnected || Session.IsConnected) && Session.IdleTime is TimeSpan time)
-            {
-                if (time < (MaxIdleTime ?? interval))
+                if (Session.IsRemoteConnected && !Clock.Remote)
                 {
                     return true;
+                }
+                else if ((Clock.Disconnected || Session.IsConnected) && Session.IdleTime is TimeSpan time)
+                {
+                    if (time < (MaxIdleTime ?? interval))
+                    {
+                        return true;
+                    }
                 }
             }
 
