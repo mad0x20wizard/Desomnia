@@ -67,4 +67,4 @@ filePath
 
 :🔍 regex:
 
-A regular expression matched against the path of each open file within the session. This criterion is only evaluated for sessions that have open files; it has no effect on passive sessions.
+A regular expression matched against the **absolute** path of each open file within the session, relative to the filesystem root. This criterion is only evaluated for sessions that have open files; it has no effect on passive sessions.

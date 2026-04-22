@@ -22,13 +22,15 @@ Choosing an installation method
    * - :doc:`Docker </installation/docker>`
      - 🐧 Linux
      - Good if you prefer containerised deployments. All dependencies are bundled; no separate installation step required.
-   * - :doc:`Manual </installation/manually>`
+   * - :doc:`Manually </installation/manually>`
      - 🐧 Linux
      - Full control over binary placement and service configuration. Requires you to install the .NET runtime and libpcap yourself.
 
 What to read next
 -----------------
 
-Once Desomnia is installed and running, the :doc:`/guides/sleep` guide is the best place to start. It explains how to replace the built-in power management with Desomnia's configurable monitoring, and introduces the concepts that all other guides build on.
+Once Desomnia is installed and running, the :doc:`/guides/sleep` guide is the best place to start, if you want to replace the built-in power management with Desomnia's configurable monitoring.
 
-If your primary goal is to wake remote hosts on demand, head directly to the Wake-on-LAN guides: start with :doc:`/guides/wol-client` if Desomnia runs on the machine that initiates the connection, or :doc:`/guides/wol-proxy` if it runs on an always-on device that watches the network on behalf of others.
+If your primary goal is to wake remote hosts on demand, head directly to the Wake-on-LAN guides: start with :doc:`/guides/wol-client` if Desomnia should run locally on the machine that initiates the connection, or :doc:`/guides/wol-proxy` if you want it to run on an always-on device that watches the network and send Magic Packets on behalf of other hosts. The proxy deployment is the most sophisticated and feature rich.
+
+If you want to reach sleeping hosts from **outside your local network** — without keeping a persistent VPN tunnel open — read the :doc:`/guides/remote-access` guide. It builds on the proxy setup and explains how to use Single Packet Authorization (SPA) to let Desomnia wake hosts in response to authenticated requests arriving from the internet, while remaining completely silent to port scanners and automated bots. This is relevant when you have a router that forwards ports into your network and you want to trigger wake-ups from a laptop on the road or a mobile connection.
