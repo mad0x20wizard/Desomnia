@@ -140,6 +140,32 @@ MAC addresses are required for Wake-on-LAN and cannot be obtained from DNS. Deso
 
 The following router integrations are currently available:
 
-- 🚧 FRITZ!Box (planned)
+- 🚧 :doc:`FRITZ!Box </modules/network/routers/fritzbox>` (planned)
 
 If none of these sources is available for a given host, its MAC address must be configured statically.
+
+Discovering MAC addresses manually
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If a host is currently online, its MAC address can usually be obtained from one of the following sources.
+
+**The host itself**
+  On Windows, run ``ipconfig /all`` and look for the ``Physical Address`` field on the relevant network adapter. On Linux or macOS, use ``ip link show`` or ``ifconfig``.
+
+**ARP table on the machine running Desomnia**
+  If the host is reachable, ping it once to populate the ARP cache, then inspect the table:
+
+  .. code:: powershell
+
+     # Windows
+     arp -a
+
+  .. code:: bash
+
+     # Linux / macOS
+     ip neigh     # or: arp -n
+
+  Find the entry matching the host's IP address to read its MAC.
+
+**Router admin interface**
+  Most routers expose a DHCP lease table that lists MAC addresses for all known devices, including hosts that are currently offline. Look for a page labelled *LAN*, *Connected devices*, *DHCP*, or similar in your router's web interface.

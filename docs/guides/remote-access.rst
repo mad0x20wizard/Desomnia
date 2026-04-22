@@ -3,36 +3,138 @@ Remote Access
 
 :OS: 🪐 *Platform-independent*
 
-A VPN is the standard solution for accessing your home lab from outside your network, and Desomnia works well alongside one. However, VPN tunnels introduce additional encapsulation that adds latency — sometimes noticeably so for applications like game streaming or remote desktop sessions. Single Packet Authorization (SPA) offers an alternative: a short authentication handshake that grants access without requiring a persistent tunnel.
+Reaching a sleeping host from outside your local network requires solving two problems at once: getting the wake signal across the network boundary, and controlling which external sources are permitted to trigger a wake-up. The four approaches below address both, ordered from simplest to most sophisticated.
 
-The current role of SPA in Desomnia is specific: it protects the wake-up mechanism from being triggered by unsolicited traffic arriving from outside your network. Port scanners and bots probing your router's forwarded ports will not know the knock sequence and cannot wake your hosts.
+Port forwarding
+---------------
+
+The simplest path requires no VPN and no changes on the connecting device. Run Desomnia in :doc:`promiscuous mode </modules/network/promiscuous>` on an always-on device inside your network and forward one or more service ports on your router to that device. When an external client connects, the connection attempt arrives at the proxy, which sends the Magic Packet and wakes the sleeping host transparently.
+
+Start with the :doc:`wol-proxy` guide if you have not done so already. Then declare your router and allow it to pass on externally-originating requests:
+
+.. code:: xml
+
+   <NetworkMonitor watchMode="promiscuous">
+     <Router name="gateway" MAC="B0:F2:08:0A:D1:14" IPv4="192.168.1.1" allowWakeByProxy="true" />
+
+     <RemoteHost name="server" MAC="00:1A:2B:3C:4D:5E" IPv4="192.168.1.10">
+       <Service name="SSH" port="22" />
+     </RemoteHost>
+   </NetworkMonitor>
+
+``allowWakeByProxy="true"`` permits packets forwarded by the router — those carrying a source IP different from the router's own — to trigger wake-ups. Without it, Desomnia blocks all externally-originating traffic by default.
+
+.. caution::
+
+   With port forwarding alone, any host on the internet that reaches the forwarded port can trigger a wake-up. Add a ``<ForeignHostFilterRule>`` to restrict which source addresses are allowed through:
+
+   .. code:: xml
+
+      <ForeignHostFilterRule>
+        <HostFilterRule name="my-laptop" IPv4="203.0.113.42" />
+      </ForeignHostFilterRule>
+
+   This is straightforward when your external IP is static and known. If your IP is dynamic or you connect from multiple locations, `Single Packet Authorization`_ is the right solution.
+
+Unicast Magic Packets
+---------------------
+
+If your router supports **static IP-to-MAC address mappings**, Magic Packets can be sent as Layer 3 UDP unicast and routed across the network boundary — no always-on proxy required. Desomnia runs in client mode on the machine you connect from and handles the wake-up automatically.
+
+When you try to connect to a sleeping host, Desomnia detects the attempt and sends a Magic Packet. With ``wakeType="auto"`` (the default), it checks whether the target IP is on the same subnet. If not, it sends the packet as a Layer 3 UDP unicast. The router uses its static ARP table to deliver the packet to the sleeping host's MAC address.
+
+.. code:: xml
+
+   <NetworkMonitor>
+     <RemoteHost name="server" MAC="00:1A:2B:3C:4D:5E" IPv4="192.168.1.10">
+       <Service name="SSH" port="22" />
+     </RemoteHost>
+   </NetworkMonitor>
+
+This works in two scenarios:
+
+- **Router-integrated VPN**: connect to your router's VPN first. The VPN makes the remote network reachable from your machine; Desomnia sends the Magic Packet as a unicast on the VPN interface and the router delivers it using its static ARP table.
+- **WoL port forwarding**: some routers can accept and forward an external Magic Packet to an internal host's IP via a dedicated Wake-on-LAN forwarding feature. Forward the WoL port (UDP 9 by default) on your router and refer to your router's documentation for how to enable WoL from outside.
+
+Follow the :doc:`wol-client` guide for a full walkthrough of client mode configuration.
 
 .. note::
-   SPA authenticates *access* — it does not encrypt your data traffic. If the connection itself needs to be private, combine SPA with application-level encryption such as SSH or TLS, or use a VPN in addition.
 
-See also: :doc:`/modules/network/vpn` and :doc:`/modules/network/knocking`.
+   Many consumer routers — including the FRITZ!Box — do not support static ARP entries, making routed Magic Packets impossible. If your router does not support this, use the proxy approach instead. See :doc:`/modules/network/router` and the individual router pages for compatibility details.
 
-How it works
-------------
+VPN
+---
 
-With a conventional connection, authentication happens after the connection is established. SPA reverses this: before any connection attempt is allowed through, the client sends a single short packet to the server. If the server can validate it, the client's IP address is temporarily authorized. If not, the server remains completely silent — it gives no indication that any service is running, which is effective against automated scanning.
+Running Desomnia in proxy mode alongside a VPN is the most common approach for regular remote access. The VPN tunnel delivers connection attempts inside the local network; the proxy detects them and sends Magic Packets. Authentication and encryption are handled entirely by the VPN.
 
-In Desomnia, when a validated knock is received, the sender's IP is added to a temporary trusted range. Any connection attempt from that IP to a watched host during this window can trigger a wake-up. Once the window expires, the IP is removed and access is revoked.
+Which Desomnia configuration is needed depends on how the VPN presents traffic on the local segment:
 
-Receiver configuration
-----------------------
+Router-integrated VPN
++++++++++++++++++++++
 
-This section covers configuring Desomnia to listen for knock packets and authorize access on the **always-on device** running in proxy mode.
+When the VPN server is your router, forwarded packets carry the router's MAC as their physical sender. Declare the router and add a ``<VPNClient>`` entry for each known client. Desomnia pings these before permitting wake-ups, confirming that at least one VPN client is actually connected:
+
+.. code:: xml
+
+   <NetworkMonitor watchMode="promiscuous">
+     <Router name="gateway" MAC="B0:F2:08:0A:D1:14" IPv4="192.168.1.1" vpnTimeout="250ms">
+       <VPNClient name="Alice" IPv4="192.168.1.201" />
+     </Router>
+
+     <RemoteHost name="server" MAC="00:1A:2B:3C:4D:5E" IPv4="192.168.1.10">
+       <Service name="RDP" port="3389" />
+     </RemoteHost>
+   </NetworkMonitor>
+
+When none of the declared VPN clients respond to a ping, forwarded packets are blocked — preventing idle internet traffic from waking hosts when nobody is actually connected. This matters because some routers answer ARP requests for VPN client IPs even when the client is offline, so address resolution alone cannot be trusted. See :doc:`/modules/network/router` and the :doc:`/modules/network/routers/fritzbox` page for further details.
+
+Standalone VPN server
++++++++++++++++++++++
+
+A VPN server running on a dedicated device inside the network does not route traffic through the default gateway, so no ``<Router>`` declaration is needed. If the VPN is configured for proxy ARP or subnet routing without masquerading, source IPs are preserved and Desomnia can identify individual clients.
+
+If VPN clients are assigned IPs outside the local subnet and a ``<ForeignHostFilterRule>`` is in place, declare the VPN range as a ``<HostRange>`` to let those clients through:
+
+.. code:: xml
+
+   <NetworkMonitor watchMode="promiscuous">
+     <HostRange name="vpn-clients" network="10.8.0.0/24" />
+
+     <ForeignHostFilterRule>
+       <HostRangeFilterRule name="vpn-clients" />
+     </ForeignHostFilterRule>
+
+     <RemoteHost name="server" MAC="00:1A:2B:3C:4D:5E" IPv4="192.168.1.10">
+       <Service name="RDP" port="3389" />
+     </RemoteHost>
+   </NetworkMonitor>
+
+See :doc:`/modules/network/vpn` for more details on the different VPN network models and how to configure each.
+
+Masquerading
+~~~~~~~~~~~~
+
+When the VPN masquerades traffic — :doc:`/modules/network/vpn/tailscale` in its default configuration, or :doc:`/modules/network/vpn/openvpn` in tun mode with NAT — all VPN clients appear to originate from the VPN node's local IP. Individual clients cannot be identified and per-client filtering is not possible, but wake-on-demand still works: Desomnia sees the connection attempt regardless of which client originated it. No configuration beyond the baseline proxy setup is required.
+
+Layer 2 bridge
+~~~~~~~~~~~~~~
+
+With an :doc:`/modules/network/vpn/openvpn` ``tap`` configuration, the VPN creates a Layer 2 bridge and VPN clients appear on the local network with their own MAC addresses. This is the most transparent model and equally requires no special Desomnia configuration — remote clients are indistinguishable from local ones.
+
+Single Packet Authorization
+----------------------------
+
+If a VPN is not an option — or if latency matters for your application — Single Packet Authorization (SPA) offers a lighter alternative. Instead of a persistent tunnel, the client sends a single short UDP packet to prove its identity. Desomnia validates it and temporarily authorizes the client's IP address; any connection attempt from that IP to a watched host during the authorization window triggers a wake-up. No ongoing connection is required on either side.
+
+This makes SPA particularly well suited to latency-sensitive workloads such as game streaming or remote desktop sessions, where even the per-packet overhead of a VPN tunnel is noticeable. It is also the right answer for the port-forwarding scenario when the external IP is not known in advance: SPA replaces the static ``<HostFilterRule>`` with dynamic, authenticated access.
 
 .. note::
-   If you already have an SPA listener running — either another instance of Desomnia, an original `fwknop <https://github.com/mrash/fwknop>`_ server, or a service managed by someone else — you can skip this section and continue with `Sender configuration`_.
 
-The receiver requires a proxy mode installation. If you have not done so yet, follow the :doc:`wol-proxy` guide first.
+   SPA authenticates *access* — it does not encrypt the data connection itself. Combine it with application-level encryption (SSH, TLS) or a VPN for confidentiality.
 
-Step 1: Allow traffic routed through the gateway
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+SPA requires a proxy mode installation. Start with the :doc:`wol-proxy` guide if you have not done so already.
 
-By default, Desomnia ignores connection attempts that were routed through the gateway. To enable this, set ``allowWakeByProxy="true"`` on your router declaration and add a ``<ForeignHostFilterRule>`` to tell Desomnia to handle inbound routed traffic:
+**Receiver** (always-on device, proxy mode):
 
 .. code:: xml
 
@@ -40,133 +142,34 @@ By default, Desomnia ignores connection attempts that were routed through the ga
      <Router name="gateway" MAC="B0:F2:08:0A:D1:14" IPv4="192.168.1.1" allowWakeByProxy="true" />
 
      <ForeignHostFilterRule>
-       <!-- authorized sources will be defined here -->
+       <DynamicHostRange name="trusted" knockMethod="plain" knockPort="12345" knockTimeout="30s">
+         <SharedSecret encoding="UTF-8">changeme</SharedSecret>
+       </DynamicHostRange>
      </ForeignHostFilterRule>
 
      <RemoteHost name="server" MAC="00:1A:2B:3C:4D:5E" IPv4="192.168.1.10">
-       <Service name="RDP" port="3389" />
        <Service name="SSH" port="22" />
      </RemoteHost>
    </NetworkMonitor>
 
-Without any nested rules inside ``<ForeignHostFilterRule>``, no external source is authorized yet. The next step adds the SPA listener, which grants authorization dynamically.
+Forward the knock port (UDP 12345 in this example) on your router to the always-on device.
 
-.. note::
-   You also need to configure port forwarding on your router to make the knock port reachable from the internet. The knock port is UDP by default.
-
-Step 2: Configure the SPA listener
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Add a ``<DynamicHostRange>`` inside the ``<ForeignHostFilterRule>``. When a valid knock packet arrives, the sender's IP is added to this range and can trigger wake-ups for the configured timeout duration:
-
-.. code:: xml
-
-   <ForeignHostFilterRule>
-     <DynamicHostRange name="trusted" knockMethod="plain" knockPort="12345" knockTimeout="30s">
-       <SharedSecret encoding="UTF-8">changeme</SharedSecret>
-     </DynamicHostRange>
-   </ForeignHostFilterRule>
-
-Replace ``changeme`` with your own shared secret, and ``12345`` with the port you have forwarded on your router.
-
-The ``knockTimeout`` defines how long the sender's IP remains authorized after a successful knock. It should be long enough for the target host to wake up and accept connections — typically 20–60 seconds depending on your hardware.
-
-.. caution::
-   The ``plain`` knock method transmits the shared secret as clear text. Anyone who can intercept the UDP packet can read the secret and replay it. This protects against port scanners and automated bots — which do not know the knock sequence — but not against an active attacker with the ability to capture network traffic.
-
-   Use ``plain`` for testing, or in scenarios where replay attacks are not a concern. For a deployment exposed to the internet for an extended period, use the FKO method instead — see :doc:`/plugins/fko`. To generate a cryptographically strong key for use with FKO, see :doc:`/modules/network/knocking`.
-
-Sender configuration
---------------------
-
-This section covers configuring Desomnia to automatically send a knock before connecting to a remote service, on **the machine you connect from**.
-
-.. note::
-   If you are using an external fwknop client, configure it according to its own documentation. The following covers Desomnia's built-in knock sender, which automates this process transparently.
-
-On the client machine, add knock attributes to the ``<RemoteHost>`` and configure the ``onServiceDemand`` event to trigger the knock automatically:
+**Sender** (machine you connect from):
 
 .. code:: xml
 
    <NetworkMonitor knockDelay="200ms" knockRepeat="3s" knockTimeout="30s">
-
      <RemoteHost name="server"
        onServiceDemand="knock"
        knockMethod="plain" knockPort="12345"
        knockSecret="changeme" knockEncoding="UTF-8"
        IPv4="203.0.113.1">
-
-       <Service name="RDP" port="3389" />
        <Service name="SSH" port="22" />
-
      </RemoteHost>
-
    </NetworkMonitor>
 
-Replace ``203.0.113.1`` with the public IP address (or hostname) of your router, and ensure the knock attributes match those configured on the receiver side.
+Replace ``203.0.113.1`` with your router's public IP or use DNS based lookup via ``hostname``. When Desomnia detects a connection attempt to ``server``, it sends the knock automatically, waits for the host to wake up, and forwards the connection.
 
-The knock timing attributes control the sending behaviour:
+.. caution::
 
-``knockDelay``
-  How long Desomnia waits after detecting a connection attempt before sending the knock. A short delay (100–500ms) is usually sufficient.
-
-``knockRepeat``
-  If set, Desomnia will resend the knock after this interval and continue doing so until ``knockTimeout`` expires. Useful if packets are occasionally dropped.
-
-``knockTimeout``
-  The total time Desomnia will keep trying. Should be at least as long as the receiver's ``knockTimeout`` to ensure the connection attempt falls within the authorization window.
-
-Knock attributes can be set at the ``<NetworkMonitor>`` level as defaults, at the ``<RemoteHost>`` level for a specific host, or at the ``<Service>`` level to override per service.
-
-Complete example
-----------------
-
-The following shows a minimal receiver and sender configuration working together using the ``plain`` method.
-
-**Receiver** (always-on device, proxy mode):
-
-.. code:: xml
-
-   <?xml version="1.0" encoding="UTF-8"?>
-   <SystemMonitor version="1">
-
-     <NetworkMonitor watchMode="promiscuous">
-       <Router name="gateway" MAC="B0:F2:08:0A:D1:14" IPv4="192.168.1.1" allowWakeByProxy="true" />
-
-       <ForeignHostFilterRule>
-         <DynamicHostRange name="trusted" knockMethod="plain" knockPort="12345" knockTimeout="30s">
-           <SharedSecret encoding="UTF-8">changeme</SharedSecret>
-         </DynamicHostRange>
-       </ForeignHostFilterRule>
-
-       <RemoteHost name="server" MAC="00:1A:2B:3C:4D:5E" IPv4="192.168.1.10">
-         <Service name="RDP" port="3389" />
-         <Service name="SSH" port="22" />
-       </RemoteHost>
-     </NetworkMonitor>
-
-   </SystemMonitor>
-
-**Sender** (client machine, normal mode):
-
-.. code:: xml
-
-   <?xml version="1.0" encoding="UTF-8"?>
-   <SystemMonitor version="1">
-
-     <NetworkMonitor knockDelay="200ms" knockRepeat="3s" knockTimeout="30s">
-       <RemoteHost name="server"
-         onServiceDemand="knock"
-         knockMethod="plain" knockPort="12345"
-         knockSecret="changeme" knockEncoding="UTF-8"
-         IPv4="203.0.113.1">
-
-         <Service name="RDP" port="3389" />
-         <Service name="SSH" port="22" />
-
-       </RemoteHost>
-     </NetworkMonitor>
-
-   </SystemMonitor>
-
-Note that the ``IPv4`` on the sender side is the **public IP address of your router**, not the internal IP of the server. The router forwards connections to the server once the host has been woken.
+   The ``plain`` method transmits the shared secret as clear text with no replay protection. It is suitable for testing or when the knock traffic cannot be observed by an attacker. For any deployment exposed to the internet for an extended period, switch to the ``fko`` method, which adds AES encryption, HMAC authentication, and optional replay protection. See :doc:`/modules/network/knocking` for a comparison of the two methods and :doc:`/plugins/fko` for the fko configuration reference.

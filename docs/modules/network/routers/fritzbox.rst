@@ -40,6 +40,18 @@ Wake-on-LAN from outside
 
 The FRITZ!Box does not support static IP-to-MAC address mappings, so the :ref:`unicast WoL approach <vpn-unicast>` is not available. The recommended alternative is to run Desomnia in :doc:`promiscuous mode <../promiscuous>` on an always-on device inside the network. The VPN delivers the connection attempt into the local network; Desomnia sees it, sends the Magic Packet, and claims the sleeping host's IP to buffer the connection until the host wakes up. No static router configuration is required.
 
+Auto discovery
+--------------
+
+🚧 This section describes upcoming features that are not yet available in the current release.
+
+A future version of Desomnia will include a FRITZ!Box integration that queries the router's ARP and DHCP tables directly, enabling:
+
+- **Automatic MAC address discovery**: MAC addresses for known hosts will be resolved from the router without manual configuration, including for hosts that are currently offline.
+- **VPN client discovery**: connected VPN clients will be detected automatically, removing the need to declare ``<VPNClient>`` entries individually.
+
+These features will make FRITZ!Box-based configurations significantly less verbose and will not require any changes on the router itself.
+
 Capability summary
 ------------------
 

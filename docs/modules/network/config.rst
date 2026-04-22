@@ -125,6 +125,9 @@ If you define this attribute, Desomnia will scan repeatedly for a changed config
 deviceTimeout
 +++++++++++++
 
+:⏱️ duration:
+:default: ``1min``
+
 The packet capture device can sometimes become unresponsive. If you select this option, the Network Monitor will restart if no packets have been captured for the specified duration.
 
 .. include:: ./options/knock.rst

@@ -30,20 +30,22 @@ When a knock packet arrives, the receiver validates it. If validation passes, th
 
 If validation fails — wrong secret, expired timestamp, malformed packet — the receiver discards the packet silently. Nothing is sent back.
 
+On the receiver, the SPA listener is configured through a ``<DynamicHostRange>`` element placed inside a ``<ForeignHostFilterRule>``. This single element holds the knock method, port, timeout, validation options, and shared secrets. When a valid knock arrives, the sender's IP is dynamically added to that range for the duration of the authorization window.
+
 Knock methods
 -------------
 
 Two knock methods are available, with different security properties.
 
-plain
-+++++
+Plain Text
+++++++++++
 
 The ``plain`` method transmits the shared secret as a UTF-8 string inside the UDP payload. There is no encryption and no replay protection. Anyone who captures the packet can read the secret and resend it.
 
 This method protects against port scanners and automated bots, which do not know the knock sequence and have no reason to look for it. It does not protect against a targeted attacker who can observe traffic on the network path between sender and receiver.
 
-fko
-+++
+Firewall Knock Operator
++++++++++++++++++++++++
 
 The ``fko`` method is based on the open `fwknop <https://github.com/mrash/fwknop>`_ protocol (Firewall Knock Operator). The payload is encrypted with AES and can be authenticated with an HMAC, making it resistant to both eavesdropping and message forgery. Optionally, a timestamp can be embedded in the payload: when ``proofTime`` is configured on the receiver, a captured packet becomes invalid once its timestamp falls outside the configured acceptance window, preventing replay attacks.
 
@@ -82,10 +84,25 @@ Comparison
 
 Use ``plain`` for testing, or in scenarios where the knock traffic cannot be observed by an adversary (for example, on a trusted internal network). For any deployment exposed to the internet for an extended period, use ``fko``.
 
-Configuration overview
+Configuration options
 -----------------------
 
-Knock behaviour is configured on both sides. The key attributes are:
+Knock behaviour is configured on both sides. On the **receiver**, all SPA settings belong to the ``<DynamicHostRange>`` element:
+
+.. code:: xml
+
+   <ForeignHostFilterRule>
+     <DynamicHostRange name="trusted"
+       knockMethod="plain"
+       knockPort="62201"
+       knockTimeout="30s">
+       <SharedSecret encoding="UTF-8">my-passphrase</SharedSecret>
+     </DynamicHostRange>
+   </ForeignHostFilterRule>
+
+On the **sender**, knock attributes are set on ``<RemoteHost>``, with ``<NetworkMonitor>`` available as an inherited default and individual ``<Service>`` elements available for per-service overrides.
+
+The key attributes are:
 
 ``knockMethod``
   The knock method to use: ``plain`` or ``fko``. Must match on sender and receiver.
@@ -104,20 +121,26 @@ Knock behaviour is configured on both sides. The key attributes are:
 ``knockRepeat``
   On the sender: if set, Desomnia resends the knock at this interval until ``knockTimeout`` expires, as a guard against occasional packet loss.
 
+Knock attributes can be set at the ``<NetworkMonitor>`` level as inherited defaults, overridden at the ``<RemoteHost>`` level, or further overridden at the ``<Service>`` level.
+
+Receiver-only 
++++++++++++++
+
+Some options are only valid in the context of configuring the SPA receiver:
+
 ``proofIP``
   On the receiver: when set to ``true``, Desomnia checks that the source IP address observed in the knock packet matches the IP embedded in the SPA payload. This ensures that nobody has tampered with the packet's source address in transit. This check works correctly when the sender is directly reachable from the internet. For senders behind NAT, the embedded IP is the sender's private address, which will not match the public IP observed by Desomnia — support for NAT traversal via external IP lookup is planned for a future release.
 
 ``proofTime``
   On the receiver: a duration that specifies the acceptable deviation between the timestamp embedded in the SPA payload and the receiver's current time. When set, any knock whose timestamp falls outside this window is rejected, preventing replay attacks. The value should be generous enough to account for clock differences between sender and receiver — a few minutes is typically sufficient. Supported by ``fko`` only; ``plain`` carries no timestamp.
 
-Knock attributes can be set at the ``<NetworkMonitor>`` level as inherited defaults, overridden at the ``<RemoteHost>`` level, or further overridden at the ``<Service>`` level.
 
 For a complete worked example, see :doc:`/guides/remote-access`.
 
 Shared secret management
 -------------------------
 
-Secrets are stored directly in the configuration file as ``<SharedSecret>`` child elements of the ``<DynamicHostRange>``. Two forms are available:
+Shared secrets are declared as ``<SharedSecret>`` child elements directly inside the ``<DynamicHostRange>``. Two forms are available:
 
 A simple inline secret, suitable for ``plain`` or as a quick starting point:
 

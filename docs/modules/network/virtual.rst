@@ -57,4 +57,4 @@ There are two distinct configurations, depending on whether the VM runs on the l
 ``<RemoteHost>`` × ``<VirtualHost>``
     VMs on a remote host cannot be controlled directly by Desomnia. When a connection attempt to one of their services is detected, Desomnia wakes the physical host with a Magic Packet and leaves it to the remote host to bring the VM online.
 
-    If Desomnia is also running on the remote host as a :doc:`local resource manager </guides/sleep>`, it can handle the second step automatically — starting the VM once the physical host is back online.
+    If Desomnia is also running on the remote host as a :doc:`local resource manager </guides/sleep>`, it can handle the second step automatically: a ``<LocalHost>`` × ``<VirtualHost>`` configuration there will start the VM once the physical host is back online.

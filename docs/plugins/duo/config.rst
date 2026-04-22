@@ -1,25 +1,22 @@
 Configuration
 =============
 
-To enable the plugin, you have to add a ``<DuoStreamMonitor>`` to your cofiguration. This plugin reads the available instances from the Duo config, so you do not have to configure any particular instance at all. 
+To enable the plugin, add a ``<DuoStreamMonitor>`` to your configuration. The plugin reads the available instances from the Duo Manager, so no individual instance configuration is required to get started.
 
 DuoStreamMonitor
 ----------------
-
-If you need to set attributes for an individual instance, you can then add an ``<Instance>`` as a child node to the monitor, identified by their name in the Duo Manager. This does not affect any of the other instances. In order to react to an event for all available instances, use the appropriate ``onInstance...`` handler. Otherwise use the individual event handler on the instance.
-
-.. attention::
-
-  None of the events has a default value, so you have to be explicit here.
 
 .. code:: xml
 
   <SystemMonitor>
 
     <DuoStreamMonitor serviceName="DuoService" refresh="5s"
+      onDemand="sleepless"
+      onIdle=""
+
       onInstanceDemand="start"
       onInstanceIdle="stop"
-      
+
       onInstanceLogin=""
       onInstanceStarted=""
       onInstanceStopped=""
@@ -32,12 +29,16 @@ If you need to set attributes for an individual instance, you can then add an ``
 
   </SystemMonitor>
 
+.. attention::
+
+  None of the events has a default value, so you have to be explicit here.
+
 serviceName
 +++++++++++
 
 :default: ``DuoService``
 
-This attribute configures the name of the Duo service as it is displayed in the Service Control Manager (SCM). In order to monitor the lifecycle of the service this name has to match exactly.
+The name of the Duo service as it appears in the Windows Service Control Manager (SCM). This must match exactly for Desomnia to track the service lifecycle.
 
 refresh
 +++++++
@@ -45,7 +46,21 @@ refresh
 :⏱️ duration:
 :default: ``5s``
 
-This attribute configures the interval at which the state of the Duo instances is polled from the Duo Manager.
+The interval at which the state of the Duo instances is polled from the Duo Manager web interface. Instance start and stop events are currently detected by polling; a future version will use Windows Event Log notifications instead.
+
+onDemand
+++++++++
+
+:⚡️ event:
+
+Triggered when any Duo instance receives a connection request and at least one instance transitions from idle to active — that is, when the monitor as a whole goes from fully idle to having at least one running session. You can use this to stop any background activity, the physical system should perform while no streaming client is connected, for example with ``exec``.
+
+onIdle
+++++++
+
+:⚡️ event:
+
+Triggered during the timeout phase when no Duo instance has an active client connection — that is, when all instances have become idle. This is the counterpart to ``onDemand`` and can be used to startup performance intense background tasks.
 
 onInstanceDemand
 ++++++++++++++++
@@ -98,12 +113,14 @@ onInstanceLogout
 Instance
 --------
 
+If you need to configure individual instances differently from the monitor-level defaults, add an ``<Instance>`` child element identified by its name in the Duo Manager. Attributes on an ``<Instance>`` override the inherited defaults for that instance only; all other instances are unaffected.
+
 .. code:: xml
 
     <Instance name="Thomas Anderson"
       onDemand="start"
       onIdle="stop"
-      
+
       onLogin=""
       onStart=""
       onStop=""
@@ -113,10 +130,11 @@ Instance
 name
 ++++
 
-To correctly identify the instance, you have to provide it's logical name here. 
+The logical name of the instance as configured in the Duo Manager.
 
 .. important::
-  This is **not** the display name. It's the one you have set, when you created the Duo instance.
+
+  This is the internal instance name, not the display name shown in the Duo Manager UI.
 
 onDemand
 ++++++++

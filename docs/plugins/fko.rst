@@ -3,71 +3,93 @@ Firewall Knock Operator
 
 :OS: 🪐 *Platform-independent*
 
-This plugin aims to become a fully compatible implementation for acting as a `fwknop`_ server and client. It would go beyond the scope of this documentation to explain all the concepts behind this technique. You can read everything you need to know on the project's website. This document will focus on highlighting notable differences in use and implementation and give practical advice on how to do Single Packet Authorization.
+The ``fko`` knock method is Desomnia's implementation of the `fwknop`_ (Firewall Knock Operator) protocol. It extends the basic SPA mechanism described in :doc:`/modules/network/knocking` with AES payload encryption, HMAC message authentication, and optional timestamp-based replay protection — making it suitable for deployments that are exposed to the internet for any length of time.
 
-.. admonition:: Work in progress
+Desomnia is interoperable with the original fwknop tooling: it can receive knocks from an external fwknop client, and its built-in knock sender can target an original fwknop server.
 
-    You can already use a great subset of the main features provided by fwknop. But since this software has a huge and rather complex feature set, some features are still needed to be implemented. Currently the following is **not** possible:
+For a more general overview and a comparison with the ``plain`` method, see :doc:`/modules/network/knocking`.
 
-    - Automatic reconfiguration of the system firewall. The SPA packet is only used to configure the internal packet filter, so that Desomnia react only to a certain range of source IP addresses.
-    - Support for clients behind a NAT, if ``proofIP`` is enabled on the server side.
-    - Using GnuGP as encryption method, only symmetric keys via Rijndael can be used.
-    - Encryption modes other than CBC or a key derivation other than PBKDF1.
-    - Accepting packets over real sockets, either TCP or UDP. Only passive packet capturing is supported.
-    - Sending or validating the local username in the wire format.
-    - Running custom commands either configured on the server side or specified by the client inside the SPA packet.
-    - Doing SPA over TOR.
+Specifying keys
+---------------
 
-Specifiying keys
-----------------
-
-To establish security, fwknop uses up to two different keys. The first one is mandatory and used to encrypt the payload of the SPA packet, so that nobody can see what you are up to. The second one is used to authenticate the message, to ensure that nobody changes anything during transit and to reduce the possibility to create forged messages dramatically.
+The fwknop protocol uses up to two keys. The first encrypts the SPA payload so that an observer cannot read the secret. The second authenticates the message — it makes tampering or forging a valid knock packet computationally infeasible, even for an attacker who knows the encryption key. Using both is strongly recommended.
 
 .. attention::
 
-    Please read on :ref:`how to generate cryptographically strong keys <generating-cryptographically-strong-keys>` for your platform.
+   Keys must be cryptographically random. See :ref:`generating-cryptographically-strong-keys` for instructions specific to your platform. Run the command twice to produce a separate encryption key and authentication key.
 
-You can use these directly to include them in your configuration file on the server:
+Receiver
+++++++++
 
-.. code:: xml
-
-    <ForeignHostFilterRule>
-        <DynamicHostRange name="trusted-clients" knockMethod="fko" knockPort="62201">
-            <SharedSecret encoding="Base64">
-                <Key>1RNh13FmfBTiMT+/VPEMVXUnRXtg+2/nbVVY+O4ENcs=</Key>
-                <AuthKey type="SHA256">1k00+6JhD4LIKAqkVtLN6FCEHZxQamCbGqD+vyCmPjTzALzLLxatBB1tCYdDe4flf+xIqlwP6JpVHwggEk0jqA==</AuthKey>
-            </SharedSecret>
-        </DynamicHostRange>
-    </ForeignHostFilterRule>
-
-If you also use Desomnia for sending SPA packets, you need to match these keys in your client configuration:
+On the receiver, both keys are declared as a ``<SharedSecret>`` child of the ``<DynamicHostRange>``. The ``<Key>`` element holds the encryption key; ``<AuthKey>`` holds the HMAC key and specifies the digest algorithm via its ``type`` attribute:
 
 .. code:: xml
 
-    <RemoteHost name="example.com" onServiceDemand="knock"
-      knockMethod="fko" knockPort="62201"
-      knockSecret="1RNh13FmfBTiMT+/VPEMVXUnRXtg+2/nbVVY+O4ENcs="
-      knockSecretAuth="1k00+6JhD4LIKAqkVtLN6FCEHZxQamCbGqD+vyCmPjTzALzLLxatBB1tCYdDe4flf+xIqlwP6JpVHwggEk0jqA=="
-      knockSecretAuthType="SHA256"
-      knockEncoding="Base64">
+   <ForeignHostFilterRule>
+     <DynamicHostRange name="trusted-clients" knockMethod="fko" knockPort="62201" knockTimeout="30s">
+       <SharedSecret label="primary" encoding="Base64">
+         <Key>1RNh13FmfBTiMT+/VPEMVXUnRXtg+2/nbVVY+O4ENcs=</Key>
+         <AuthKey type="SHA256">1k00+6JhD4LIKAqkVtLN6FCEHZxQamCbGqD+vyCmPjTzALzLLxatBB1tCYdDe4flf+xIqlwP6JpVHwggEk0jqA==</AuthKey>
+       </SharedSecret>
+     </DynamicHostRange>
+   </ForeignHostFilterRule>
 
-      <Service name="SSH" port="22" />
+Sender
+++++++
 
-    </RemoteHost>
+When Desomnia is also the knock sender, the same keys are supplied as flat attributes on ``<RemoteHost>``. ``knockSecret`` carries the encryption key, ``knockSecretAuth`` carries the HMAC key, and ``knockSecretAuthType`` names the digest algorithm — matching the ``type`` attribute of the receiver's ``<AuthKey>``:
+
+.. code:: xml
+
+   <RemoteHost name="home-server"
+     onServiceDemand="knock"
+     knockMethod="fko" knockPort="62201"
+     knockEncoding="Base64"
+     knockSecret="1RNh13FmfBTiMT+/VPEMVXUnRXtg+2/nbVVY+O4ENcs="
+     knockSecretAuth="1k00+6JhD4LIKAqkVtLN6FCEHZxQamCbGqD+vyCmPjTzALzLLxatBB1tCYdDe4flf+xIqlwP6JpVHwggEk0jqA=="
+     knockSecretAuthType="SHA256"
+     IPv4="203.0.113.1">
+
+     <Service name="SSH" port="22" />
+
+   </RemoteHost>
+
+If you are using an external fwknop client instead, configure it according to its own documentation. The keys must match those declared on the receiver side.
+
+Replay protection
+-----------------
+
+The fko payload embeds the sender's current timestamp. When ``proofTime`` is set on the receiver, any knock whose timestamp deviates from the receiver's clock by more than the configured window is rejected. This prevents a captured packet from being replayed later.
+
+Set ``proofTime`` to a duration generous enough to tolerate reasonable clock differences between sender and receiver — a few minutes is typically sufficient:
+
+.. code:: xml
+
+   <DynamicHostRange name="trusted-clients" knockMethod="fko" knockPort="62201"
+     knockTimeout="30s"
+     proofTime="3min"
+     proofIP="true">
+
+     <SharedSecret label="primary" encoding="Base64">
+       <Key>1RNh13FmfBTiMT+/VPEMVXUnRXtg+2/nbVVY+O4ENcs=</Key>
+       <AuthKey type="SHA256">1k00+6JhD4LIKAqkVtLN6FCEHZxQamCbGqD+vyCmPjTzALzLLxatBB1tCYdDe4flf+xIqlwP6JpVHwggEk0jqA==</AuthKey>
+     </SharedSecret>
+
+   </DynamicHostRange>
+
+``proofIP="true"`` additionally verifies that the source IP observed in the knock packet matches the IP embedded in the SPA payload. This works correctly for senders with a direct internet connection; for senders behind NAT the embedded IP is the private address, which will not match the public IP seen by the receiver. NAT traversal support is planned for a future release.
 
 Symmetric encryption
-++++++++++++++++++++
+--------------------
 
-The implementation of fwknop supports the use of **128** / **192** / **256** bit `AES`_ encryption keys. These keys are represented by a byte sequence of the respective length and should be as cryptographically random as possible.
+The fwknop protocol supports **128**, **192**, and **256**-bit `AES`_ encryption keys. Keys must be byte sequences of exactly the corresponding length (16, 24, or 32 bytes) and should be as random as possible.
 
-Hash-based message authentification
-+++++++++++++++++++++++++++++++++++
+Hash-based message authentication
+----------------------------------
 
-Although the protocol allows you to opt out of using an `HMAC`_, you should always add a second secret key to authenticate the message. This provides an additional security layer and makes it substantially harder for attackers to tamper with or forge messages.
+Although the protocol allows omitting the HMAC key, you should always include one. Without it, an attacker who captures a packet can attempt to forge a modified payload; the HMAC makes this computationally infeasible.
 
-The protocol allows you use any digest algorithm listed for the ``type`` attribute of the ``<AuthKey>`` belonging to a shared secret. If you don't specify an algorithm explicitly, ``SHA256`` is used as a default, in accordance with the fwknop implementation.
-
-The recommended key length for a particular digest algorithm varies and depends on their internal block size. Use this table to select an appropriate key length:
+The digest algorithm is specified via the ``type`` attribute of ``<AuthKey>`` on the receiver, and via ``knockSecretAuthType`` on the sender. ``SHA256`` is the default and matches the fwknop reference implementation. The recommended minimum key length depends on the algorithm's internal block size:
 
 =========== ==================== ===================== ========================
 Algorithm   Hash Output Size     Internal Block Size   Recommended Key Length
@@ -81,7 +103,20 @@ SHA3-256    32 bytes             136 bytes*            ≥ 32 bytes
 SHA3-512    64 bytes             72 bytes*             ≥ 64 bytes
 =========== ==================== ===================== ========================
 
-Since MD5 and SHA1 are effectively broken, you should consider to use at least **SHA-256** or **SHA-512**.
+MD5 and SHA1 are effectively broken and should not be used. SHA256 or stronger is recommended.
+
+.. admonition:: Work in progress
+
+   Desomnia implements the core fwknop feature set. The following are not yet supported:
+
+   - Automatic firewall reconfiguration. The SPA packet is only used to configure Desomnia's internal packet filter.
+   - Clients behind NAT when ``proofIP`` is enabled on the receiver.
+   - GnuPG encryption — only symmetric AES (Rijndael) is supported.
+   - Encryption modes other than CBC, or key derivation other than PBKDF1.
+   - Accepting knock packets over real sockets (TCP or UDP) — only passive packet capture is supported.
+   - Sending or validating the local username in the wire format.
+   - Running custom commands specified in the SPA packet.
+   - SPA over Tor.
 
 .. _`fwknop`: https://github.com/mrash/fwknop
 .. _`AES`: https://en.wikipedia.org/wiki/Advanced_Encryption_Standard
