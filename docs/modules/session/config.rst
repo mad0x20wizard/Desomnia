@@ -78,7 +78,7 @@ onIdle
 
 :⚡️ event:
 
-This event is triggered if the processing time used since the last timeout is less than the configured ``minCPU`` value. If no CPU threshold is configured, this event will not be triggered.
+This event is triggered when the session has been idle — that is, when no user input has been detected for longer than the configured ``maxIdleTime``, or the global ``timeout`` if ``maxIdleTime`` is not set.
 
 onLogin
 +++++++

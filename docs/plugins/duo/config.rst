@@ -18,8 +18,8 @@ DuoStreamMonitor
       onInstanceIdle="stop"
 
       onInstanceLogin=""
-      onInstanceStarted=""
-      onInstanceStopped=""
+      onInstanceStart=""
+      onInstanceStop=""
       onInstanceLogout="">
 
       <Instance name="Neo" ... />

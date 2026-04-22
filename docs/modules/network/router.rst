@@ -38,6 +38,10 @@ Rather than enabling ``allowWakeByProxy`` unconditionally, you can declare known
 
 The ``vpnTimeout`` attribute specifies how long to wait for a ping response. On a local network, responses arrive in single-digit milliseconds; 250–500 ms is generally sufficient.
 
+.. admonition:: Work in progress
+
+   The ``vpnFrequency`` attribute (documented in the :doc:`configuration reference <config>`) is not yet implemented — periodic re-checking of VPN client presence has no effect in the current version. Use ``vpnTimeout`` exclusively for now.
+
 .. note::
 
    Some routers answer address resolution requests for VPN client IPs even when the client is not connected. ICMP ping is the only reliable way to confirm actual presence in such cases.

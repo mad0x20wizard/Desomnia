@@ -54,7 +54,7 @@ Desomnia provides support for monitoring any number of installed network interfa
       watchYield="false"
       
       onConnect="..."
-      onDisconect="...">
+      onDisconnect="...">
 
       <!-- network entities -->
 
@@ -673,10 +673,10 @@ This rule configures the embedded packet filter to either include or exclude req
 
   <HostRangeFilterRule name="anything" type="MustNot"
     network="192.168.178.0/24"
-    firstIP="192.168.178.10" 
+    firstIP="192.168.178.10"
     lastIP="192.168.178.20">
 
-  </HostFilterRule>
+  </HostRangeFilterRule>
 
 .. include:: /attributes/filtertype.rst
 
@@ -859,7 +859,7 @@ When you configure a ``<Service>`` you can configure all the attributes of a ``<
     <HostFilterRule ... />
     <HostRangeFilterRule ... />
 
-  </ServiceFilterRule>
+  </Service>
 
 serviceName
 +++++++++++
@@ -911,4 +911,4 @@ When you configure a ``<HTTPService>`` you can configure all the attributes of a
 
     <RequestFilterRule ... />
 
-  </ServiceFilterRule>
+  </HTTPService>

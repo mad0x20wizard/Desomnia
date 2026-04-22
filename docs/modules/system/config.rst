@@ -38,7 +38,7 @@ onIdle
 
 :⚡️ event:
 
-The ``onIdle`` event of the ``<SystemMonitor>`` gets triggered, when none of the nested monitor reports a usage. This would be a good moment to suspend the computer. Alternatively sou can configure any of the other :doc:`available actions <actions>`.
+The ``onIdle`` event of the ``<SystemMonitor>`` gets triggered, when none of the nested monitor reports a usage. This would be a good moment to suspend the computer. Alternatively you can configure any of the other :doc:`available actions <actions>`.
 
 onDemand
 ++++++++

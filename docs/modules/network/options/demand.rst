@@ -11,7 +11,7 @@ The following options are available to specify **which address procotols** shoul
 ``IPv4``
   advertise IPv4 addresses
 ``IPv6``
-  advertise IPv4 addresses
+  advertise IPv6 addresses
 ``Both``
   advertise IPv4 and IPv6 addresses
 

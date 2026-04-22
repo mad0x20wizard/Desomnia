@@ -12,7 +12,7 @@ If you do not have a suitable always-on device, the :doc:`wol-client` guide desc
 
 .. attention::
 
-   Only one Desomnia instance may run in proxy mode on a given local subnet at a time. On startup, Desomnia broadcasts a discovery packet to detect any running proxy instance. If another instance in proxy mode is present, it responds, and the starting instance exits with an error that includes the MAC address of the conflicting instance.
+   Only one Desomnia instance may run in proxy mode on a given local subnet at a time. On startup, Desomnia broadcasts a beacon to detect any running proxy instance. If another instance in proxy mode is present, it responds, and the secondary instance exits with an error that includes the MAC address of the conflicting instance.
 
    Two Desomnia instances operating on different subnets, or where only one is in proxy mode, are not affected by this restriction.
 

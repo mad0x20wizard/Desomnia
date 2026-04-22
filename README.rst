@@ -6,7 +6,7 @@ Desomnia
 
 **Desomnia** is an intelligent power manager for home labs and small businesses. It keeps your machines asleep until they are actually needed, wakes them the moment a connection arrives, and puts them back to sleep once the last client disconnects — transparently, with minimal or no changes at all on the connecting sides.
 
-The built-in sleep management in your OS was designed for desktops. It has little awareness of the network, cannot tell the difference between a process that matters and background noise, and has no mechanism to restart a host after it suspended. Desomnia replaces it with a declarative, network-aware monitoring system: you describe the services, sessions, and processes that should keep your machines awake, and Desomnia enforces exactly that — across every your entire network, automatically.
+The built-in sleep management in your OS was designed for desktops. It has little awareness of the network, cannot tell the difference between a process that matters and background noise, and has no mechanism to restart a host after it suspended. Desomnia replaces it with a declarative, network-aware monitoring system: you describe the services, sessions, and processes that should keep your machines awake, and Desomnia enforces exactly that — across your entire network, automatically.
 
 Why should I need this?
 -----------------------

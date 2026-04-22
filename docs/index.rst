@@ -30,6 +30,7 @@
    :caption: Basic Concepts
 
    /concepts/resources
+   /concepts/version
    /concepts/logging
 
 .. toctree::
