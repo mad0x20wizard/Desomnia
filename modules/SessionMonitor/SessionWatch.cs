@@ -14,7 +14,7 @@ namespace MadWizard.Desomnia.Session
 
         public TimeSpan? MaxIdleTime { get; private set; }
 
-        private ClockOptions Clock { get; set; }
+        private ClockOptions Clock { get; set; } = new() { Time = true };
 
         public event EventInvocation? Login;
         public event EventInvocation? RemoteLogin;
