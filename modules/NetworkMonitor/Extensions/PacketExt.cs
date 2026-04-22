@@ -1,7 +1,7 @@
-﻿using MadWizard.Desomnia.Network.Neighborhood.Services;
-using PacketDotNet.Ndp;
+﻿using PacketDotNet.Ndp;
 using PacketDotNet.Utils;
 using PacketDotNet.Utils.Converters;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.NetworkInformation;
 
@@ -108,7 +108,7 @@ namespace PacketDotNet
             return false;
         }
 
-        public static bool IsMagicPacket(this EthernetPacket packet, out PhysicalAddress? mac)
+        public static bool IsMagicPacket(this EthernetPacket packet, [MaybeNullWhen(false)] out PhysicalAddress mac)
         {
             mac = null;
 
