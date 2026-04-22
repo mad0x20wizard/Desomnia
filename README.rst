@@ -39,23 +39,23 @@ Desomnia models your system as a tree of logical resources. The root is the ``<S
 
 The following activities can be tracked out of the box:
 
-- **Network activity** – 🪐 *platform-independent*
+-  **Network activity** – 🪐 *platform-independent*
 
    Tracks incoming and outgoing connections using libpcap or Npcap. You declare which hosts and which services — by TCP or UDP port — should count as activity; anything else is invisible to Desomnia. For remote hosts, network demand can also trigger actions: wake a sleeping machine, start a VM, or issue a Single Packet Authorization knock before the connection attempt is made. In *promiscuous mode*, Desomnia watches the entire broadcast domain and can act on behalf of other hosts — this is the foundation of the Wake-on-LAN deployment.
 
-- **User sessions** – 🪟 *Windows*
+-  **User sessions** – 🪟 *Windows*
 
    Tracks the activity of Windows user sessions, including Remote Desktop connections. Sessions can be filtered by user account, have individual idle thresholds, and trigger actions — lock, disconnect, logout, or run a script — when they go quiet.
 
-- **Processes** – 🪐 *platform-independent*
+-  **Processes** – 🪐 *platform-independent*
 
    Watches running processes by name, with an optional CPU threshold to distinguish real activity from idle background processes. On Windows, Desomnia uses Event Trace for Windows (ETW) for near-instant start and stop notifications with no polling overhead; on other platforms it polls at a configurable interval.
 
-- **SMB sessions** – 🪟 *Windows*
+-  **SMB sessions** – 🪟 *Windows*
 
    Keeps the system awake while remote clients have open file-sharing sessions, with fine-grained filtering by username, client name, IP address, share name, or file path.
 
-- **Power requests** – 🪟 *Windows*
+-  **Power requests** – 🪟 *Windows*
 
    Tracks and filters the power requests registered by processes and drivers — giving you selective control over something the OS's own override mechanism cannot reliably provide.
 
