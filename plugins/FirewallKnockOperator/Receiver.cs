@@ -26,7 +26,7 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
 
                         byte[] hmac = bytes[^length..]; bytes = bytes[..^length]; // chop off HMAC by its length
 
-                        if (!hmac.SequenceEqual(CalculateHMAC(EncodeBase64(bytes), auth)))
+                        if (!CryptographicOperations.FixedTimeEquals(hmac, CalculateHMAC(EncodeBase64(bytes), auth)))
                         {
                             throw new CryptographicException("HMAC verification FAILED.");
                         }
@@ -54,7 +54,7 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
                 yield return new KnockEvent
                 {
                     Time = payload.Timestamp.DateTime,
-                    SourceAddress = packet.SourceAddress, // payload.SourceAddress, // TODO: implement public IP resolution
+                    SourceAddress = payload.SourceAddress,
                     TargetPort = payload.TargetPort,
                 };
             }
