@@ -3,8 +3,10 @@ using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Knocking;
 using MadWizard.Desomnia.Network.Context.Parameters;
 using MadWizard.Desomnia.Network.Filter;
+using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Network.Knocking;
 using MadWizard.Desomnia.Network.Knocking.Events;
+using MadWizard.Desomnia.Network.Knocking.Filter.Rules;
 using MadWizard.Desomnia.Network.Knocking.Secrets;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Services.Knocking;
@@ -14,7 +16,7 @@ using System.Net;
 
 namespace MadWizard.Desomnia.Network.Context
 {
-    internal class NetworkKnockContext : Context
+    internal class NetworkKnockContext : FilterContext
     {
         public required ILogger<NetworkKnockContext> Logger { private get; init; }
 
@@ -23,7 +25,7 @@ namespace MadWizard.Desomnia.Network.Context
 
         public IList<KnockStanza> Stanzas { get; private init; } = [];
 
-        public NetworkKnockContext(ILifetimeScope parent, NetworkMonitorConfig network, DynamicHostRangeInfo config)
+        public NetworkKnockContext(ILifetimeScope parent, NetworkMonitorConfig network, DynamicHostRangeInfo config) : base(parent)
         {
             string knockMethod = config.KnockMethod ?? network.KnockMethod;
             IPProtocol knockProtocol = config.KnockProtocol ?? network.KnockProtocol;
@@ -48,8 +50,8 @@ namespace MadWizard.Desomnia.Network.Context
                         .SingleInstance()
                         .AsSelf();
 
-                    RegisterPacketFilter(builder, secret);
-                    RegisterKnockFilter(builder, config, secret);
+                    RegisterPacketFilter(builder, config);
+                    RegisterKnockFilter(builder, config);
                 });
 
                 Stanzas.Add(ConfigureStanza(scope));
@@ -66,14 +68,40 @@ namespace MadWizard.Desomnia.Network.Context
             });
         }
 
-        private void RegisterPacketFilter(ContainerBuilder builder, SharedSecretData data)
+        private void RegisterPacketFilter(ContainerBuilder builder, DynamicHostRangeInfo config)
         {
-            // TODO implement knock packet filters
+            RegisterHostFilters(builder, config.HostFilterRule);
+            RegisterHostRangeFilters(builder, config.HostRangeFilterRule);
         }
 
-        private void RegisterKnockFilter(ContainerBuilder builder, DynamicHostRangeInfo config, SharedSecretData data)
+        private void RegisterKnockFilter(ContainerBuilder builder, DynamicHostRangeInfo config)
         {
-            // TODO implement knock filter
+            if (config.ProofIP)
+            {
+                builder.RegisterType<KnockSourceIPFilterRule>()
+                    .WithParameter(TypedParameter.From(FilterRuleType.MustNot))
+                    .As<KnockFilterRule>()
+                    .SingleInstance();
+            }
+
+            if (config.ProofTime is TimeSpan time)
+            {
+                builder.RegisterType<KnockTimeFilterRule>()
+                    .WithParameter(TypedParameter.From(FilterRuleType.MustNot))
+                    .WithParameter(TypedParameter.From(time))
+                    .As<KnockFilterRule>()
+                    .SingleInstance();
+            }
+
+            foreach (var filter in config.ServiceFilterRule)
+            {
+                builder.RegisterType<KnockPortFilterRule>()
+                    .WithParameter(TypedParameter.From(filter.Type))
+                    .WithParameter(TypedParameter.From(filter.Protocol))
+                    .WithParameter(TypedParameter.From(filter.Port))
+                    .As<KnockFilterRule>()
+                    .SingleInstance();
+            }
         }
 
         private KnockStanza ConfigureStanza(ILifetimeScope scope)

@@ -37,7 +37,7 @@ namespace MadWizard.Desomnia.Network.Knocking
                     {
                         if (stanza.KnockFilter.ShouldFilter(ip, knock)) continue; // maybe filter knock
 
-                        Logger.LogDebug($"Received valid knock from {knock.SourceAddress}" +
+                        Logger.LogDebug($"Received valid knock from {ip.SourceAddress}" +
                             (knock.TargetPort != null ? $" to access {knock.TargetPort}" : "") +
                             $" via stanza '{stanza.Label}'");
 

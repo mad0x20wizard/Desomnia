@@ -16,7 +16,13 @@ namespace MadWizard.Desomnia.Network.Configuration.Knocking
         public bool                 ProofIP             { get; set; } = false;
         public TimeSpan?            ProofTime           { get; set; } = null;
 
-        public IList<SharedSecretData> SharedSecret { get; set; } = [];
+        public IList<SharedSecretData> SharedSecret     { get; set; } = [];
+
+        // Packet Filter Rules
+        public IList<HostFilterRuleInfo> HostFilterRule { get; set; } = [];
+        public IList<HostRangeFilterRuleInfo> HostRangeFilterRule { get; set; } = [];
+        // KnockEvent Filter Rules
+        public IList<ServiceFilterRuleInfo> ServiceFilterRule { get; set; } = [];
     }
 
     public class SharedSecretData : KeyData
@@ -27,12 +33,6 @@ namespace MadWizard.Desomnia.Network.Configuration.Knocking
         public AuthKeyData? AuthKey { get; set; }
 
         public bool Passthrough { get; set; } = false;
-
-        // Packet Filter Rules
-        public IList<HostFilterRuleInfo> HostFilterRule { get; set; } = [];
-        public IList<HostRangeFilterRuleInfo> HostRangeFilterRule { get; set; } = [];
-        // KnockEvent Filter Rules
-        public IList<ServiceFilterRuleInfo> ServiceFilterRule { get; set; } = [];
     }
 
     public class KeyData

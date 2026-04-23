@@ -1,12 +1,20 @@
 ﻿using PacketDotNet;
+using System.Net;
 
 namespace MadWizard.Desomnia.Network.Knocking.Filter.Rules
 {
-    internal class KnockPortFilterRule : KnockFilterRule
+    internal class KnockPortFilterRule(IPPort port) : KnockFilterRule
     {
+        public KnockPortFilterRule(IPProtocol protocol, ushort port) : this(new(protocol, port)) { }
+
         public override bool Matches(IPPacket packet, KnockEvent knock)
         {
-            throw new NotImplementedException();
+            if (knock.TargetPort is IPPort)
+            {
+                return knock.TargetPort.Equals(port);
+            }
+
+            return false;
         }
     }
 }

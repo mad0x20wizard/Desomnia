@@ -1,14 +1,17 @@
-﻿using MadWizard.Desomnia.Network.Knocking;
-using MadWizard.Desomnia.Network.Knocking.Filter.Rules;
-using PacketDotNet;
+﻿using PacketDotNet;
 
-namespace MadWizard.Desomnia.Network.Services.Knocking.Filter.Rules
+namespace MadWizard.Desomnia.Network.Knocking.Filter.Rules
 {
     public class KnockSourceIPFilterRule : KnockFilterRule
     {
         public override bool Matches(IPPacket packet, KnockEvent knock)
         {
-            throw new NotImplementedException();
+            if (!packet.SourceAddress.Equals(knock.SourceAddress))
+            {
+                return true;
+            }
+
+            return false;
         }
     }
 }
