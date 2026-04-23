@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using PacketDotNet;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 
 namespace MadWizard.Desomnia.Network.Knocking.Methods
 {
@@ -23,10 +24,8 @@ namespace MadWizard.Desomnia.Network.Knocking.Methods
         {
             if (packet.PayloadPacket is UdpPacket udp)
             {
-                if (udp.PayloadData.SequenceEqual(secret.Key))
+                if (CryptographicOperations.FixedTimeEquals(secret.Key, udp.PayloadData))
                 {
-                    //Logger.LogInformation($"Received valid plain-text knock from {packet.SourceAddress} to {packet.DestinationAddress}:{udp.DestinationPort}/udp");
-
                     yield return new(packet.SourceAddress);
                 }
             }
