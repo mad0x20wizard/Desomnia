@@ -2,14 +2,9 @@
 using Microsoft.Extensions.Hosting.WindowsServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace MadWizard.Desomnia.Service
 {

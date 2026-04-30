@@ -74,7 +74,8 @@ try
              */
             if (watcher.HasChanged && service is not null)
             {
-                EventLog.WriteEntry(EVENT_LOG_SOURCE, $"Configuration file changed. Restarting...", EventLogEntryType.Information);
+                EventLog.WriteEntry(EVENT_LOG_SOURCE, $"Configuration file changed. Restarting...",
+                    EventLogEntryType.Information, eventID: 1234);
 
                 service.ScheduleSelfRestart();
 
