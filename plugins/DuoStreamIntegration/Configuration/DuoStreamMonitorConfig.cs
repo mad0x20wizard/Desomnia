@@ -6,8 +6,6 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
     {
         public required string ServiceName { get; set; } = "DuoService";
 
-        public TimeSpan Refresh { get; set; } = TimeSpan.FromSeconds(5);
-
         public DelayedAction? OnIdle                { get; set; }
         public DelayedAction? OnDemand              { get; set; }
 
@@ -22,7 +20,10 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
 
         public IList<DuoInstanceInfo> Instance      { get; private set; } = [];
 
-        public bool UseFallback { get; set; } = false;
+        public bool UseFallback                     { get; set; } = false;
+        public bool UsePolling                      { get; set; } = false;
+
+        public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(1);
 
         internal DuoInstanceInfo? this[string name] => Instance.FirstOrDefault(i => i.Name == name);
     }

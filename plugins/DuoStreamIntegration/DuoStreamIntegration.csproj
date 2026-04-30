@@ -23,8 +23,8 @@
 
   <ItemGroup>
 	  <ProjectReference Include="..\..\DesomniaService\DesomniaService.csproj">
-		  <Private>false</Private>
 		  <ExcludeAssets>runtime</ExcludeAssets>
+		  <Private>false</Private>
 	  </ProjectReference>
 
 	  <ProjectReference Include="..\..\DesomniaCore\DesomniaCore.csproj">

@@ -2,6 +2,7 @@ using MadWizard.Desomnia.Service.Duo.Configuration;
 using MadWizard.Desomnia.Service.Duo.Sunshine;
 using MadWizard.Desomnia.Session.Manager;
 using Microsoft.Win32;
+using Nito.AsyncEx;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager
 {
@@ -10,6 +11,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
         private readonly RegistryKey Key;
 
         internal readonly SemaphoreSlim Semaphore = new(1, 1);
+        internal readonly AsyncLock RefreshMutex = new();
 
         public DuoInstance(DuoInstanceInfo info, RegistryKey key)
         {
@@ -40,7 +42,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                 if (value != null)
                     Key.SetValue("SessionId", value);
                 else if (Key.GetValue("SessionId") != null)
-                    Key.DeleteValue("SessionId");
+                    try { Key.DeleteValue("SessionId"); } catch (ArgumentException) { /* No value exists with that name. */ }
             }
         }
 

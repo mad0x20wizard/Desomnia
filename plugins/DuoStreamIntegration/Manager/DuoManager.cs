@@ -3,13 +3,11 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 using Refit;
-using System.ComponentModel;
-using System.Diagnostics;
 using System.ServiceProcess;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager
 {
-    public class DuoManager(DuoStreamMonitorConfig config) : BackgroundService, IIEnumerable<DuoInstance>
+    public abstract class DuoManager(DuoStreamMonitorConfig config) : BackgroundService, IIEnumerable<DuoInstance>
     {
         const int DEFAULT_TIMEOUT = 30000;
 
@@ -19,6 +17,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
         public required ILogger<DuoManager> Logger { get; set; }
 
         internal IDuoWebManager? API;
+
+        protected ServiceController Service => field ??= new(config.ServiceName);
 
         private IList<DuoInstance> Instances { get; set; } = [];
 
@@ -35,87 +35,58 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             }
         }
 
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        protected async Task TriggerStarted(uint? servicePID = null)
         {
-            try
-            {
-                ServiceController service = new(config.ServiceName);
+            var servicePath = Service.GetExecutablePath();
+            var serviceVersion = Service.GetVersion();
+            servicePID ??= Service.GetPID();
 
-                bool serviceNotFound = false;
-                var status = ServiceControllerStatus.Stopped;
-                while (config != null && !stoppingToken.IsCancellationRequested)
+            Logger.LogInformation("Service is running at: '{path}' ({version}) -> PID {pid}", servicePath, serviceVersion, servicePID);
+
+            API = RestService.For<IDuoWebManager>("http://localhost:" + Port);
+
+            Instances = LoadInstances();
+
+            await TriggerRefresh();
+
+            this.Started?.Invoke(this, EventArgs.Empty);
+        }
+
+        protected async Task TriggerRefresh()
+        {
+            foreach (var instance in this) using (await instance.RefreshMutex.LockAsync())
+            {
+                bool? wasRunning = instance.IsRunning, shouldBeRunning = await API!.QueryInstance(instance.Name);
+
+                if (shouldBeRunning.Value)
+                    instance.IsRunning = instance.IsSandboxed || (instance.SessionID != null);
+                else
                 {
-                    try
-                    {
-                        //Logger.LogTrace("Checking Duo instances...");
-
-                        service.Refresh();
-
-                        switch (service.Status)
-                        {
-                            case ServiceControllerStatus.Running:
-                                if (status == ServiceControllerStatus.Stopped)
-                                {
-                                    API = RestService.For<IDuoWebManager>("http://localhost:" + Port);
-
-                                    Instances = LoadInstances();
-
-                                    this.Started?.Invoke(this, EventArgs.Empty);
-                                }
-
-                                foreach (var instance in this)
-                                    if (!instance.IsBusy)
-                                        await Refresh(instance);
-
-                                break;
-
-                            case ServiceControllerStatus.Stopped:
-                                if (status == ServiceControllerStatus.Running)
-                                {
-                                    this.Stopped?.Invoke(this, EventArgs.Empty);
-
-                                    foreach (var instance in this)
-                                        instance.Dispose();
-
-                                    Instances.Clear();
-
-                                    API = null;
-                                }
-
-                                break;
-
-                            case ServiceControllerStatus.StartPending:
-                            case ServiceControllerStatus.StopPending:
-                                continue;
-                        }
-
-                        status = service.Status;
-                        serviceNotFound = false;
-                    }
-                    catch (InvalidOperationException ex) when (ex.InnerException is Win32Exception win && win.NativeErrorCode == 1060)
-                    {
-                        if (!serviceNotFound) // log only once
-                        {
-                            Logger.LogWarning(ex, "Duo service not found.");
-
-                            serviceNotFound = true;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.LogError(ex, "Error checking instances.");
-                    }
-
-                    await Task.Delay(config.Refresh, stoppingToken);
+                    instance.IsRunning = false;
+                    instance.SessionID = null;
                 }
-            }
-            catch (TaskCanceledException)
-            {
-                // we need no more status updates
+
+                if (wasRunning != null && wasRunning != instance.IsRunning)
+                {
+                    Logger.LogInformation($"{instance} is now {(instance.IsRunning.Value ? "running" : "stopped")} " +
+                        $"{(instance.IsBusy ? "" : "(manually)")}");
+                }
             }
         }
 
-        private List<DuoInstance> LoadInstances()
+        protected void TriggerStopped()
+        {
+            this.Stopped?.Invoke(this, EventArgs.Empty);
+
+            foreach (var instance in this)
+                instance.Dispose();
+
+            Instances.Clear();
+
+            API = null;
+        }
+
+        protected List<DuoInstance> LoadInstances()
         {
             using RegistryKey instancesKey = OpenInstancesKey();
 
@@ -138,47 +109,32 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             return instances;
         }
 
-        public async Task<bool> Refresh(DuoInstance instance)
-        {
-            bool? wasRunning = instance.IsRunning, shouldBeRunning = await API!.QueryInstance(instance.Name);
-
-            if (shouldBeRunning.Value)
-                instance.IsRunning = instance.IsSandboxed || (instance.SessionID != null);
-            else
-            {
-                instance.IsRunning = false;
-                instance.SessionID = null;
-            }
-
-            if (wasRunning != null && wasRunning != instance.IsRunning)
-            {
-                Logger.LogInformation($"{instance} is now {(instance.IsRunning.Value ? "running" : "stopped")} " +
-                    $"{(instance.IsBusy ? "" : "(manually)")}");
-            }
-
-            return instance.IsRunning!.Value;
-        }
-
         public async Task Start(DuoInstance instance, int timeout = DEFAULT_TIMEOUT)
         {
             Logger.LogInformation($"Starting {instance}...");
 
             await API!.StartInstance(instance.Name);
 
-            Stopwatch watch = Stopwatch.StartNew();
-            while (watch.ElapsedMilliseconds < timeout)
+            if (instance.IsRunning != true)
             {
-                if (await Refresh(instance))
+                var semaphore = new SemaphoreSlim(0);
+
+                async Task Instance_Started(Event data)
                 {
-                    return;
+                    semaphore.Release();
                 }
 
-                await Task.Delay(250);
+                instance.Started += Instance_Started;
+
+                try
+                {
+                    await semaphore.WaitAsync(timeout);
+                }
+                finally
+                {
+                    instance.Started -= Instance_Started;
+                }
             }
-
-            Logger.LogError($"{instance} failed to start");
-
-            //throw new System.TimeoutException($"{instance} failed to start");
         }
 
         public async Task Stop(DuoInstance instance, int timeout = 5000)
@@ -187,25 +143,38 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
             await API!.StopInstance(instance.Name);
 
-            Stopwatch watch = Stopwatch.StartNew();
-            while (watch.ElapsedMilliseconds < timeout)
+            if (instance.IsRunning != false)
             {
-                if (!(await Refresh(instance)))
+                var semaphore = new SemaphoreSlim(0);
+
+                async Task Instance_Stopped(Event data)
                 {
-                    return;
+                    semaphore.Release();
                 }
 
-                await Task.Delay(250);
+                instance.Stopped += Instance_Stopped;
+
+                try
+                {
+                    await semaphore.WaitAsync(timeout);
+                }
+                finally
+                {
+                    instance.Stopped -= Instance_Stopped;
+                }
             }
-
-            Logger.LogError($"{instance} failed to stop");
-
-            //throw new System.TimeoutException($"{instance} failed to stop");
         }
 
         public IEnumerator<DuoInstance> GetEnumerator()
         {
             return Instances.GetEnumerator();
+        }
+
+        public override void Dispose()
+        {
+            Service.Dispose();
+
+            base.Dispose();
         }
         
         private static RegistryKey OpenInstancesKey()

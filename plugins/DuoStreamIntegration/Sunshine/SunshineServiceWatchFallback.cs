@@ -39,7 +39,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine
 
                 Firewall.Rules.Add(Rule);
 
-                Logger.LogDebug("Successfully configured Windows Firewall to allow incoming connection. Rule name = '{name}'", Rule.Name);
+                Logger.LogDebug("Configured Windows Firewall to allow incoming connection. Rule name = '{name}'", Rule.Name);
             }
         }
 

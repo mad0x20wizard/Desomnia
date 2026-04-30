@@ -38,9 +38,6 @@ namespace MadWizard.Desomnia.Service.Duo
             AddEventAction(nameof(Idle), config.OnIdle);
             AddEventAction(nameof(Demand), config.OnDemand);
 
-            sessionManager.UserLogon += SessionManager_UserLogon;
-            sessionManager.UserLogoff += SessionManager_UserLogoff;
-
             manager.Started += DuoService_Started;
             manager.Stopped += DuoService_Stopped;
 
@@ -57,7 +54,8 @@ namespace MadWizard.Desomnia.Service.Duo
 
         private void DuoService_Started(object? sender, EventArgs e)
         {
-            Logger.LogInformation($"Service is running:");
+            sessionManager.UserLogon += SessionManager_UserLogon;
+            sessionManager.UserLogoff += SessionManager_UserLogoff;
 
             foreach (var instance in manager)
             {
@@ -85,7 +83,7 @@ namespace MadWizard.Desomnia.Service.Duo
                 }
                 else
                 {
-                    Logger.LogInformation($"Monitoring {instance}:{instance.Port}");
+                    Logger.LogInformation($"Monitoring {instance}:{instance.Port}" + (instance.IsRunning == true ? " (running)" : ""));
 
                     instance.StartTracking(sunshine = CreateSunshineWatch(instance.Port));
 
@@ -150,6 +148,9 @@ namespace MadWizard.Desomnia.Service.Duo
 
                 this.StopTracking(instance);
             }
+
+            sessionManager.UserLogoff -= SessionManager_UserLogoff;
+            sessionManager.UserLogon -= SessionManager_UserLogon;
         }
 
         private static void RegisterInstanceWithNetworkMonitor(DuoInstance instance, NetworkMonitor monitor)
