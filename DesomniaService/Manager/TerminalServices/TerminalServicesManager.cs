@@ -2,6 +2,7 @@
 using Autofac.Features.OwnedInstances;
 using MadWizard.Desomnia.Service;
 using Microsoft.Extensions.Logging;
+using System.ComponentModel;
 using System.ServiceProcess;
 using static MadWizard.Desomnia.Session.Manager.TerminalServicesSession;
 
@@ -92,43 +93,55 @@ namespace MadWizard.Desomnia.Session.Manager
 
             if (owned != null && owned.Value is var session)
             {
-                Logger.LogDebug($"{session} -> {desc.Reason}");
-
-                switch (desc.Reason)
+                try
                 {
-                    case SessionChangeReason.SessionLogoff:
-                        if (Sessions.Remove(sid))
-                        {
-                            UserLogoff?.Invoke(this, session);
+                    Logger.LogDebug($"{session} -> {desc.Reason}");
 
-                            session.Dispose();
-                        }
-                        break;
+                    switch (desc.Reason)
+                    {
+                        case SessionChangeReason.SessionLogoff:
+                            if (Sessions.Remove(sid))
+                            {
+                                UserLogoff?.Invoke(this, session);
 
-                    case SessionChangeReason.RemoteConnect:
-                        session.TriggerConnected();
-                        RemoteConnect?.Invoke(this, session);
-                        break;
-                    case SessionChangeReason.ConsoleConnect:
-                        session.TriggerConnected();
-                        ConsoleConnect?.Invoke(this, session);
-                        break;
+                                session.Dispose();
+                            }
+                            break;
 
-                    case SessionChangeReason.RemoteDisconnect:
-                        session.TriggerDisconnected();
-                        RemoteDisconnect?.Invoke(this, session);
-                        break;
-                    case SessionChangeReason.ConsoleDisconnect:
-                        session.TriggerDisconnected();
-                        ConsoleDisconnect?.Invoke(this, session);
-                        break;
+                        case SessionChangeReason.RemoteConnect:
+                            session.TriggerConnected();
+                            RemoteConnect?.Invoke(this, session);
+                            break;
+                        case SessionChangeReason.ConsoleConnect:
+                            session.TriggerConnected();
+                            ConsoleConnect?.Invoke(this, session);
+                            break;
 
-                    case SessionChangeReason.SessionLock:
-                        session.IsLocked = true;
-                        break;
-                    case SessionChangeReason.SessionUnlock:
-                        session.IsLocked = false;
-                        break;
+                        case SessionChangeReason.RemoteDisconnect:
+                            session.TriggerDisconnected();
+                            RemoteDisconnect?.Invoke(this, session);
+                            break;
+                        case SessionChangeReason.ConsoleDisconnect:
+                            session.TriggerDisconnected();
+                            ConsoleDisconnect?.Invoke(this, session);
+                            break;
+
+                        case SessionChangeReason.SessionLock:
+                            session.IsLocked = true;
+                            break;
+                        case SessionChangeReason.SessionUnlock:
+                            session.IsLocked = false;
+                            break;
+                    }
+                }
+                catch (Win32Exception ex) when (ex.NativeErrorCode == 2) // Das System kann die angegebene Datei nicht finden.
+                {
+                    Logger.LogError($"WTSSession[id={desc.SessionId}, name=?, state=Unknown] -> {desc.Reason}: {ex.Message}");
+
+                    if (Sessions.Remove(sid))
+                    {
+                        session.Dispose();
+                    }
                 }
             }
             else
