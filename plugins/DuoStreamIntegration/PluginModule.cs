@@ -32,7 +32,7 @@ namespace MadWizard.Desomnia.Service.Duo
                     {
                         using var service = new ServiceController(duo.ServiceName);
 
-                        if (service.GetVersion() >= DuoEventManager.MinVersion)
+                        if (service.Version >= DuoEventManager.MinVersion)
                         {
                             builder.RegisterType<DuoEventManager>().As<DuoManager>()
                                 .WithParameter(TypedParameter.From(duo))

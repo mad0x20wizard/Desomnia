@@ -38,7 +38,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
         {
             Service.Refresh();
 
-            if (Service.Status == ServiceControllerStatus.Running && Service.GetPID() is uint pid)
+            if (Service.Status == ServiceControllerStatus.Running && Service.PID is uint pid)
             {
                 await TriggerStarted(pid);
             }
@@ -46,9 +46,17 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
         protected async Task TriggerStarted(uint servicePID)
         {
-            ProcessManager[(int)servicePID].Stopped += (sender, @event) => TriggerStopped();
+            if (ServicePID is null)
+            {
+                ProcessManager[(int)servicePID].Stopped += (sender, @event) => TriggerStopped();
 
-            await base.TriggerStarted(servicePID);
+                await base.TriggerStarted(servicePID);
+            }
+            else if (ServicePID != servicePID)
+            {
+                Logger.LogWarning("Another Duo service (PID = {NewPID}) started, before the current service (PID = {CurrentPID}) stopped.",
+                    servicePID, ServicePID);
+            }
         }
 
         private async void EventLogWatcher_EventRecordWritten(object? sender, EventRecordWrittenEventArgs args)
@@ -65,7 +73,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                     {
                         switch (eventId)
                         {
-                            case DuoEventID.ServiceStarted when Service.GetPID() is uint pid:
+                            case DuoEventID.ServiceStarted when Service.PID is uint pid:
                                 await TriggerStarted(pid);
                                 break;
 

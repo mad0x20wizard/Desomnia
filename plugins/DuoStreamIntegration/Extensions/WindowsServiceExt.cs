@@ -7,44 +7,55 @@ namespace MadWizard.Desomnia.Service.Duo
 {
     public static class WindowsServiceExt
     {
-        public static uint? GetPID(this ServiceController sc)
+        extension (ServiceController sc)
         {
-            int size = Marshal.SizeOf<SERVICE_STATUS_PROCESS>();
-
-            IntPtr buffer = Marshal.AllocHGlobal(size);
-
-            try
+            public uint? PID
             {
-                if (!QueryServiceStatusEx(
-                    sc.ServiceHandle,
-                    SC_STATUS_PROCESS_INFO,
-                    buffer,
-                    (uint)size,
-                    out _))
+                get
+                {
+                    int size = Marshal.SizeOf<SERVICE_STATUS_PROCESS>();
 
-                    throw new Win32Exception();
+                    IntPtr buffer = Marshal.AllocHGlobal(size);
 
-                var status = Marshal.PtrToStructure<SERVICE_STATUS_PROCESS>(buffer);
+                    try
+                    {
+                        if (!QueryServiceStatusEx(
+                            sc.ServiceHandle,
+                            SC_STATUS_PROCESS_INFO,
+                            buffer,
+                            (uint)size,
+                            out _))
 
-                return status.dwProcessId > 0 ? status.dwProcessId : null;
+                            throw new Win32Exception();
+
+                        var status = Marshal.PtrToStructure<SERVICE_STATUS_PROCESS>(buffer);
+
+                        return status.dwProcessId > 0 ? status.dwProcessId : null;
+                    }
+                    finally
+                    {
+                        Marshal.FreeHGlobal(buffer);
+                    }
+                }
             }
-            finally
+
+            public Version Version
             {
-                Marshal.FreeHGlobal(buffer);
+                get
+                {
+                    var info = FileVersionInfo.GetVersionInfo(sc.ExecutablePath);
+
+                    return Version.Parse(info.FileVersion ?? throw new InvalidDataException());
+                }
             }
+
+            public string ExecutablePath => GetServiceExecutablePathByName(sc.ServiceName);
         }
 
-        public static Version GetVersion(this ServiceController service)
+        extension(ServiceBase service)
         {
-            var servicePath = service.GetExecutablePath();
-
-            var info = FileVersionInfo.GetVersionInfo(servicePath);
-
-            return Version.Parse(info.FileVersion ?? throw new InvalidDataException());
+            public string ExecutablePath => GetServiceExecutablePathByName(service.ServiceName);
         }
-
-        public static string GetExecutablePath(this ServiceController service) => GetServiceExecutablePathByName(service.ServiceName);
-        public static string GetExecutablePath(this ServiceBase service) => GetServiceExecutablePathByName(service.ServiceName);
 
         internal static string GetServiceExecutablePathByName(string serviceName)
         {

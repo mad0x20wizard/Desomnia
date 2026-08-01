@@ -1,11 +1,11 @@
-﻿using MadWizard.Desomnia.Service.Duo.Configuration;
+﻿using MadWizard.Desomnia.Events;
+using MadWizard.Desomnia.Service.Duo.Configuration;
 using MadWizard.Desomnia.Session.Manager;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 using Refit;
 using System.ServiceProcess;
-using MadWizard.Desomnia.Events;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager
 {
@@ -41,11 +41,14 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             }
         }
 
+        protected uint? ServicePID { get; private set; }
+
         protected async Task TriggerStarted(uint? servicePID = null)
         {
-            var servicePath = Service.GetExecutablePath();
-            var serviceVersion = Service.GetVersion();
-            servicePID ??= Service.GetPID();
+            var servicePath = Service.ExecutablePath;
+            var serviceVersion = Service.Version;
+
+            ServicePID = servicePID ?? Service.PID;
 
             Logger.LogInformation("Service is running at: '{path}' ({version}) -> PID {pid}", servicePath, serviceVersion, servicePID);
 
@@ -86,7 +89,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             }
         }
 
-        protected void TriggerStopped()
+        protected virtual void TriggerStopped()
         {
             SessionManager.UserLogoff -= SessionManager_UserLogoff;
             SessionManager.UserLogon -= SessionManager_UserLogon;
@@ -97,6 +100,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                 instance.Dispose();
 
             Instances.Clear();
+
+            ServicePID = null;
 
             API = null;
         }
