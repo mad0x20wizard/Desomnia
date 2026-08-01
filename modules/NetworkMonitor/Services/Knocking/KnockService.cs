@@ -21,6 +21,13 @@ namespace MadWizard.Desomnia.Network.Knocking
 
             foreach (var stanza in Stanzas)
             {
+                if (stanza.Detector is IKnockValidation validation)
+                {
+                    // Fail here rather than on every packet: ProcessPacket swallows and logs per-packet
+                    // exceptions, so an unusable secret would otherwise show up only as repeated noise.
+                    validation.ValidateSecret(stanza.Secret);
+                }
+
                 Logger.LogDebug($"Listening on {stanza.Port} for SPA stanza '{stanza.Label}'" +
                     $" using <{stanza.Detector.Name}>");
             }

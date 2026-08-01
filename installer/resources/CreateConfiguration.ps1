@@ -109,7 +109,7 @@ function Add-Security
             knockMethod =           $Security['method']
             knockProtocol =         $Security['protocol']
             knockPort =             $Security['port']
-            knockEncoding =         $Security['encoding']
+            knockSecretEncoding =   $Security['encoding']
             knockSecret =           $Security['secret']
             knockSecretAuth =       $Security['auth']
             knockSecretAuthType =   $Security['digest']

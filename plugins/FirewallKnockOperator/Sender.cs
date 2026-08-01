@@ -26,6 +26,10 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
 
         static byte[] BuildFKOPayload(SharedSecret secret, IPAddress source, IPPort? target, string username = "desomnia")
         {
+            // Belt and braces: KnockService validates via IKnockMethod.ValidateSecret before it ever
+            // gets here, but this is the method that actually depends on the secret's length.
+            ValidateAESSecret(secret);
+
             using HMAC? auth = AuthMethod(secret);
 
             // 1) Build the plaintext fields (without the trailing digest yet)
