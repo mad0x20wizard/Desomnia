@@ -10,7 +10,7 @@ namespace MadWizard.Desomnia.Network.Manager
     /// a downed interface stays in the macOS enumeration, so absence really means gone (dock
     /// USB NICs) — and the daemon has no wireless source, so an SSID stays unanswerable.
     /// </summary>
-    internal sealed class NetToolsInterfaceManager(ILogger<NetToolsInterfaceManager> logger) : NetworkInterfaceManager(logger)
+    internal sealed class NetToolsInterfaceManager : NetworkInterfaceManager
     {
         protected override void DisableInterface(INetworkInterface @interface)
         {
@@ -26,7 +26,7 @@ namespace MadWizard.Desomnia.Network.Manager
         {
             string state = up ? "up" : "down";
 
-            logger.LogTrace($"ifconfig {name} {state}");
+            Logger.LogTrace($"ifconfig {name} {state}");
 
             using var process = System.Diagnostics.Process.Start(new ProcessStartInfo
             {

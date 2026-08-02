@@ -5,9 +5,9 @@ using System.Net.Sockets;
 
 namespace MadWizard.Desomnia.Network.Manager
 {
-    internal class WindowsNeighborCache : ILocalAddressMapping
+    internal class NetshNeighborCache : ILocalAddressMapping
     {
-        public required ILogger<WindowsNeighborCache> Logger { private get; init; }
+        public required ILogger<NetshNeighborCache> Logger { private get; init; }
 
         public required NetworkDevice Device { protected get; init; }
 

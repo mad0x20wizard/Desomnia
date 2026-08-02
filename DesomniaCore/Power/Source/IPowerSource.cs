@@ -10,6 +10,6 @@ namespace MadWizard.Desomnia.Power.Source
     {
         PowerSource Source { get; }
 
-        event EventHandler? PowerSourceChanged;
+        event EventHandler? SourceChanged;
     }
 }

@@ -3,7 +3,6 @@ using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Processes.Manager;
 using System.Runtime.InteropServices;
 
-
 namespace MadWizard.Desomnia.Processes
 {
     public class ProcessWatch : Resource

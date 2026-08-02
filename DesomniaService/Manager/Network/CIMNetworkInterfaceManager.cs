@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging;
 using Microsoft.Management.Infrastructure;
 using System.Net.NetworkInformation;
 
@@ -16,7 +15,7 @@ namespace MadWizard.Desomnia.Network.Manager
     /// It is also the platform that lets a service ask which wireless network an adapter is
     /// joined to (see <see cref="WiFiInterop"/>), so this is where the SSID answer exists.
     /// </summary>
-    internal sealed class WindowsNetworkInterfaceManager(ILogger<WindowsNetworkInterfaceManager> logger) : NetworkInterfaceManager(logger)
+    internal sealed class CIMNetworkInterfaceManager : NetworkInterfaceManager
     {
         private const string AdapterNamespace = @"root\StandardCimv2";
 

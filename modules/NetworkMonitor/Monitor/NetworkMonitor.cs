@@ -28,7 +28,7 @@ namespace MadWizard.Desomnia.Network
         [EventContext]
         public INetworkInterface Interface => Device.Interface;
 
-        public IOrderedCollection<INetworkService> Services { private get; init; } = [];
+        public IEnumerable<INetworkService> Services { private get; init; } = [];
 
         public event EventInvocation? Connected;
         public event EventInvocation? Disconnected;

@@ -1,6 +1,7 @@
 ﻿using Autofac;
 using Autofac.Core;
 using Autofac.Features.Metadata;
+using MadWizard.Desomnia;
 using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network.Bridges;
 using MadWizard.Desomnia.Network.Configuration;
@@ -145,7 +146,7 @@ namespace MadWizard.Desomnia.Network.Context
                 if (config.UseBPF)
                 {
                     builder.RegisterType<BerkeleyPacketFilter>()
-                        .WithOrder(1)
+                        .WithPriority(1)
                         .AsImplementedInterfaces()
                         .InstancePerNetwork()
                         .AsSelf();

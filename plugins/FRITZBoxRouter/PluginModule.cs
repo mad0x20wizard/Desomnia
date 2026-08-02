@@ -72,7 +72,7 @@ namespace MadWizard.Desomnia.Network.FRITZ
 
             // Before the built-in detectors (order 1, 2): when the box is the default gateway,
             // DefaultGatewayDetector then enriches it instead of creating a second router.
-            builder.RegisterType<FRITZBoxDetector>().WithOrder(0)
+            builder.RegisterType<FRITZBoxDetector>().WithPriority(0)
                 .WithParameter(TypedParameter.From(config.MakeAutoDiscoveryOptions()))
                 .WithParameter(new TypedParameter(typeof(IEnumerable<FRITZBoxRouterInfo>), config.FRITZBoxRouter)) // static routers
                 .AsImplementedInterfaces()

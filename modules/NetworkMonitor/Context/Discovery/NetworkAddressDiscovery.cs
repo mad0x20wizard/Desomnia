@@ -16,24 +16,24 @@ namespace MadWizard.Desomnia.Network.Context
         private void RegisterAddressDiscovery(ContainerBuilder builder, NetworkMonitorConfig config)
         {
             // MAC-Discovery
-            builder.RegisterType<ARPPhysicalAddressDetector>().WithOrder(2)
+            builder.RegisterType<ARPPhysicalAddressDetector>().WithPriority(2)
                 .WithParameter(TypedParameter.From(config.MakeAutoDiscoveryOptions()))
                 .AsImplementedInterfaces()
                 .SingleInstance()
                 .AsSelf();
-            builder.RegisterType<NDPPhysicalAddressDetector>().WithOrder(2)
+            builder.RegisterType<NDPPhysicalAddressDetector>().WithPriority(2)
                 .WithParameter(TypedParameter.From(config.MakeAutoDiscoveryOptions()))
                 .AsImplementedInterfaces()
                 .SingleInstance()
                 .AsSelf();
 
             // Host/IP-Discovery
-            builder.RegisterType<DNSIPAddressDetector>().WithOrder(1)
+            builder.RegisterType<DNSIPAddressDetector>().WithPriority(1)
                 .WithParameter(TypedParameter.From(config.MakeAutoDiscoveryOptions()))
                 .AsImplementedInterfaces()
                 .SingleInstance()
                 .AsSelf();
-            builder.RegisterType<HostAdvertismentDetector>().WithOrder(1)
+            builder.RegisterType<HostAdvertismentDetector>().WithPriority(1)
                 .WithParameter(TypedParameter.From(config.MakeAutoDiscoveryOptions()))
                 .AsImplementedInterfaces()
                 .SingleInstance()
@@ -83,7 +83,7 @@ namespace MadWizard.Desomnia.Network.Context
             if (Auto != AutoDiscoveryType.Nothing)
             {
                 // Dynamically resolve IP addresses
-                foreach (var discoverIP in Scope.Resolve<IOrderedCollection<IIPAddressDiscovery>>())
+                foreach (var discoverIP in Scope.Resolve<IEnumerable<IIPAddressDiscovery>>())
                 {
                     if (Auto.HasFlag(AutoDiscoveryType.IPv4))
                         await discoverIP.DiscoverIPAddresses(Host, AddressFamily.InterNetwork);
@@ -92,7 +92,7 @@ namespace MadWizard.Desomnia.Network.Context
                 }
 
                 // Dynamically resolve MAC address
-                foreach (var discoverMAC in Scope.Resolve<IOrderedCollection<IPhysicalAddressDiscovery>>())
+                foreach (var discoverMAC in Scope.Resolve<IEnumerable<IPhysicalAddressDiscovery>>())
                 {
                     if (Auto.HasFlag(AutoDiscoveryType.MAC))
                         await discoverMAC.DiscoverAddress(Host);

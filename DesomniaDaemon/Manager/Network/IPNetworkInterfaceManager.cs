@@ -9,7 +9,7 @@ namespace MadWizard.Desomnia.Network.Manager
     /// The base's enumeration defaults fit Linux: a downed link stays enumerated, so absence
     /// really means gone — and there is no SSID to answer until an nl80211 lookup exists.
     /// </summary>
-    internal sealed class IPNetworkInterfaceManager(ILogger<IPNetworkInterfaceManager> logger) : NetworkInterfaceManager(logger)
+    internal sealed class IPNetworkInterfaceManager : NetworkInterfaceManager
     {
         protected override void DisableInterface(INetworkInterface @interface)
         {
@@ -25,7 +25,7 @@ namespace MadWizard.Desomnia.Network.Manager
         {
             string state = up ? "up" : "down";
 
-            logger.LogTrace($"ip link set dev {name} {state}");
+            Logger.LogTrace($"ip link set dev {name} {state}");
 
             using var process = Process.Start(new ProcessStartInfo
             {
