@@ -38,10 +38,19 @@ class DesomniaDaemonBuilder(string[] args) : MadWizard.Desomnia.ApplicationBuild
     const string FHS_CORE_PLUGINS_PATH  = "/usr/lib/desomnia/plugins";
     const string FHS_USER_PLUGINS_PATH  = "/var/lib/desomnia/plugins";
 
-    internal bool UseFHS => ConfigPath.StartsWith(FHS_CONFIG_PATH);
+    private bool useFHS = false;
 
     protected override string[] DefaultConfigPaths  => [.. base.DefaultConfigPaths, FHS_CONFIG_PATH];
 
-    protected override string[] DefaultPluginsPaths => UseFHS ? [FHS_CORE_PLUGINS_PATH, FHS_USER_PLUGINS_PATH] : base.DefaultPluginsPaths;
-    protected override string   DefaultLogPath      => UseFHS ? FHS_LOG_PATH : base.DefaultLogPath;
+    protected override string LookupConfigPath()
+    {
+        var path = base.LookupConfigPath();
+
+        useFHS = path.StartsWith(FHS_CONFIG_PATH);
+
+        return path;
+    }
+
+    protected override string[] DefaultPluginsPaths => useFHS ? [FHS_CORE_PLUGINS_PATH, FHS_USER_PLUGINS_PATH] : base.DefaultPluginsPaths;
+    protected override string   DefaultLogPath      => useFHS ? FHS_LOG_PATH : base.DefaultLogPath;
 }

@@ -8,7 +8,7 @@ using System.ServiceProcess;
 
 namespace MadWizard.Desomnia.Service
 {
-    public class WindowsService : WindowsServiceLifetime, IApplicationFailureHandler
+    public class WindowsService : WindowsServiceLifetime
     {
         // the SCM's managed stop wait (WindowsServiceLifetime._delayStop.Wait) is bounded by the
         // host's ShutdownTimeout; this only asks the SCM to keep waiting that long, so it does
@@ -27,24 +27,6 @@ namespace MadWizard.Desomnia.Service
             CanHandlePowerEvent = true;
             CanHandleSessionChangeEvent = true;
             CanShutdown = true;
-        }
-
-        /// <summary>Reports a fatal application failure to the SCM: a non-zero exit code makes
-        /// the service stop count as a failure, so the installer's recovery actions fire.</summary>
-        public void OnFatal(Exception exception)
-        {
-            ExitCode = 1; // ServiceBase.ExitCode -> reported as the win32 exit code with SERVICE_STOPPED
-
-            Environment.ExitCode = 1;
-
-            try
-            {
-                System.Diagnostics.EventLog.WriteEntry("Desomnia", $"{exception}", EventLogEntryType.Error);
-            }
-            catch
-            {
-                // best effort - the application loop already logged it via NLog
-            }
         }
 
         internal event EventHandler<PowerBroadcastStatus>? PowerStatusChanged;
@@ -108,6 +90,14 @@ namespace MadWizard.Desomnia.Service
         /// </summary>
         private void ShutdownApplication()
         {
+            // a fatal configuration error sets a non-zero exit code (see DesomniaHost's loop)
+            // before it stops the application; report it as the service's exit code, so the
+            // SCM sees a FAILED stop and its recovery actions restart the service (self-heal)
+            if (Environment.ExitCode != 0)
+            {
+                ExitCode = Environment.ExitCode;
+            }
+
             // the teardown gets its own slice of the SCM's patience: the wait inside base.OnStop
             // may already have spent most of the hint asked for when the stop began
             try

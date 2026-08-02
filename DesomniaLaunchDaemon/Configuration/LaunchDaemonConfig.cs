@@ -5,9 +5,9 @@ namespace MadWizard.Desomnia.LaunchDaemon.Configuration
     public class LaunchDaemonConfig
     {
         /// <summary>
-        /// The same &lt;ProcessMonitor&gt; element the module binds, read here for its
-        /// <c>pollInterval</c> alone — the platform manager has to be built with it.
+        /// The persistent ProcessManager settings (<c>&lt;?global ProcessManager:pollInterval="..."?&gt;</c>),
+        /// read for the <c>pollInterval</c> alone — the platform manager has to be built with it.
         /// </summary>
-        public ProcessManagerConfig? ProcessMonitor { get; set; }
+        public PollingProcessManagerConfig ProcessManager { get; set; } = new();
     }
 }

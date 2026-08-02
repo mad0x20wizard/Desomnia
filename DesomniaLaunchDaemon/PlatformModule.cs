@@ -5,15 +5,17 @@ using MadWizard.Desomnia.LaunchDaemon.Configuration;
 using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Network.Manager;
 using MadWizard.Desomnia.Power.Manager;
-using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Processes.Manager;
+using Microsoft.Extensions.Configuration;
 
 namespace MadWizard.Desomnia.LaunchDaemon
 {
-    internal class PlatformModule : Desomnia.ConfigurableModule<LaunchDaemonConfig>
+    internal class PlatformModule : Desomnia.ConfigurableModule
     {
-        protected override void LoadOnce(ContainerBuilder builder)
+        protected override void LoadOnce(ContainerBuilder builder, IConfiguration configuration)
         {
+            var config = Bind<LaunchDaemonConfig>(configuration);
+
             // the display manager lives in the persistent container, so it survives a
             // configuration rebuild with its soft-disconnect holds and CG display ids intact;
             // created only on first demand, and recorded so a config-less rebuild can re-attach
@@ -21,6 +23,15 @@ namespace MadWizard.Desomnia.LaunchDaemon
                 .As<IDisplayManager>()
                 .SingleInstance()
                 .AsSelf();
+
+            // Takes the place of the module's own polling fallback (its registration steps aside
+            // for any IProcessManager already registered, and platform modules load first): same
+            // polling, but a poll that finds nothing new costs a single syscall here.
+            builder.RegisterType<LibProcProcessManager>()
+                .WithParameter(TypedParameter.From(config.ProcessManager?.PollInterval))
+                .AsImplementedInterfaces()
+                .As<ProcessManager>()
+                .SingleInstance();
 
             // the interface manager is persistent for the same reason: a standing disable
             // intent (and what it took away) must survive a configuration rebuild, and only
@@ -42,16 +53,8 @@ namespace MadWizard.Desomnia.LaunchDaemon
                 .Named<IEnvironmentCondition>("power");
         }
 
-        protected override void Load(ContainerBuilder builder, LaunchDaemonConfig config)
+        protected override void Load(ContainerBuilder builder)
         {
-            // Takes the place of the module's own polling fallback (its registration steps aside
-            // for any IProcessManager already registered, and platform modules load first): same
-            // polling, but a poll that finds nothing new costs a single syscall here.
-            builder.RegisterType<LibProcProcessManager>()
-                .WithParameter(TypedParameter.From(config.ProcessMonitor?.PollInterval ?? ProcessManagerConfig.DefaultPollInterval))
-                .AsImplementedInterfaces()
-                .As<ProcessManager>()
-                .SingleInstance();
 
             // Implementing Network-Managers
             builder.RegisterType<ArpNdpCache>()

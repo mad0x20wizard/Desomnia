@@ -12,15 +12,18 @@ using MadWizard.Desomnia.Processes.Manager;
 using MadWizard.Desomnia.Service.Actions;
 using MadWizard.Desomnia.Service.Configuration;
 using MadWizard.Desomnia.Session.Manager;
+using Microsoft.Extensions.Configuration;
 
 namespace MadWizard.Desomnia.Service
 {
-    internal class PlatformModule : Desomnia.ConfigurableModule<ServiceConfig>
+    internal class PlatformModule : Desomnia.ConfigurableModule
     {
         private static string HostsFilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "drivers", "etc", "hosts");
 
-        protected override void LoadOnce(ContainerBuilder builder)
+        protected override void LoadOnce(ContainerBuilder builder, IConfiguration configuration)
         {
+            var config = Bind<ServiceConfig>(configuration);
+
             builder.RegisterType<PowerManager>()
                 .AsImplementedInterfaces()
                 .SingleInstance()
@@ -28,6 +31,15 @@ namespace MadWizard.Desomnia.Service
 
             builder.RegisterType<PowerSourceCondition>()
                 .Named<IEnvironmentCondition>("power");
+
+            if (config.ProcessManager?.PollInterval is not TimeSpan)
+            {
+                builder.RegisterType<TraceEventProcessManager>()
+                    .AsImplementedInterfaces()
+                    .As<ProcessManager>()
+                    .SingleInstance()
+                    .AsSelf();
+            }
 
             // takes over from the platform-neutral matcher the NetworkMonitor module registers
             // with PreserveExistingDefaults (its LoadOnce runs after this one), so conditions
@@ -38,7 +50,7 @@ namespace MadWizard.Desomnia.Service
             // like the display manager: persistent, created only on first demand, recorded
             // so a config-less rebuild can re-attach — and on this platform additionally the
             // keeper of adapters it disabled, which Windows drops from the BCL enumeration
-            builder.RegisterType<WindowsNetworkInterfaceManager>()
+            builder.RegisterType<CIMNetworkInterfaceManager>()
                 .As<INetworkInterfaceManager>()
                 .SingleInstance()
                 .AsSelf();
@@ -52,23 +64,14 @@ namespace MadWizard.Desomnia.Service
                 .AsSelf();
         }
 
-        protected override void Load(ContainerBuilder builder, ServiceConfig config)
+        protected override void Load(ContainerBuilder builder)
         {
-            if (config.ProcessMonitor?.PollInterval is not TimeSpan)
-            {
-                builder.RegisterType<TraceEventProcessManager>()
-                    .AsImplementedInterfaces()
-                    .As<ProcessManager>()
-                    .SingleInstance()
-                    .AsSelf();
-            }
-
             // Address mappings
             builder.RegisterType<HostsManager>()
                 .WithParameter(TypedParameter.From(HostsFilePath))
                 .AsImplementedInterfaces()
                 .SingleInstance();
-            builder.RegisterType<WindowsNeighborCache>()
+            builder.RegisterType<NetshNeighborCache>()
                 .AsImplementedInterfaces()
                 .InstancePerNetwork()
                 .AsSelf();

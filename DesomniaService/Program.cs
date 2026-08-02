@@ -5,6 +5,8 @@ using Microsoft.Extensions.Hosting;
 using System.Diagnostics;
 using System.Reflection;
 
+//MadWizard.Desomnia.Test.Debugger.UntilAttached().Wait();
+
 if (!Environment.IsPrivilegedProcess)
     throw new NotSupportedException("The application must be run with elevated privileges.");
 
@@ -14,10 +16,7 @@ DesomniaWindowsBuilder builder;
 
 if (Environment.IsWindowsService)
 {
-    builder = new DesomniaWindowsServiceBuilder()
-    {
-        AutoReload = true // reload configuration on change
-    };
+    builder = new DesomniaWindowsServiceBuilder();
 
     builder.RegisterModule<WindowsServiceModule>();
 }
@@ -88,6 +87,8 @@ class DesomniaWindowsServiceBuilder : DesomniaWindowsBuilder
     internal DesomniaWindowsServiceBuilder() : base()
     {
         Directory.SetCurrentDirectory(ProgramDataDir);
+
+        _source.ReloadOnChange = true;
 
         CreateEventLog();
     }

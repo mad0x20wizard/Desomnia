@@ -4,12 +4,15 @@ namespace MadWizard.Desomnia.Processes.Configuration
 {
     public class ProcessManagerConfig
     {
-        public static readonly TimeSpan DefaultPollInterval = TimeSpan.FromSeconds(2);
-
         public TimeSpan? PollInterval { get; init; }
     }
 
-    public class ProcessMonitorConfig : ProcessManagerConfig
+    public class PollingProcessManagerConfig : ProcessManagerConfig
+    {
+        public new TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(2);
+    }
+
+    public class ProcessMonitorConfig
     {
         public DelayedActionInfo? OnIdle { get; set; }
         public DelayedActionInfo? OnDemand { get; set; }

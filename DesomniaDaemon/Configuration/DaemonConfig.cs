@@ -7,12 +7,9 @@ namespace MadWizard.Desomnia.Daemon.Configuration
     {
         public bool UseDBus { get; set; } = true;
 
-        /// <summary>
-        /// The same &lt;ProcessMonitor&gt; element the module binds, read here for its
-        /// <c>pollInterval</c> alone — the platform manager has to be built with it.
-        /// </summary>
-        public ProcessManagerConfig? ProcessMonitor { get; set; }
+        public PowerManagerConfig PowerManager { get; set; } = new();
 
-        public PowerManagerConfig PowerRequestMonitor { get; set; } = new PowerManagerConfig();
+        public PollingProcessManagerConfig ProcessManager { get; set; } = new();
+
     }
 }

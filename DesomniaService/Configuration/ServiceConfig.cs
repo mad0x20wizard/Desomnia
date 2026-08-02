@@ -4,6 +4,6 @@ namespace MadWizard.Desomnia.Service.Configuration
 {
     public class ServiceConfig
     {
-        public ProcessManagerConfig? ProcessMonitor { get; set; }
+        public ProcessManagerConfig? ProcessManager { get; set; }
     }
 }
