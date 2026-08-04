@@ -106,20 +106,9 @@ namespace MadWizard.Desomnia.Processes.Manager
             }
         }
 
-        // createIfUnknown, because the indexer's callers ask about processes they positively
-        // expect – above all a freshly launched one, which the platform's own event lane may
-        // not have delivered yet; observers that must not create only what they saw mentioned
-        // use TryFindProcess directly, without the flag
-        public IProcess this[int pid] => TryFindProcess(pid, out IProcess? process, createIfUnknown: true) ? process : throw new ProcessNotFoundException(pid);
+        public IProcess this[int pid] => TryFindProcess(pid, out IProcess? process, true, true) ? process : throw new ProcessNotFoundException(pid);
 
-        public virtual IProcess LaunchProcess(ProcessStartInfo info)
-        {
-            var native = Process.Start(info) ?? throw new Exception("Process could not be started.");
-
-            return TriggerStart(native)!;
-        }
-
-        public bool TryFindProcess(int pid, [NotNullWhen(true)] out IProcess? process, bool createIfUnknown = false)
+        public bool TryFindProcess(int pid, [NotNullWhen(true)] out IProcess? process, bool createIfUnknown = false, bool checkIfStopped = false)
         {
             if (!_processList.TryGetValue(pid, out process))
             {
@@ -128,7 +117,7 @@ namespace MadWizard.Desomnia.Processes.Manager
                     return (process = created) is not null;
                 }
             }
-            else if (process?.HasStopped ?? false)
+            else if (checkIfStopped && (process?.HasStopped ?? false))
             {
                 TriggerStop(process.Id);
 
@@ -136,6 +125,13 @@ namespace MadWizard.Desomnia.Processes.Manager
             }
 
             return process != null;
+        }
+
+        public virtual IProcess LaunchProcess(ProcessStartInfo info)
+        {
+            var native = Process.Start(info) ?? throw new Exception("Process could not be started.");
+
+            return TriggerStart(native)!;
         }
 
         /**
