@@ -28,11 +28,11 @@ Process
 
 .. code:: xml
 
-  <Process name="Browser" withChildren="false" minCPU="1%" 
+  <Process name="Browser" watchChildren="false" minCPU="1%"
     onIdle="stop" onStart="" onStop="">
-    
+
     chrome|edge|firefox
-  
+
   </Process>
 
 name
@@ -63,12 +63,16 @@ By default, this process group will only include processes with a matching image
 
 .. include:: attributes/cpu.rst
 
+.. include:: attributes/io.rst
+
+.. include:: attributes/traffic.rst
+
 onIdle
 ++++++
 
 :⚡️ event:
 
-This event is triggered if the processing time used since the last timeout is less than the configured ``minCPU`` value. If no CPU threshold is configured, this event will not be triggered.
+This event is triggered if the configured thresholds (``minCPU``, ``minIO``, ``minTraffic``) were not all met since the last timeout. If no threshold is configured, this event will not be triggered.
 
 onStart
 +++++++
@@ -82,4 +86,4 @@ onStop
 
 :⚡️ event:
 
-This event is triggered when the last process of this group exists 
+This event is triggered when the last process of this group exits. 
