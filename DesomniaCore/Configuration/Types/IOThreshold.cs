@@ -2,10 +2,10 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace MadWizard.Desomnia.Network.Configuration
+namespace MadWizard.Desomnia.Configuration
 {
-    [TypeConverter(typeof(TrafficThresholdConverter))]
-    public struct TrafficThreshold
+    [TypeConverter(typeof(IOThresholdConverter))]
+    public struct IOThreshold
     {
         public long?    TrafficUnit { get; set; }
         public TimeSpan?   TimeUnit { get; set; }
@@ -13,7 +13,7 @@ namespace MadWizard.Desomnia.Network.Configuration
         public long           Value { get; set; }
     }
 
-    public partial class TrafficThresholdConverter : TypeConverter
+    public partial class IOThresholdConverter : TypeConverter
     {
         public override bool CanConvertFrom(ITypeDescriptorContext? context, Type type)
         {
@@ -30,13 +30,15 @@ namespace MadWizard.Desomnia.Network.Configuration
             return null;
         }
 
-        private static TrafficThreshold TryParseFormat(string str)
+        private static IOThreshold TryParseFormat(string str)
         {
             str = string.Concat(str.Where(c => !char.IsWhiteSpace(c))); // remove all whitespace
 
-            if (TrafficThresholdPattern().Match(str) is Match match)
+            // Match never returns null – only Success separates "1MB/s" from garbage, and without
+            // this check the descriptive error below was dead code behind a long.Parse("") throw
+            if (TrafficThresholdPattern().Match(str) is { Success: true } match)
             {
-                var speed = new TrafficThreshold { Value = long.Parse(match.Groups["Value"].Value) };
+                var speed = new IOThreshold { Value = long.Parse(match.Groups["Value"].Value) };
 
                 if (match.Groups.TryGetValue("TrafficUnit", out var traffic) && traffic.Success)
                 {

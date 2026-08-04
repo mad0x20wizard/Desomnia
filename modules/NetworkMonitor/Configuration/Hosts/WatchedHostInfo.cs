@@ -8,7 +8,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
 {
     public class WatchedHostInfo : NetworkHostInfo
     {
-        public TrafficThreshold? MinTraffic { get; set; }
+        public IOThreshold? MinTraffic { get; set; }
 
         // Options
         #region                     DemandOptions

@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Configuration.Filter;
+﻿using MadWizard.Desomnia.Configuration;
+using MadWizard.Desomnia.Network.Configuration.Filter;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Configuration.Services;
 using System.Text;
@@ -7,7 +8,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
 {
     public class LocalHostInfo
     {
-        public TrafficThreshold? MinTraffic { get; set; }
+        public IOThreshold? MinTraffic { get; set; }
 
         // Options
         #region         DemandOptions

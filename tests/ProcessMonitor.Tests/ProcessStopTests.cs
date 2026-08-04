@@ -17,7 +17,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         [Fact]
         public async Task WithoutATimeout_TheProcessIsNotAskedFirst()
         {
-            var process = new FakeHandle { IsGone = true };
+            var process = new FakeHandle { IsGone = false };
 
             await process.Stop();
 
@@ -27,25 +27,40 @@ namespace MadWizard.Desomnia.Processes.Tests
         [Fact]
         public async Task WithATimeout_TheProcessIsAsked()
         {
-            var process = new FakeHandle { IsGone = true };
+            var process = new FakeHandle { IsGone = false };
 
             await process.Stop(TimeSpan.FromSeconds(5));
 
             Assert.Equal(1, process.Requested);
         }
 
+        /// <summary>
+        /// A process that has already gone is not asked and not killed: there is nothing there to ask,
+        /// and the pid may by now belong to somebody else entirely.
+        /// </summary>
         [Fact]
-        public async Task AProcessThatWillNotGo_IsKilled()
+        public async Task AProcessAlreadyGone_IsLeftAlone()
+        {
+            var process = new FakeHandle { IsGone = true };
+
+            await process.Stop(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(0, process.Requested);
+        }
+
+        /// <summary>
+        /// Reaching for a process that is not there is not an error anybody can act on – and this
+        /// handle stands for a pid no operating system will hand out, so every reach fails.
+        /// </summary>
+        [Fact]
+        public async Task AProcessThatCannotBeReached_FailsQuietly()
         {
             var process = new FakeHandle { IsGone = false };
 
-            // The kill is not a seam any more, so it cannot be counted — but it can still be caught
-            // in the act: this handle stands for a pid that cannot exist, so the moment Stop reaches
-            // for the real process to kill it, that reach is what fails. Were the kill dropped, this
-            // would return quietly instead.
-            await Assert.ThrowsAsync<ArgumentException>(() => process.Stop());
+            await process.Stop();                // kills, or would, were the pid a real one
+            await process.Stop(TimeSpan.FromSeconds(5));
 
-            Assert.Equal(0, process.Requested); // still not asked – no timeout was given
+            Assert.Equal(1, process.Requested);  // asked the once, by the call that had a timeout
         }
 
         /// <summary>

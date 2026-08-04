@@ -16,7 +16,7 @@ namespace MadWizard.Desomnia.Network.Tests
         [Fact]
         public void Disable_TakesTheUpStateAway_AndReleaseRestoresIt()
         {
-            using var manager = new FakeManager();
+            using var manager = new FakeManager() { Logger = NullLogger.Instance };
             manager.System.Add(new SystemInterface("eth0"));
             manager.Pump();
 
@@ -37,7 +37,7 @@ namespace MadWizard.Desomnia.Network.Tests
         [Fact]
         public void AlreadyDisabledInterface_StaysDisabledOnRelease()
         {
-            using var manager = new FakeManager();
+            using var manager = new FakeManager() { Logger = NullLogger.Instance };
             manager.System.Add(new SystemInterface("eth0") { Status = OperationalStatus.Down }); // the base reads Down as already disabled
             manager.Pump();
 
@@ -59,7 +59,7 @@ namespace MadWizard.Desomnia.Network.Tests
             // disabled one — but the platform's admin check knows it is still ENABLED, so
             // disabling it does take an enabled interface out of service, and the release (and
             // the shutdown self-heal) must put it back
-            using var manager = new FakeManager();
+            using var manager = new FakeManager() { Logger = NullLogger.Instance };
             manager.System.Add(new SystemInterface("wlan0") { Status = OperationalStatus.Down });
             manager.Enabled.Add("wlan0"); // administratively enabled, merely not associated
             manager.Pump();
@@ -78,7 +78,7 @@ namespace MadWizard.Desomnia.Network.Tests
         [Fact]
         public void ForeignReEnable_IsToleratedByDefault()
         {
-            using var manager = new FakeManager();
+            using var manager = new FakeManager() { Logger = NullLogger.Instance };
             var system = new SystemInterface("eth0");
             manager.System.Add(system);
             manager.Pump();
@@ -97,7 +97,7 @@ namespace MadWizard.Desomnia.Network.Tests
         [Fact]
         public void ForeignReEnable_IsAnsweredWhenEnforced()
         {
-            using var manager = new FakeManager();
+            using var manager = new FakeManager() { Logger = NullLogger.Instance };
             var system = new SystemInterface("eth0");
             manager.System.Add(system);
             manager.Pump();
@@ -121,7 +121,7 @@ namespace MadWizard.Desomnia.Network.Tests
         [Fact]
         public void GoneInterface_IsSkippedOnRelease()
         {
-            using var manager = new FakeManager();
+            using var manager = new FakeManager() { Logger = NullLogger.Instance };
             manager.System.Add(new SystemInterface("eth0"));
             manager.Pump();
 
@@ -142,7 +142,7 @@ namespace MadWizard.Desomnia.Network.Tests
         [Fact]
         public void HiddenAdapter_IsStillRestored() // the Windows behavior: disabling hides the adapter
         {
-            using var manager = new FakeManager();
+            using var manager = new FakeManager() { Logger = NullLogger.Instance };
             manager.System.Add(new SystemInterface("wlan0"));
             manager.HiddenButKnown.Add("wlan0"); // the platform lookup sees disabled adapters
             manager.Pump();
@@ -164,7 +164,7 @@ namespace MadWizard.Desomnia.Network.Tests
         [Fact]
         public void HiddenAdapter_ForeignReEnableIsTolerated()
         {
-            using var manager = new FakeManager();
+            using var manager = new FakeManager() { Logger = NullLogger.Instance };
             var system = new SystemInterface("wlan0");
             manager.System.Add(system);
             manager.HiddenButKnown.Add("wlan0");
@@ -192,7 +192,7 @@ namespace MadWizard.Desomnia.Network.Tests
         [Fact]
         public void Dispose_RestoresWhatItTookAway()
         {
-            var manager = new FakeManager();
+            var manager = new FakeManager() { Logger = NullLogger.Instance };
             manager.System.Add(new SystemInterface("eth0"));
             manager.System.Add(new SystemInterface("eth1") { Status = OperationalStatus.Down });
             manager.Pump();
@@ -208,7 +208,7 @@ namespace MadWizard.Desomnia.Network.Tests
         [Fact]
         public void ReturningInterface_IsTheSameInstance_WithItsIntent()
         {
-            using var manager = new FakeManager();
+            using var manager = new FakeManager() { Logger = NullLogger.Instance };
             manager.System.Add(new SystemInterface("eth0"));
             manager.Pump();
 
@@ -242,7 +242,7 @@ namespace MadWizard.Desomnia.Network.Tests
         [Fact]
         public void DisposedManager_IgnoresLateChangesAndIntents()
         {
-            var manager = new FakeManager();
+            var manager = new FakeManager() { Logger = NullLogger.Instance };
             var system = new SystemInterface("eth0");
             manager.System.Add(system);
             manager.Pump();
@@ -272,7 +272,7 @@ namespace MadWizard.Desomnia.Network.Tests
         [Fact]
         public void IntentHeldHandle_DoesNotAccumulateInTheMemory()
         {
-            using var manager = new FakeManager();
+            using var manager = new FakeManager() { Logger = NullLogger.Instance };
             var system = new SystemInterface("wlan0");
             manager.System.Add(system);
             manager.HiddenButKnown.Add("wlan0");
@@ -299,7 +299,7 @@ namespace MadWizard.Desomnia.Network.Tests
         [Fact]
         public void DetachedHandle_WithoutIntent_IsRemembered()
         {
-            using var manager = new FakeManager();
+            using var manager = new FakeManager() { Logger = NullLogger.Instance };
             manager.System.Add(new SystemInterface("eth0"));
             manager.Pump();
 
@@ -316,7 +316,7 @@ namespace MadWizard.Desomnia.Network.Tests
         [Fact]
         public void Refresh_RaisesChanged()
         {
-            using var manager = new FakeManager();
+            using var manager = new FakeManager() { Logger = NullLogger.Instance };
 
             int raised = 0;
             manager.Changed += (_, _) => raised++;
@@ -350,7 +350,7 @@ namespace MadWizard.Desomnia.Network.Tests
         /// <summary>A platform over a fabricated enumeration: disabling and enabling flip the
         /// snapshot's status like an OS would, and <see cref="HiddenButKnown"/> mimics the
         /// Windows lookup that finds adapters their own disable hid.</summary>
-        private sealed class FakeManager() : NetworkInterfaceManager(NullLogger.Instance)
+        private sealed class FakeManager: NetworkInterfaceManager
         {
             public List<SystemInterface> System { get; } = [];
 

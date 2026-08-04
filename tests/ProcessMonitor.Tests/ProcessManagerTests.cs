@@ -338,6 +338,60 @@ namespace MadWizard.Desomnia.Processes.Tests
         }
 
         /// <summary>
+        /// A start reported for a process that is already tracked must not build a second one.
+        ///
+        /// Nothing about the duplicate is visible from the outside – the roster is keyed by pid, so it
+        /// simply loses the add and is dropped. What it takes with it is the platform's exit watch,
+        /// armed in its constructor: a kernel handle and a thread-pool wait on Windows, a pidfd on
+        /// Linux, a kqueue registration on macOS, none of it given back until the process it names
+        /// ends. Live, that read as three handles per process where the budget was one.
+        /// </summary>
+        [Fact]
+        public void StartReportedTwice_BuildsOneProcess()
+        {
+            var manager = Manager((101, "chrome"));
+
+            manager.Start();
+
+            var started = new List<IProcess>();
+            manager.ProcessStarted += (sender, process) => started.Add(process);
+
+            var first = Assert.Single(manager);
+
+            // what a trace event does for a process the enumeration already found
+            manager.Announce(new ProcessInformation(101) { Name = "chrome", SessionId = 0 });
+            manager.Announce(new ProcessInformation(101) { Name = "chrome", SessionId = 0 });
+
+            Assert.Equal(1, manager.Created);            // built once, however often it is announced
+            Assert.Empty(manager.Released);              // and nothing had to be given back
+            Assert.Same(first, Assert.Single(manager));  // still the very same process object
+            Assert.Empty(started);                       // and no second arrival announced
+        }
+
+        /// <summary>
+        /// The same, for the race the check above cannot close: two lanes reporting one process at
+        /// once. Only one can be tracked, and whatever the other built has to be handed back.
+        /// </summary>
+        [Fact]
+        public void ProcessThatLosesTheRace_IsReleased()
+        {
+            var manager = new FakeProcessManager { Logger = NullLogger<ProcessManager>.Instance };
+
+            manager.Table[102] = new("code", 0) { Listed = false };
+            manager.Start();
+
+            // The window is inside CreateProcess itself, which is the only place another lane can get
+            // in between the check and the add – so that is where the other lane is let in.
+            manager.RaceOnCreate = 102;
+
+            manager.Announce(new ProcessInformation(102) { Name = "code", SessionId = 0 });
+
+            Assert.Equal(2, manager.Created);                                    // both lanes built one
+            Assert.Single(manager);                                              // one of them was kept
+            Assert.Equal([102], manager.Released.Select(process => process.Id)); // the other handed back
+        }
+
+        /// <summary>
         /// A platform whose process table is a dictionary: <see cref="EnumerateProcesses"/> hands
         /// out bare ids the way a single syscall would, <see cref="QueryProcess"/> fills in the
         /// identity, and every describe call is recorded so a test can prove the refresh only asked
@@ -352,7 +406,35 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             public List<int> Described { get; } = [];
 
+            /// <summary>How many processes this manager was asked to build, kept or not.</summary>
+            public int Created { get; private set; }
+
+            /// <summary>The ones it had to hand back – whatever creating them took out.</summary>
+            public List<IProcess> Released { get; } = [];
+
+            /// <summary>A pid to let another lane adopt while this one is still building its own.</summary>
+            public int? RaceOnCreate { get; set; }
+
             public void Pump() => RefreshProcessList();
+
+            /// <summary>What a trace event does: report a start, tracked already or not.</summary>
+            public void Announce(ProcessInformation info) => TriggerStart(info);
+
+            protected override IProcess CreateProcess(ProcessInformation info, IProcess? parent)
+            {
+                Created++;
+
+                if (RaceOnCreate == info.Id)
+                {
+                    RaceOnCreate = null; // the other lane only gets in once
+
+                    TriggerStart(info);
+                }
+
+                return base.CreateProcess(info, parent);
+            }
+
+            protected override void ReleaseProcess(IProcess process) => Released.Add(process);
 
             protected override IEnumerable<ProcessInformation> EnumerateProcesses()
             {

@@ -1,4 +1,4 @@
-﻿using MadWizard.Desomnia.Network.Configuration;
+﻿using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Network.Demand;
 using PacketDotNet;
 
@@ -9,7 +9,7 @@ namespace MadWizard.Desomnia.Network.Watch
         private long _countBytes;
         private long _countPackets;
 
-        public TrafficThreshold? Threshold { get; set; }
+        public IOThreshold? Threshold { get; set; }
 
         internal protected virtual Task StartWatch() => Task.CompletedTask;
         internal protected virtual Task StopWatch(bool gracefully)  => Task.CompletedTask;
@@ -39,7 +39,7 @@ namespace MadWizard.Desomnia.Network.Watch
             {
                 bytes = _countBytes; long packets = _countPackets;
 
-                if (Threshold is TrafficThreshold speed)
+                if (Threshold is IOThreshold speed)
                 {
                     double value, minValue;
                     if (speed.TrafficUnit is long traffic)

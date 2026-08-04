@@ -1,5 +1,6 @@
 using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Processes.Manager;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace MadWizard.Desomnia.Processes.Tests
@@ -11,9 +12,14 @@ namespace MadWizard.Desomnia.Processes.Tests
     /// </summary>
     public class ProcessWatchTests
     {
+        internal static ProcessWatch Watch(ProcessWatchInfo info, IProcessManager manager)
+        {
+            return new ProcessWatch(info) { Manager = manager, Logger = NullLogger<ProcessWatch>.Instance };
+        }
+
         private static ProcessWatch Watch(ProcessWatchInfo info, params IProcess[] processes)
         {
-            return new ProcessWatch(info) { Manager = new FakeProcessSource(processes) };
+            return Watch(info, new FakeProcessSource(processes));
         }
 
         [Fact]
@@ -40,7 +46,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var source = new FakeProcessSource();
 
-            var watch = new ProcessWatch(new ProcessWatchInfo("chrome") { Name = "Browser" }) { Manager = source };
+            var watch = Watch(new ProcessWatchInfo("chrome") { Name = "Browser" }, source);
 
             var started = 0;
             var stopped = 0;
@@ -72,7 +78,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var source = new FakeProcessSource();
 
-            var watch = new ProcessWatch(new ProcessWatchInfo("chrome") { Name = "Browser" }) { Manager = source };
+            var watch = Watch(new ProcessWatchInfo("chrome") { Name = "Browser" }, source);
 
             source.Start(new FakeProcess(101, "chrome"));
             source.Start(new FakeProcess(101, "chrome")); // the same pid arriving under a second object
@@ -120,7 +126,7 @@ namespace MadWizard.Desomnia.Processes.Tests
             var info = new ProcessWatchInfo("chrome") { Name = "Browser", MinCPU = new CPUThreshold(TimeSpan.FromMilliseconds(10)) };
 
             var source = new FakeProcessSource(window, tab);
-            var watch = new ProcessWatch(info) { Manager = source };
+            var watch = Watch(info, source);
 
             watch.Inspect(TimeSpan.FromSeconds(2)); // establishes a baseline per process
 
@@ -140,7 +146,7 @@ namespace MadWizard.Desomnia.Processes.Tests
             var info = new ProcessWatchInfo("chrome") { Name = "Browser", MinCPU = new CPUThreshold(TimeSpan.FromMilliseconds(10)) };
 
             var source = new FakeProcessSource(window);
-            var watch = new ProcessWatch(info) { Manager = source };
+            var watch = Watch(info, source);
 
             watch.Inspect(TimeSpan.FromSeconds(2));
 

@@ -35,6 +35,27 @@ namespace MadWizard.Desomnia.Processes.Tests
             }
         }
 
+        /// <summary>The storage counters to report; null is a platform (or moment) that cannot answer.</summary>
+        public ProcessInputOutput? Disk { get; set; }
+
+        /// <summary>How often the storage counters were asked for — proof a cycle did (not) sample.</summary>
+        public int DiskSamples { get; private set; }
+
+        public ProcessInputOutput? StorageData
+        {
+            get
+            {
+                DiskSamples++;
+
+                return Disk;
+            }
+        }
+
+        /// <summary>The traffic counters to report; null mimics the platforms without a meter.</summary>
+        public ProcessInputOutput? Net { get; set; }
+
+        public ProcessInputOutput? NetworkData => Net;
+
         public string? Path { get; set; }
 
         public string? ImagePath => Path ?? throw new Xunit.Sdk.XunitException($"'{name}' should not have been asked for its path");
@@ -44,6 +65,8 @@ namespace MadWizard.Desomnia.Processes.Tests
         public event EventHandler? Stopped;
 
         public void RaiseStopped() => Stopped?.Invoke(this, EventArgs.Empty);
+
+        public void Dispose() { } // nothing real to release behind a fake
     }
 
     /// <summary>A fixed roster of processes instead of a live OS enumeration.</summary>
