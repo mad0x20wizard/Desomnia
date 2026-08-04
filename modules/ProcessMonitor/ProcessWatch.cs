@@ -9,24 +9,13 @@ namespace MadWizard.Desomnia.Processes
 {
     public class ProcessWatch : Resource
     {
-        readonly ProcessWatchInfo info;
+        readonly ProcessWatchInfo _info;
 
         /**
          * Mutated by whichever thread reports a process change – the poll loop, an ETW callback, a
          * kqueue notification, the runtime's Exited event – while the inspection loop reads it.
          * Every path in and out locks the roster itself, and reads take a snapshot rather than hold
          * the lock while they work.
-         *
-         * A plain dictionary on purpose: what has to be atomic is not the change but the decision
-         * riding on it – whether this add was the first or this removal the last. A concurrent
-         * collection cannot answer that, and would only suggest it had.
-         *
-         * Keyed by pid, so a process leaves in one step rather than by a scan, and so the same
-         * process cannot be held twice under two objects.
-         *
-         * The 'readonly' is load-bearing now that the dictionary is its own lock: reassign it and
-         * two threads would be locking two different objects, with nothing to show for it. Compare
-         * the measurement histories below, which are replaced wholesale every cycle.
          */
         readonly Dictionary<int, IProcess> _watchedProcesses = [];
 
@@ -79,7 +68,7 @@ namespace MadWizard.Desomnia.Processes
 
         public ProcessWatch(ProcessWatchInfo info)
         {
-            this.info = info;
+            this._info = info;
 
             // NetworkWatch reads a unit-less threshold as raw packets, which processes cannot
             // count – and read as bytes, a naked number per interval would be satisfied by noise.
@@ -102,21 +91,21 @@ namespace MadWizard.Desomnia.Processes
 
         protected virtual bool ShouldWatchProcess(IProcess process)
         {
-            if (info.IsFilePathPattern)
+            if (_info.IsFilePathPattern)
             {
                 if (process.ImagePath is string path)
                 {
-                    if (info.Pattern.Count(path) > 0)
+                    if (_info.Pattern.Count(path) > 0)
                         return true;
                 }
             }
             else
             {
-                if (info.Pattern.Count(process.Name) > 0)
+                if (_info.Pattern.Count(process.Name) > 0)
                     return true;
             }
 
-            if (info.WatchChildren)
+            if (_info.WatchChildren)
             {
                 lock (_watchedProcesses)
                 {
@@ -257,7 +246,7 @@ namespace MadWizard.Desomnia.Processes
                 warned = true;
 
                 Logger.LogWarning("'{Name}': no watched process could answer for {Attribute} – the threshold is ignored and demand assumed " +
-                    "(unsupported platform, missing privileges, or metering not active)", info.Name, attribute);
+                    "(unsupported platform, missing privileges, or metering not active)", _info.Name, attribute);
             }
 
             return true;
@@ -269,13 +258,13 @@ namespace MadWizard.Desomnia.Processes
             // anyway costs a syscall per watched process, every cycle, for numbers nobody reads –
             // which is what made this module expensive where polling already is. The same rule
             // holds per attribute below: only a configured threshold is measured.
-            if (!info.HasThresholds)
+            if (!_info.HasThresholds)
             {
                 lock (_watchedProcesses)
                 {
                     if (_watchedProcesses.Count > 0)
                     {
-                        yield return new ProcessUsage(info.Name);
+                        yield return new ProcessUsage(_info.Name);
                     }
                 }
 
@@ -296,11 +285,11 @@ namespace MadWizard.Desomnia.Processes
             TimeSpan time = TimeSpan.Zero;
             long? io = null, traffic = null;
 
-            if (info.MinCPU is not null)
+            if (_info.MinCPU is not null)
                 time = MeasureProcessorTime(processes);
-            if (info.MinIO is not null)
+            if (_info.MinIO is not null)
                 io = MeasureBytes(processes, ref _lastIO, static process => process.StorageData);
-            if (info.MinTraffic is not null)
+            if (_info.MinTraffic is not null)
                 traffic = MeasureBytes(processes, ref _lastTraffic, static process => process.NetworkData);
 
             if (processes.Length == 0)
@@ -312,7 +301,7 @@ namespace MadWizard.Desomnia.Processes
             double? usage = null;
             TimeSpan? timeUsed = null;
 
-            if (info.MinCPU is CPUThreshold cpu)
+            if (_info.MinCPU is CPUThreshold cpu)
             {
                 if (cpu.AbsoluteTime is TimeSpan minTime)
                 {
@@ -330,19 +319,19 @@ namespace MadWizard.Desomnia.Processes
                 }
             }
 
-            if (info.MinIO is IOThreshold minIO)
+            if (_info.MinIO is IOThreshold minIO)
             {
                 demand &= io is long ioBytes ? Satisfies(minIO, ioBytes, elapsed) : AssumeDemand(ref _warnedIO, "minIO");
             }
 
-            if (info.MinTraffic is IOThreshold minTraffic)
+            if (_info.MinTraffic is IOThreshold minTraffic)
             {
                 demand &= traffic is long trafficBytes ? Satisfies(minTraffic, trafficBytes, elapsed) : AssumeDemand(ref _warnedTraffic, "minTraffic");
             }
 
             if (demand)
             {
-                yield return new ProcessUsage(info.Name) { Usage = usage, Time = timeUsed, Storage = io, Traffic = traffic };
+                yield return new ProcessUsage(_info.Name) { Usage = usage, Time = timeUsed, Storage = io, Traffic = traffic };
             }
         }
         #endregion
