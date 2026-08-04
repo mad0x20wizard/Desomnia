@@ -1,8 +1,8 @@
 ﻿using Autofac;
-using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Pipe.Messages;
 using MadWizard.Desomnia.Service.Bridge.Configuration;
 using MadWizard.Desomnia.Service.Bridge.Minion;
+using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -46,7 +46,7 @@ namespace MadWizard.Desomnia.Service.Bridge
             {
                 if (desc.AllowControlSession != null)
                     if (desc.AllowControlSession?.IsMatchingNone ?? false)
-                        session.SessionControl = SessionMatcher.None;
+                        session.SessionControl = SessionSelector.None;
                     else
                         session.SessionControl += desc.AllowControlSession;
                 if (desc.AllowControlSleep != null)
