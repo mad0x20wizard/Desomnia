@@ -1,5 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics;
+using System.Reactive.Disposables;
+using System.Reactive.Disposables.Fluent;
 
 namespace MadWizard.Desomnia.Processes.Manager
 {
@@ -15,6 +17,8 @@ namespace MadWizard.Desomnia.Processes.Manager
      */
     public class ProcessHandle(ProcessInformation info, IProcess? parent = null) : IProcess
     {
+        protected readonly CompositeDisposable _heldResources = [];
+
         /// <summary>
         /// The BCL process object, created once and kept – callers write state into this very
         /// instance (redirected output handles) and read it back through a later access.
@@ -24,7 +28,10 @@ namespace MadWizard.Desomnia.Processes.Manager
             get
             {   try
                 {
-                    return field ??= Process.GetProcessById(info.Id);
+                    lock (_heldResources)
+                    {
+                        return field ??= Process.GetProcessById(info.Id).DisposeWith(_heldResources);
+                    }
                 }
                 catch (ArgumentException)
                 {
@@ -78,6 +85,15 @@ namespace MadWizard.Desomnia.Processes.Manager
                 }
             }
         }
+
+        /**
+         * The two counter pairs have no BCL fallback to reach for – System.Diagnostics.Process
+         * simply has nothing to offer – so the base answers "cannot sample" and only a platform
+         * that actually measured something overrides. That keeps an un-ported platform failing
+         * visibly (the watch warns and stops trusting the threshold) instead of failing wrong.
+         */
+        public virtual ProcessInputOutput? StorageData => null;
+        public virtual ProcessInputOutput? NetworkData => null;
 
         public virtual bool HasStopped
         {
@@ -160,6 +176,14 @@ namespace MadWizard.Desomnia.Processes.Manager
             Stopped = null;
 
             stopped?.Invoke(this, EventArgs.Empty);
+        }
+
+        public virtual void Dispose()
+        {
+            lock (_heldResources)
+            {
+                _heldResources.Dispose();
+            }
         }
     }
 }

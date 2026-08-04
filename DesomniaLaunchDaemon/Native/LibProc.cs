@@ -32,6 +32,13 @@ namespace MadWizard.Desomnia.LaunchDaemon.Native
         /// <summary>&lt;sys/proc_info.h&gt;: 4 * MAXPATHLEN. proc_pidpath insists on 1024..4096 — anything else fails.</summary>
         public const int PROC_PIDPATHINFO_MAXSIZE = 4 * 1024;
 
+        /// <summary>
+        /// &lt;sys/resource.h&gt;: the rusage flavor pinned below. Guaranteed since macOS 10.13, and
+        /// deliberately not RUSAGE_INFO_CURRENT — the current flavor grows with the OS, and a
+        /// struct whose size depends on where it runs is not a struct to marshal.
+        /// </summary>
+        public const int RUSAGE_INFO_V4 = 4;
+
         #region P/Invoke
         // returns the number of pids written – libproc has already divided the kernel's byte count
         // by sizeof(int) – or, called with a null buffer, the number it currently expects to need.
@@ -49,6 +56,10 @@ namespace MadWizard.Desomnia.LaunchDaemon.Native
         // returns strlen of the path (no NUL), 0 on failure
         [LibraryImport(LibProcDylib, SetLastError = true)]
         private static partial int proc_pidpath(int pid, [Out] byte[] buffer, uint buffersize);
+
+        // returns 0 on success, -1 on failure — a different convention from proc_pidinfo's byte count
+        [LibraryImport(LibProcDylib, SetLastError = true)]
+        private static partial int proc_pid_rusage(int pid, int flavor, out rusage_info_v4 buffer);
 
         // the POSIX session (the session leader's pid) of an arbitrary process; no permission check
         [LibraryImport(LibSystem)]
@@ -92,6 +103,73 @@ namespace MadWizard.Desomnia.LaunchDaemon.Native
                     return Encoding.UTF8.GetString(end >= 0 ? span[..end] : span);
                 }
             }
+        }
+
+        /// <summary>
+        /// &lt;sys/resource.h&gt;: struct rusage_info_v4. A 16-byte uuid followed by 35 plain
+        /// uint64 counters — 296 bytes, no padding; the layout is kernel ABI and identical on
+        /// arm64 and x86_64.
+        /// </summary>
+        [StructLayout(LayoutKind.Sequential)]
+        public struct rusage_info_v4
+        {
+            public fixed byte ri_uuid[16];
+            public ulong ri_user_time;
+            public ulong ri_system_time;
+            public ulong ri_pkg_idle_wkups;
+            public ulong ri_interrupt_wkups;
+            public ulong ri_pageins;
+            public ulong ri_wired_size;
+            public ulong ri_resident_size;
+            public ulong ri_phys_footprint;
+            public ulong ri_proc_start_abstime;
+            public ulong ri_proc_exit_abstime;
+            public ulong ri_child_user_time;
+            public ulong ri_child_system_time;
+            public ulong ri_child_pkg_idle_wkups;
+            public ulong ri_child_interrupt_wkups;
+            public ulong ri_child_pageins;
+            public ulong ri_child_elapsed_abstime;
+            public ulong ri_diskio_bytesread;
+            public ulong ri_diskio_byteswritten;
+            public ulong ri_cpu_time_qos_default;
+            public ulong ri_cpu_time_qos_maintenance;
+            public ulong ri_cpu_time_qos_background;
+            public ulong ri_cpu_time_qos_utility;
+            public ulong ri_cpu_time_qos_legacy;
+            public ulong ri_cpu_time_qos_user_initiated;
+            public ulong ri_cpu_time_qos_user_interactive;
+            public ulong ri_billed_system_time;
+            public ulong ri_serviced_system_time;
+            public ulong ri_logical_writes;
+            public ulong ri_lifetime_max_phys_footprint;
+            public ulong ri_instructions;
+            public ulong ri_cycles;
+            public ulong ri_billed_energy;
+            public ulong ri_serviced_energy;
+            public ulong ri_interval_max_phys_footprint;
+            public ulong ri_runnable_time;
+        }
+
+        /// <summary>
+        /// The resource usage of a single process — CPU times, disk IO bytes, the logical write
+        /// ledger, energy — or null if it is gone or may not be asked.
+        /// </summary>
+        /// <remarks>
+        /// Unlike the SHORTBSDINFO flavor above, proc_pid_rusage <b>is</b> same-user-gated: the
+        /// root daemon passes via PRIV_GLOBAL_PROC_INFO, but a daemon started by hand as an
+        /// ordinary user would see only its own processes here and null for everybody else's.
+        /// </remarks>
+        public static rusage_info_v4? GetProcessRusage(int pid)
+        {
+            // pid 0 is the kernel, which several flavors refuse to describe at all
+            if (pid <= 0)
+                return null;
+
+            if (proc_pid_rusage(pid, RUSAGE_INFO_V4, out rusage_info_v4 rusage) != 0)
+                return null;
+
+            return rusage;
         }
 
         /// <summary>

@@ -17,6 +17,9 @@ namespace MadWizard.Desomnia.Processes.Manager.Native
         /// <summary>The fields of /proc/[pid]/stat this monitor reads. See proc(5).</summary>
         public readonly record struct Stat(string Command, char State, int ParentId, int SessionId);
 
+        /// <summary>The storage-layer fields of /proc/[pid]/io. See proc_pid_io(5).</summary>
+        public readonly record struct IO(long ReadBytes, long WriteBytes);
+
         /// <summary>The ids of every process on the machine — one directory read, nothing per process.</summary>
         public static IEnumerable<int> EnumeratePIDs()
         {
@@ -68,6 +71,54 @@ namespace MadWizard.Desomnia.Processes.Manager.Native
                 ParentId: int.TryParse(fields[1], out int ppid) ? ppid : 0,
                 SessionId: int.TryParse(fields[3], out int sid) ? sid : -1
             );
+        }
+
+        /**
+         * The bytes a process has moved to and from the storage layer, or null where that cannot
+         * be read — the process is gone again, or the kernel was built without
+         * CONFIG_TASK_IO_ACCOUNTING and the file with it (every mainstream distro has it).
+         *
+         * read_bytes/write_bytes rather than rchar/wchar deliberately: the logical pair counts
+         * every read() and write() on any descriptor — pipes, ttys and sockets included — and a
+         * process busy on its sockets must not look disk-busy; separating those is the whole
+         * point of having two attributes. The price is the cache: reads served from the page
+         * cache never reach the block layer and are invisible here, as they are on macOS.
+         * Buffered writes are credited to the writing process at dirty time, ahead of — and
+         * regardless of — the flusher that eventually submits them.
+         */
+        public static IO? ReadIO(int pid)
+        {
+            try
+            {
+                return ParseIO(File.ReadAllText($"{Root}/{pid}/io"));
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>Parses /proc/[pid]/io — a handful of "key: value" lines.</summary>
+        public static IO? ParseIO(string text)
+        {
+            long? read = null, write = null;
+
+            foreach (var line in text.AsSpan().EnumerateLines())
+            {
+                if (line.StartsWith("read_bytes:"))
+                    read = ParseValue(line);
+                else if (line.StartsWith("write_bytes:"))
+                    write = ParseValue(line);
+            }
+
+            return read is long r && write is long w ? new IO(r, w) : null;
+
+            static long? ParseValue(ReadOnlySpan<char> line)
+            {
+                var value = line[(line.IndexOf(':') + 1)..].Trim();
+
+                return long.TryParse(value, out long parsed) ? parsed : null;
+            }
         }
 
         /**

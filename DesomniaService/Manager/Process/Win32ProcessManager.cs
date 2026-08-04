@@ -1,15 +1,18 @@
-﻿using Microsoft.Win32.SafeHandles;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Win32.SafeHandles;
 using System.Runtime.InteropServices;
 
 namespace MadWizard.Desomnia.Processes.Manager
 {
     public partial class Win32ProcessManager : ListenerAwareProcessManager
     {
+        internal ILogger Log => Logger; // TODO: change process to owned container instance
+
         // Created here rather than through the container, as the ported platforms do: the manager
         // already holds every ingredient, and a startup materialises several hundred of them.
         protected override IProcess CreateProcess(ProcessInformation info, IProcess? parent)
         {
-            var process = new Win32Process(info, parent, Logger);
+            var process = new Win32Process(info, parent, this);
 
             process.WatchForExit();
 
@@ -31,6 +34,50 @@ namespace MadWizard.Desomnia.Processes.Manager
                 return null;
 
             return TimeSpan.FromTicks(kernel + user);
+        }
+
+        /**
+         * The IO the process has performed since it started, or null once it can no longer be asked.
+         *
+         * The kernel keeps six counters; this takes the read/write pair and leaves the third bucket
+         * deliberately: Other is where every Winsock transfer lands (sockets are driven through
+         * NtDeviceIoControlFile), mixed indistinguishably with plain IOCTL chatter – counting it
+         * would make minIO trip on a download here and nowhere else. Network demand has its own
+         * attribute, measured by something that can actually see the network.
+         *
+         * What remains is logical file and device IO as the process performed it: reads served from
+         * the cache count in full, memory-mapped IO not at all – the counters are accounted at the
+         * syscall, and mapped pages never make one.
+         */
+        internal static ProcessInputOutput? QueryIO(int pid)
+        {
+            using var process = OpenHandle(pid);
+
+            if (process.IsInvalid || !GetProcessIoCounters(process, out IO_COUNTERS counters))
+                return null;
+
+            return new ProcessInputOutput((long)counters.ReadTransferCount, (long)counters.WriteTransferCount);
+        }
+
+        /**
+         * The passive traffic approximation: the third pair of the same six counters QueryIO
+         * reads. All Winsock transfers land in the Other bucket (sockets are driven through
+         * NtDeviceIoControlFile), so its growth is a cheap "this process is talking to the
+         * network" signal – one syscall, no standing cost, and honest about being approximate:
+         * fast-path receives escape the accounting, every non-socket IOCTL lands in the same
+         * numbers, and the bucket knows no direction, so the whole count rides the received
+         * side. The precise meter (<?global ProcessManager:watchTraffic="active"?>) books its
+         * payload bytes straight into the process, which answers with those instead – this is
+         * the fallback for every process nothing books into.
+         */
+        internal static ProcessInputOutput? QueryTraffic(int pid)
+        {
+            using var process = OpenHandle(pid);
+
+            if (process.IsInvalid || !GetProcessIoCounters(process, out IO_COUNTERS counters))
+                return null;
+
+            return new ProcessInputOutput((long)counters.OtherTransferCount, 0);
         }
 
         /**
@@ -210,6 +257,21 @@ namespace MadWizard.Desomnia.Processes.Manager
         [LibraryImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         private static partial bool GetProcessTimes(SafeProcessHandle processHandle, out long creation, out long exit, out long kernel, out long user);
+
+        [LibraryImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool GetProcessIoCounters(SafeProcessHandle processHandle, out IO_COUNTERS counters);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct IO_COUNTERS
+        {
+            internal ulong ReadOperationCount;
+            internal ulong WriteOperationCount;
+            internal ulong OtherOperationCount;
+            internal ulong ReadTransferCount;
+            internal ulong WriteTransferCount;
+            internal ulong OtherTransferCount;
+        }
 
         [LibraryImport("kernel32.dll", SetLastError = true)]
         private static partial uint WaitForSingleObject(SafeProcessHandle handle, uint milliseconds);

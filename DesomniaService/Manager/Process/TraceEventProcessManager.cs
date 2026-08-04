@@ -1,4 +1,5 @@
-﻿using Microsoft.Diagnostics.Tracing.Parsers;
+﻿using MadWizard.Desomnia.Processes.Manager.Metrics;
+using Microsoft.Diagnostics.Tracing.Parsers;
 using Microsoft.Diagnostics.Tracing.Parsers.Kernel;
 using Microsoft.Diagnostics.Tracing.Session;
 using Microsoft.Extensions.Logging;
@@ -9,6 +10,16 @@ namespace MadWizard.Desomnia.Processes.Manager
     public class TraceEventProcessManager : Win32ProcessManager, IDisposable
     {
         TraceEventSession? _traceEventSession;
+
+        /**
+         * The metrics riding this session – registered by configuration, empty by default. Each
+         * declares the kernel keywords it needs, reads its events off the shared source, and
+         * books what it measures into the process objects itself; the manager never asks one
+         * anything back, so a new per-process measurement is a new registration, never another
+         * change here. The session's flags are the union of what the metrics ask for, fixed at
+         * enable time.
+         */
+        public IEnumerable<ITraceEventMetric> Metrics { private get; init; } = [];
 
         public TraceEventProcessManager()
         {
@@ -46,12 +57,29 @@ namespace MadWizard.Desomnia.Processes.Manager
         {
             Logger.LogDebug("Subscribing to process trace events...");
 
+            var keywords = Metrics.Select(m => m.Keywords).Aggregate(KernelTraceEventParser.Keywords.Process, (keywords, k) => keywords |= k);
+
             _traceEventSession = new("Desomnia::ProcessManager");
-            _traceEventSession.EnableKernelProvider(KernelTraceEventParser.Keywords.Process);
+            _traceEventSession.EnableKernelProvider(keywords);
             _traceEventSession.Source.Kernel.ProcessStart += ETW_ProcessStart;
             _traceEventSession.Source.Kernel.ProcessStop += ETW_ProcessStop;
 
-            Task.Factory.StartNew(ETW_Process, TaskCreationOptions.LongRunning);
+            foreach (var metric in Metrics)
+            {
+                // reset on the way in, not only on the way out: the teardown never joins the pump
+                // thread, so a handler caught mid-flight can write after the stop-side Reset – but
+                // never after this one, because nothing pumps before Process() below
+                metric.Reset();
+
+                metric.Subscribe(_traceEventSession.Source.Kernel);
+            }
+
+            // The session is captured rather than re-read from the field: a stop/start cycle can
+            // replace the field before this task's thread ever runs, and a stale task adopting
+            // the new session would race the new task's pump on a single-threaded dispatcher.
+            var session = _traceEventSession;
+
+            Task.Factory.StartNew(() => ETW_Process(session), TaskCreationOptions.LongRunning);
         }
 
         private void UnsubscribeFromTraceEvents()
@@ -64,20 +92,46 @@ namespace MadWizard.Desomnia.Processes.Manager
                 _traceEventSession.Dispose();
                 _traceEventSession = null;
 
+                foreach (var metric in Metrics)
+                {
+                    metric.Reset();
+                }
+
                 Logger.LogDebug("Unsubscribed from process trace events");
             }
         }
 
-        #region ETW callbacks
-        private void ETW_Process()
+        #region ETW Process callbacks
+        private void ETW_Process(TraceEventSession session)
         {
             try
             {
-                _traceEventSession!.Source.Process();
+                session.Source.Process();
+            }
+            catch (ObjectDisposedException)
+            {
+                // superseded by a restart before this thread ever ran; the replacement has its own pump
             }
             catch (Exception ex)
             {
                 Logger.LogError(ex, "ETW_Process"); // TODO maybe try to restart processing?
+
+                /**
+                 * A dead pump must take its session with it. The OS keeps the session alive after
+                 * the pumping thread dies, so IsProcessing would stay true while nothing updates a
+                 * counter again – and a frozen counter is a 0-byte delta, which reads as a group
+                 * gone idle: the one lie the metering must never tell (a stopped session answers
+                 * null instead, and the watch assumes demand). Torn down, the next rebuild – or a
+                 * listener change – starts a fresh session; restarting from here would just spin
+                 * if whatever killed the pump is not done killing.
+                 */
+                lock (this)
+                {
+                    if (_traceEventSession == session)
+                    {
+                        UnsubscribeFromTraceEvents();
+                    }
+                }
             }
         }
 
@@ -118,11 +172,16 @@ namespace MadWizard.Desomnia.Processes.Manager
             return base.GetEnumerator();
         }
 
-        public void Dispose()
+        public override void Dispose()
         {
             Logger.LogDebug("Shutting down...");
 
-            UnsubscribeFromTraceEvents();
+            lock (this) // the same lock every other session mutator holds
+            {
+                UnsubscribeFromTraceEvents();
+            }
+
+            base.Dispose();
         }
     }
 }

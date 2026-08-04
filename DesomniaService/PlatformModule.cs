@@ -9,6 +9,7 @@ using MadWizard.Desomnia.Network.Manager;
 using MadWizard.Desomnia.NetworkSession.Manager;
 using MadWizard.Desomnia.Power.Manager;
 using MadWizard.Desomnia.Processes.Manager;
+using MadWizard.Desomnia.Processes.Manager.Metrics;
 using MadWizard.Desomnia.Service.Actions;
 using MadWizard.Desomnia.Service.Configuration;
 using MadWizard.Desomnia.Session.Manager;
@@ -32,13 +33,22 @@ namespace MadWizard.Desomnia.Service
             builder.RegisterType<PowerSourceCondition>()
                 .Named<IEnvironmentCondition>("power");
 
-            if (config.ProcessManager?.PollInterval is not TimeSpan)
+            builder.RegisterType<TraceEventProcessManager>()
+                .PropertiesAutowired(PropertyWiringOptions.AllowCircularDependencies)
+                .AsImplementedInterfaces()
+                .As<ProcessManager>()
+                .SingleInstance()
+                .AsSelf();
+
+            // The precise traffic meter is a plugin to the trace session:registered,
+            // it rides along and answers the traffic queries; absent, the
+            // manager falls back to the passive IO-counter approximation. Future per-process
+            // metrics follow the same pattern – a registration, not a manager change.
+            if (config.ProcessManager.WatchTraffic == ProcessTrafficWatch.Active)
             {
-                builder.RegisterType<TraceEventProcessManager>()
-                    .AsImplementedInterfaces()
-                    .As<ProcessManager>()
-                    .SingleInstance()
-                    .AsSelf();
+                builder.RegisterType<TrafficTraceMetric>()
+                    .As<ITraceEventMetric>()
+                    .SingleInstance();
             }
 
             // takes over from the platform-neutral matcher the NetworkMonitor module registers

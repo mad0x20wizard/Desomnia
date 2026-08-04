@@ -2,12 +2,13 @@
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 
 namespace MadWizard.Desomnia.Processes.Manager
 {
-    public abstract class ProcessManager : IProcessManager, IStartable
+    public abstract class ProcessManager : IProcessManager, IStartable, IDisposable
     {
-        public required ILogger<ProcessManager> Logger { protected get; init; }
+        public required ILogger Logger { protected get; init; }
 
         private bool _initialized = false;
 
@@ -99,33 +100,32 @@ namespace MadWizard.Desomnia.Processes.Manager
             }
         }
 
-        public IProcess this[int pid]
-        {
-            get
-            {
-                if (!_processList.TryGetValue((int)pid, out IProcess? process))
-                {
-                    if (TriggerStart(pid) is IProcess created)
-                    {
-                        return created;
-                    }
-                }
-                else if (process?.HasStopped ?? false)
-                {
-                    TriggerStop(process.Id);
-
-                    process = null;
-                }
-
-                return process ?? throw new ProcessNotFoundException(pid);
-            }
-        }
+        public IProcess this[int pid] => TryFindProcess(pid, out IProcess? process, false) ? process : throw new ProcessNotFoundException(pid);
 
         public virtual IProcess LaunchProcess(ProcessStartInfo info)
         {
             var native = Process.Start(info) ?? throw new Exception("Process could not be started.");
 
             return TriggerStart(native)!;
+        }
+
+        public bool TryFindProcess(int pid, [NotNullWhen(true)] out IProcess? process, bool createIfUnknown = false)
+        {
+            if (!_processList.TryGetValue(pid, out process))
+            {
+                if (createIfUnknown && TriggerStart(pid) is IProcess created)
+                {
+                    return (process = created) is not null;
+                }
+            }
+            else if (process?.HasStopped ?? false)
+            {
+                TriggerStop(process.Id);
+
+                process = null;
+            }
+
+            return process != null;
         }
 
         /**
@@ -169,8 +169,8 @@ namespace MadWizard.Desomnia.Processes.Manager
                     parent = null;
                 }
 
-                IProcess process;
-                if (_processList.TryAdd(pid, process = CreateProcess(info, parent)))
+                IProcess? process = null;
+                if (_processList.GetOrAdd(pid, pid => process = CreateProcess(info, parent)) == process)
                 {
                     // A platform may learn that this process is gone long before the next enumeration
                     // would: Windows by waiting on the process handle, macOS through kqueue, Linux
@@ -186,7 +186,7 @@ namespace MadWizard.Desomnia.Processes.Manager
                     }
                 }
 
-                return _processList[pid];
+                return process;
             }
             catch (KeyNotFoundException)
             {
@@ -217,5 +217,13 @@ namespace MadWizard.Desomnia.Processes.Manager
         #endregion
 
         public virtual IEnumerator<IProcess> GetEnumerator() => _processList.Values.GetEnumerator();
+
+        public virtual void Dispose()
+        {
+            foreach (var process in this)
+            {
+                process.Dispose();
+            }
+        }
     }
 }

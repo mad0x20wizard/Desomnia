@@ -9,7 +9,7 @@ namespace MadWizard.Desomnia.Daemon.Configuration
 
         public PowerManagerConfig PowerManager { get; set; } = new();
 
-        public PollingProcessManagerConfig ProcessManager { get; set; } = new();
+        public ProcessManagerConfig ProcessManager { get; set; } = new();
 
     }
 }

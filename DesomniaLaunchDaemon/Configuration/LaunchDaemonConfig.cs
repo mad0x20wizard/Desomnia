@@ -8,6 +8,6 @@ namespace MadWizard.Desomnia.LaunchDaemon.Configuration
         /// The persistent ProcessManager settings (<c>&lt;?global ProcessManager:pollInterval="..."?&gt;</c>),
         /// read for the <c>pollInterval</c> alone — the platform manager has to be built with it.
         /// </summary>
-        public PollingProcessManagerConfig ProcessManager { get; set; } = new();
+        public ProcessManagerConfig ProcessManager { get; set; } = new();
     }
 }
