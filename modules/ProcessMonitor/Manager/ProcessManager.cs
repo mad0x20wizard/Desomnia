@@ -1,4 +1,5 @@
 ﻿using Autofac;
+using Autofac.Core;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -16,6 +17,14 @@ namespace MadWizard.Desomnia.Processes.Manager
 
         public virtual event EventHandler<IProcess>? ProcessStarted;
         public virtual event EventHandler<IProcess>? ProcessStopped;
+
+        /**
+         * Creates the processes through the container, where everything a bare new could not
+         * reach takes part: the logger arrives as a required property, the exit watch as a
+         * middleware on the registration, and – when configured – the metric decorations wrap
+         * the result. What remains here is only the seam the base class calls.
+         */
+        public required Func<ProcessInformation, IProcess?, IProcess> CreateProcess { private get; init; }
 
         public virtual void Start() => RefreshProcessList();
 
@@ -46,9 +55,6 @@ namespace MadWizard.Desomnia.Processes.Manager
         protected virtual ProcessInformation? QueryProcess(int pid) => new(Process.GetProcessById(pid));
 
         protected virtual ProcessInformation? QueryParentProcess(ProcessInformation info) => info.ParentId;
-
-        /// <summary>Builds the <see cref="IProcess"/> behind a freshly discovered entry.</summary>
-        protected virtual IProcess CreateProcess(ProcessInformation info, IProcess? parent) => new ProcessHandle(info, parent);
 
         protected virtual void RefreshProcessList()
         {
@@ -100,7 +106,11 @@ namespace MadWizard.Desomnia.Processes.Manager
             }
         }
 
-        public IProcess this[int pid] => TryFindProcess(pid, out IProcess? process, false) ? process : throw new ProcessNotFoundException(pid);
+        // createIfUnknown, because the indexer's callers ask about processes they positively
+        // expect – above all a freshly launched one, which the platform's own event lane may
+        // not have delivered yet; observers that must not create only what they saw mentioned
+        // use TryFindProcess directly, without the flag
+        public IProcess this[int pid] => TryFindProcess(pid, out IProcess? process, createIfUnknown: true) ? process : throw new ProcessNotFoundException(pid);
 
         public virtual IProcess LaunchProcess(ProcessStartInfo info)
         {
@@ -185,8 +195,15 @@ namespace MadWizard.Desomnia.Processes.Manager
                         ProcessStarted?.Invoke(this, process);
                     }
                 }
+                else
+                {
+                    // built, and beaten to the roster by another lane: the duplicate is handed
+                    // back with everything creating it took out – an exit watch, a kernel handle
+                    process?.Dispose();
+                    process = null;
+                }
 
-                return process;
+                return process ?? _processList.GetValueOrDefault(pid);
             }
             catch (KeyNotFoundException)
             {
@@ -198,6 +215,14 @@ namespace MadWizard.Desomnia.Processes.Manager
 
                 return null;
             }
+            catch (DependencyResolutionException ex) when (ex.GetBaseException() is ArgumentException or InvalidOperationException)
+            {
+                // the same "probably not running" – but thrown inside the container the processes
+                // are created through now, which wraps it beyond the filter above
+                Logger.LogTrace(ex.GetBaseException().Message);
+
+                return null;
+            }
         }
 
         protected void TriggerStop(int pid)
@@ -206,9 +231,9 @@ namespace MadWizard.Desomnia.Processes.Manager
             {
                 Logger.LogTrace("Process '{name}' ({pid}) stopped", process.Name, process.Id);
 
-                if (process is ProcessHandle wrapper)
+                if (process.Layer<ProcessHandle>() is { } handle)
                 {
-                    wrapper.TriggerStop(); // a no-op when this stop came from the process itself
+                    handle.TriggerStop(); // a no-op when this stop came from the process itself
                 }
 
                 ProcessStopped?.Invoke(this, process);

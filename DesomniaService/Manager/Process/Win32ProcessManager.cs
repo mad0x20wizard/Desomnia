@@ -1,24 +1,10 @@
-﻿using Microsoft.Extensions.Logging;
-using Microsoft.Win32.SafeHandles;
+﻿using Microsoft.Win32.SafeHandles;
 using System.Runtime.InteropServices;
 
 namespace MadWizard.Desomnia.Processes.Manager
 {
     public partial class Win32ProcessManager : ListenerAwareProcessManager
     {
-        internal ILogger Log => Logger; // TODO: change process to owned container instance
-
-        // Created here rather than through the container, as the ported platforms do: the manager
-        // already holds every ingredient, and a startup materialises several hundred of them.
-        protected override IProcess CreateProcess(ProcessInformation info, IProcess? parent)
-        {
-            var process = new Win32Process(info, parent, this);
-
-            process.WatchForExit();
-
-            return process;
-        }
-
         /**
          * The processor time this process has used, or null once it can no longer be sampled.
          *

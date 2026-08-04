@@ -1,15 +1,17 @@
-using Microsoft.Diagnostics.Tracing.Parsers;
+﻿using Microsoft.Diagnostics.Tracing.Parsers;
 
 namespace MadWizard.Desomnia.Processes.Manager.Metrics
 {
     /**
      * The precise per-process network meter: actual TCP and UDP payload bytes, booked straight
-     * into the <see cref="Win32Process"/> behind each event's pid – the same source the Resource
-     * Monitor's per-process network column drinks from. Registered only when the persistent
-     * configuration asks for it (<c>&lt;?global ProcessManager:watchTraffic="active"?&gt;</c>);
-     * a process this meter has never booked into answers from the passive approximation instead.
+     * into the <see cref="ProcessTrafficLayer"/> decoration around each event's process – the
+     * same source the Resource Monitor's per-process network column drinks from. Registered only
+     * when the persistent configuration asks for it
+     * (<c>&lt;?global ProcessManager:watchTraffic="active"?&gt;</c>), which is also when the
+     * decoration is; a process the meter has never booked into answers from the passive
+     * approximation instead.
      */
-    public sealed class TrafficTraceMetric(IProcessManager manager) : ITraceEventMetric
+    public sealed class ProcessTrafficMetric(ProcessManager manager) : ITraceEventMetric
     {
         public KernelTraceEventParser.Keywords Keywords => KernelTraceEventParser.Keywords.NetworkTCPIP;
 
@@ -30,11 +32,15 @@ namespace MadWizard.Desomnia.Processes.Manager.Metrics
             kernel.UdpIpRecvIPV6    += data => Book(data.ProcessID, received: data.size);
         }
 
+        // TryFindProcess, not the indexer: a pid the roster does not hold – a process gone before
+        // its bytes were pumped, or racing its own start – must not throw in a kernel-event
+        // callback, and must certainly not be materialized for having been seen transferring
+        // (which is what the indexer would do, at packet rates, from the pump thread)
         private void Book(int pid, int received = 0, int sent = 0)
         {
-            if (manager[pid] is Win32Process process)
+            if (manager.TryFindProcess(pid, out IProcess? process))
             {
-                process.BookTraffic(received, sent);
+                process.Layer<ProcessTrafficLayer>().BookTraffic(received, sent);
             }
         }
 
@@ -46,9 +52,9 @@ namespace MadWizard.Desomnia.Processes.Manager.Metrics
          */
         public void Reset()
         {
-            foreach (var process in manager.OfType<Win32Process>())
+            foreach (var process in manager.Select(p => p.Layer<ProcessTrafficLayer>()))
             {
-                process.ClearTraffic();
+                process.StopMetering();
             }
         }
     }

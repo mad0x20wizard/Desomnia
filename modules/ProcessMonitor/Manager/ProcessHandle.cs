@@ -19,6 +19,10 @@ namespace MadWizard.Desomnia.Processes.Manager
     {
         protected readonly CompositeDisposable _heldResources = [];
 
+        /// <summary>Settled by TriggerStop before the wait is torn down – written before StopWatching
+        /// takes the gate, so whoever finds the signal gone under it finds this set.</summary>
+        protected bool _stopped;
+
         /// <summary>
         /// The BCL process object, created once and kept – callers write state into this very
         /// instance (redirected output handles) and read it back through a later access.
@@ -101,7 +105,7 @@ namespace MadWizard.Desomnia.Processes.Manager
             {
                 try
                 {
-                    return Native.HasExited;
+                    return _stopped || Native.HasExited;
                 }
                 catch (ProcessNotFoundException)
                 {
@@ -171,11 +175,13 @@ namespace MadWizard.Desomnia.Processes.Manager
          */
         internal protected virtual void TriggerStop()
         {
-            var stopped = Stopped;
+            _stopped = true;
+
+            var handlers = Stopped;
 
             Stopped = null;
 
-            stopped?.Invoke(this, EventArgs.Empty);
+            handlers?.Invoke(this, EventArgs.Empty);
         }
 
         public virtual void Dispose()

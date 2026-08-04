@@ -3,13 +3,16 @@ using Microsoft.Win32.SafeHandles;
 
 namespace MadWizard.Desomnia.Processes.Manager
 {
-    internal class Win32Process(ProcessInformation info, IProcess? parent, Win32ProcessManager manager) : ProcessHandle(info, parent)
+    internal class Win32Process(ProcessInformation info, IProcess? parent) : ProcessHandle(info, parent)
     {
+        public required ILogger Logger { private get; init; }
+
         private readonly Lock _gate = new();
 
         private RegisteredWaitHandle? _registration;
         private WaitHandle? _signal;
 
+        #region Win32 Metrics
         /**
          * The processor time, asked of the kernel rather than of a process object.
          *
@@ -24,47 +27,13 @@ namespace MadWizard.Desomnia.Processes.Manager
         /// <summary>Sampled like the processor time: a limited handle, one syscall, null once the process is gone.</summary>
         public override ProcessInputOutput? StorageData => Win32ProcessManager.QueryIO(Id);
 
-        #region Traffic account
-        private long _bytesReceived, _bytesSent;
-        private volatile bool _metered;
-
         /**
-         * Answered from this process' own account while a meter books into it, and from the
-         * passive counters otherwise. The account never asks who is booking – the meter finds
-         * the process, not the other way around – which is also why the fallback is per process:
-         * a process the meter has not seen transfer anything has an empty account, and an empty
-         * account is indistinguishable from an unmetered one.
+         * The passive approximation, and nothing else: precise metering is not this class'
+         * business any more – when it is configured, a decorator wraps this process and answers
+         * from the account the meter books into, falling back to exactly this member. That keeps
+         * every future metric a wrapper away instead of another region in here.
          */
-        public override ProcessInputOutput? NetworkData
-        {
-            get
-            {
-                if (_metered)
-                {
-                    return new ProcessInputOutput(Interlocked.Read(ref _bytesReceived), Interlocked.Read(ref _bytesSent));
-                }
-
-                return Win32ProcessManager.QueryTraffic(Id);
-            }
-        }
-
-        /// <summary>Books metered bytes into the account – and switches the answer over to it, from the first byte on.</summary>
-        internal void BookTraffic(long received = 0, long sent = 0)
-        {
-            if (received > 0)
-                Interlocked.Add(ref _bytesReceived, received);
-            if (sent > 0)
-                Interlocked.Add(ref _bytesSent, sent);
-
-            _metered = true;
-        }
-
-        /**
-         * The meter is gone; the account must not go on being the answer, because numbers nobody
-         * maintains would read as a process that stopped transferring. The totals themselves
-         * stay – a later meter books on top of them, keeping the account monotonic.
-         */
-        internal void ClearTraffic() => _metered = false;
+        public override ProcessInputOutput? NetworkData => Win32ProcessManager.QueryTraffic(Id);
         #endregion
 
         /**
@@ -72,10 +41,30 @@ namespace MadWizard.Desomnia.Processes.Manager
          * kept around for. The indexer asks it of every process it hands out, and the session bridge
          * asks it of its minion before and after every attempt to stop it.
          *
-         * Only where the kernel refuses to say does the BCL get a turn, which is where it would have
-         * been asked anyway: a process we cannot open is one we can only ask about second-hand.
+         * The watch already holds the one handle that answers this exactly: a process handle is
+         * signalled when its process ends, so a zero-length wait on it is the whole question in a
+         * single syscall – against three for opening the pid anew, and about the *right* process,
+         * where a re-opened pid may since have been handed to a stranger. Once the exit has been
+         * reported the answer is a settled fact and costs nothing. Only a process that never gave
+         * the watch a handle is asked the long way – and where the kernel refuses even that, the
+         * BCL gets a turn, which is where it would have been asked anyway.
          */
-        public override bool HasStopped => Win32ProcessManager.QueryHasStopped(Id) ?? base.HasStopped;
+        public override bool HasStopped
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    if (_signal is not null)
+                        return _signal.WaitOne(0);
+
+                    if (_stopped)
+                        return true;
+                }
+
+                return Win32ProcessManager.QueryHasStopped(Id) ?? base.HasStopped;
+            }
+        }
 
         /**
          * Waits on the process handle, which Windows signals the moment the process ends – the same
@@ -138,7 +127,7 @@ namespace MadWizard.Desomnia.Processes.Manager
             {
                 // the wait fires on a thread-pool thread, where an exception is not something anybody
                 // is left to catch – it would take the service down with whoever was listening
-                manager.Log.LogError(ex, "Reporting the exit of '{name}' ({pid}) failed", Name, Id);
+                Logger.LogError(ex, "Reporting the exit of '{name}' ({pid}) failed", Name, Id);
             }
         }
 

@@ -113,7 +113,15 @@ namespace MadWizard.Desomnia.Processes.Manager
                 return;
             }
 
-            if (!_watched.TryAdd(pid, (descriptor, onExit)) || !Epoll.TryWatch(_epoll, descriptor, (ulong)pid))
+            if (!_watched.TryAdd(pid, (descriptor, onExit)))
+            {
+                // a second watch for a pid already covered – both lanes of a create race end up
+                // here. The first registration stands and only the duplicate descriptor closes:
+                // removing the standing entry would orphan a registered pidfd, which stays
+                // readable for good and would spin this thread at full tilt (see Deliver).
+                Epoll.Close(descriptor);
+            }
+            else if (!Epoll.TryWatch(_epoll, descriptor, (ulong)pid))
             {
                 _watched.TryRemove(pid, out _);
 

@@ -162,17 +162,21 @@ namespace MadWizard.Desomnia.Session.Manager
             CloseHandle(pi.hProcess);
             CloseHandle(pi.hThread);
 
-            var process = Manager[(int)pi.dwProcessId];
-
-            if (startup.RedirectStandardOutput)
+            if (Manager.TryFindProcess((int)pi.dwProcessId, out var process, true))
             {
-                CloseHandle(hWrite); // Close write handle in this process
+                if (startup.RedirectStandardOutput)
+                {
+                    CloseHandle(hWrite); // Close write handle in this process
 
-                // the pipe is handed to the BCL object itself, which only the BCL-backed process has
-                ((ProcessHandle)process).Native.AddStandardOutput(new StreamReader(new FileStream(new SafeFileHandle(hRead, true), FileAccess.Read)));
+                    // the pipe is handed to the BCL object itself, which only the BCL-backed
+                    // process has – and which may sit beneath a metric decoration in the roster
+                    process.Native.AddStandardOutput(new StreamReader(new FileStream(new SafeFileHandle(hRead, true), FileAccess.Read)));
+                }
+
+                return process;
             }
 
-            return process;
+            throw new ProcessNotFoundException((int)pi.dwProcessId); // launched, and gone before it could be adopted
         }
 
         #region Windows-API

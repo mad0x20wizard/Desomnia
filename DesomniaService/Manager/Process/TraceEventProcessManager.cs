@@ -1,5 +1,4 @@
-﻿using MadWizard.Desomnia.Processes.Manager.Metrics;
-using Microsoft.Diagnostics.Tracing.Parsers;
+﻿using Microsoft.Diagnostics.Tracing.Parsers;
 using Microsoft.Diagnostics.Tracing.Parsers.Kernel;
 using Microsoft.Diagnostics.Tracing.Session;
 using Microsoft.Extensions.Logging;
@@ -11,6 +10,11 @@ namespace MadWizard.Desomnia.Processes.Manager
     {
         TraceEventSession? _traceEventSession;
 
+        public TraceEventProcessManager()
+        {
+            this.ListenerCountChanged += (sender, @event) => ConfigureSession();
+        }
+
         /**
          * The metrics riding this session – registered by configuration, empty by default. Each
          * declares the kernel keywords it needs, reads its events off the shared source, and
@@ -20,11 +24,6 @@ namespace MadWizard.Desomnia.Processes.Manager
          * enable time.
          */
         public IEnumerable<ITraceEventMetric> Metrics { private get; init; } = [];
-
-        public TraceEventProcessManager()
-        {
-            this.ListenerCountChanged += (sender, @event) => ConfigureSession();
-        }
 
         private bool IsProcessing => _traceEventSession?.IsActive ?? false;
 

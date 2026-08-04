@@ -1,6 +1,6 @@
 using Microsoft.Diagnostics.Tracing.Parsers;
 
-namespace MadWizard.Desomnia.Processes.Manager.Metrics
+namespace MadWizard.Desomnia.Processes.Manager
 {
     /**
      * A per-process metric that rides the process manager's kernel trace session. The manager owns

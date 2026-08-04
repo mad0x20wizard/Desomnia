@@ -10,6 +10,7 @@ using MadWizard.Desomnia.NetworkSession.Manager;
 using MadWizard.Desomnia.Power.Manager;
 using MadWizard.Desomnia.Processes.Manager;
 using MadWizard.Desomnia.Processes.Manager.Metrics;
+using MadWizard.Desomnia.Processes.Middleware;
 using MadWizard.Desomnia.Service.Actions;
 using MadWizard.Desomnia.Service.Configuration;
 using MadWizard.Desomnia.Session.Manager;
@@ -40,13 +41,24 @@ namespace MadWizard.Desomnia.Service
                 .SingleInstance()
                 .AsSelf();
 
-            // The precise traffic meter is a plugin to the trace session:registered,
-            // it rides along and answers the traffic queries; absent, the
-            // manager falls back to the passive IO-counter approximation. Future per-process
-            // metrics follow the same pattern – a registration, not a manager change.
+            // Externally owned, because the container must not track what it did not get to
+            // keep: the manager holds every process' lifetime, and the persistent container
+            // would otherwise remember a disposal reference for each of the hundreds a startup
+            // materialises. The exit watch rides the registration pipeline, where the concrete
+            // process is still unwrapped.
+            builder.RegisterType<Win32Process>().As<IProcess>()
+                .ConfigurePipeline(pipeline => pipeline.Use(new ProcessExitWatch()))
+                .ExternallyOwned();
+
+            // The precise traffic meter is a plugin to the trace session: registered, it rides
+            // along and books into the decoration that wraps every process; absent, the processes
+            // answer with the passive IO-counter approximation. Future per-process metrics follow
+            // the same pattern – a registration and a decoration, not a manager or process change.
             if (config.ProcessManager.WatchTraffic == ProcessTrafficWatch.Active)
             {
-                builder.RegisterType<TrafficTraceMetric>()
+                builder.RegisterDecorator<ProcessTrafficLayer, IProcess>();
+
+                builder.RegisterType<ProcessTrafficMetric>()
                     .As<ITraceEventMetric>()
                     .SingleInstance();
             }

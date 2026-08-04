@@ -415,26 +415,45 @@ namespace MadWizard.Desomnia.Processes.Tests
             /// <summary>A pid to let another lane adopt while this one is still building its own.</summary>
             public int? RaceOnCreate { get; set; }
 
+            /**
+             * Creation is a required factory now, so the fake supplies its own – with the same
+             * instrumentation the CreateProcess override used to carry. The release of a race
+             * loser IS its disposal these days, so the handles record themselves when it happens.
+             */
+            [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]
+            public FakeProcessManager()
+            {
+                Logger = NullLogger<ProcessManager>.Instance;
+
+                CreateProcess = (info, parent) =>
+                {
+                    Created++;
+
+                    if (RaceOnCreate == info.Id)
+                    {
+                        RaceOnCreate = null; // the other lane only gets in once
+
+                        TriggerStart(info);
+                    }
+
+                    return new ReleasableHandle(this, info, parent);
+                };
+            }
+
+            private sealed class ReleasableHandle(FakeProcessManager manager, ProcessInformation info, IProcess? parent) : ProcessHandle(info, parent)
+            {
+                public override void Dispose()
+                {
+                    manager.Released.Add(this);
+
+                    base.Dispose();
+                }
+            }
+
             public void Pump() => RefreshProcessList();
 
             /// <summary>What a trace event does: report a start, tracked already or not.</summary>
             public void Announce(ProcessInformation info) => TriggerStart(info);
-
-            protected override IProcess CreateProcess(ProcessInformation info, IProcess? parent)
-            {
-                Created++;
-
-                if (RaceOnCreate == info.Id)
-                {
-                    RaceOnCreate = null; // the other lane only gets in once
-
-                    TriggerStart(info);
-                }
-
-                return base.CreateProcess(info, parent);
-            }
-
-            protected override void ReleaseProcess(IProcess process) => Released.Add(process);
 
             protected override IEnumerable<ProcessInformation> EnumerateProcesses()
             {

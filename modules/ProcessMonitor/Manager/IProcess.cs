@@ -53,6 +53,8 @@ namespace MadWizard.Desomnia.Processes.Manager
         bool HasStopped { get; }
         Task Stop(TimeSpan timeout = default);
         event EventHandler Stopped;
+
+        System.Diagnostics.Process Native { get; }
     }
 
     /**

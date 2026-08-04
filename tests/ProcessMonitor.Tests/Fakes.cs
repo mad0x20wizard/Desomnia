@@ -60,6 +60,8 @@ namespace MadWizard.Desomnia.Processes.Tests
 
         public string? ImagePath => Path ?? throw new Xunit.Sdk.XunitException($"'{name}' should not have been asked for its path");
 
+        public Process Native => throw new Xunit.Sdk.XunitException($"'{name}' should not have been asked for its native process");
+
         public Task Stop(TimeSpan timeout = default) => Task.CompletedTask;
 
         public event EventHandler? Stopped;
