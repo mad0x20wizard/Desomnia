@@ -1,4 +1,6 @@
-﻿namespace MadWizard.Desomnia.Processes
+﻿using System.Globalization;
+
+namespace MadWizard.Desomnia.Processes
 {
     public class ProcessUsageMetrics
     {
@@ -22,7 +24,7 @@
         /// <summary>Network bytes per second, when a minTraffic rate was compared instead.</summary>
         public double? TrafficRate { get; init; }
 
-        private static string Percentage(double usage) => $"{usage * 100:0.#}%";
+        private static string Percentage(double usage) => string.Create(CultureInfo.InvariantCulture, $"{usage * 100:0.#}%");
 
         /// <summary>Renders whatever was measured, in a fixed order: CPU, GPU, storage, then traffic.</summary>
         public override string ToString()
