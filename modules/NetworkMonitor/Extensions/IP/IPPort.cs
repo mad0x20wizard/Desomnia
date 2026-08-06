@@ -1,4 +1,5 @@
-﻿using PacketDotNet;
+﻿using MadWizard.Desomnia.Network;
+using PacketDotNet;
 
 namespace System.Net
 {
@@ -12,6 +13,22 @@ namespace System.Net
                     return tcp.DestinationPort == Port;
                 case UdpPacket udp when Protocol.HasFlag(IPProtocol.UDP):
                     return udp.DestinationPort == Port;
+            }
+
+            return false;
+        }
+
+        public bool Accepts(TransportPacket packet, PacketDirection direction)
+        {
+            if (direction == PacketDirection.Inbound)
+                return Accepts(packet);
+
+            switch (packet) // outbound: the service answers from its own port
+            {
+                case TcpPacket tcp when Protocol.HasFlag(IPProtocol.TCP):
+                    return tcp.SourcePort == Port;
+                case UdpPacket udp when Protocol.HasFlag(IPProtocol.UDP):
+                    return udp.SourcePort == Port;
             }
 
             return false;

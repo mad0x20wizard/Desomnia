@@ -146,7 +146,7 @@ namespace MadWizard.Desomnia.Network.Watch
                     if (CanTriggerDemand(packet))
                         return true;
 
-                    ReportNetworkTraffic(packet);
+                    ReportNetworkTraffic(packet, PacketDirection.Inbound);
 
                     return false;
                 }

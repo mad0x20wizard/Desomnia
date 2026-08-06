@@ -6,25 +6,33 @@ namespace MadWizard.Desomnia.Network.Watch
 {
     public abstract class NetworkWatch<T> : ResourceMonitor<T> where T : IInspectable
     {
-        private long _countBytes;
-        private long _countPackets;
+        private long _countBytesIn,  _countPacketsIn;
+        private long _countBytesOut, _countPacketsOut;
 
         public TransmissionThreshold? Threshold { get; set; }
 
         internal protected virtual Task StartWatch() => Task.CompletedTask;
         internal protected virtual Task StopWatch(bool gracefully)  => Task.CompletedTask;
 
-        protected void ReportNetworkTraffic(long? bytes = null)
+        protected void ReportNetworkTraffic(long? bytes = null, PacketDirection direction = PacketDirection.Inbound)
         {
-            _countBytes += bytes ?? 0;
-            _countPackets += 1;
+            if (direction == PacketDirection.Inbound)
+            {
+                _countBytesIn += bytes ?? 0;
+                _countPacketsIn += 1;
+            }
+            else
+            {
+                _countBytesOut += bytes ?? 0;
+                _countPacketsOut += 1;
+            }
         }
 
-        protected internal virtual void ReportNetworkTraffic(EthernetPacket packet)
+        protected internal virtual void ReportNetworkTraffic(EthernetPacket packet, PacketDirection direction)
         {
             if (packet.Extract<TransportPacket>() is TransportPacket transport)
             {
-                ReportNetworkTraffic(transport.PayloadData?.Length); // TODO: sometimes PayloadData is null – PayloadPacket is probably set with some data (e.g. DHCP, port 67/68); need further investigation
+                ReportNetworkTraffic(transport.PayloadData?.Length, direction); // TODO: sometimes PayloadData is null – PayloadPacket is probably set with some data (e.g. DHCP, port 67/68); need further investigation
             }
         }
 
@@ -50,19 +58,23 @@ namespace MadWizard.Desomnia.Network.Watch
         {
             try
             {
-                bytes = _countBytes; long packets = _countPackets;
+                // the threshold judges the COMBINED transfer volume — inbound and
+                // outbound are tracked separately, but count as one activity signal
+                bytes = _countBytesIn + _countBytesOut;
+
+                long packets = _countPacketsIn + _countPacketsOut;
 
                 if (Threshold is TransmissionThreshold speed)
                 {
                     double value, minValue;
                     if (speed.ByteUnit is long traffic)
                     {
-                        value = _countBytes;
+                        value = bytes;
                         minValue = speed.Amount * traffic;
                     }
                     else
                     {
-                        value = _countPackets;
+                        value = packets;
                         minValue = speed.Amount;
                     }
 
@@ -79,8 +91,8 @@ namespace MadWizard.Desomnia.Network.Watch
             }
             finally
             {
-                _countBytes = 0;
-                _countPackets = 0;
+                _countBytesIn = _countBytesOut = 0;
+                _countPacketsIn = _countPacketsOut = 0;
             }
         }
     }

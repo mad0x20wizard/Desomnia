@@ -19,12 +19,12 @@ namespace MadWizard.Desomnia.Network.Watch
             return IsIdle && ((IEventSystem)this)[nameof(Demand)].HasHandlers && Service.Accepts(trigger);
         }
 
-        protected internal override void ReportNetworkTraffic(EthernetPacket packet)
+        protected internal override void ReportNetworkTraffic(EthernetPacket packet, PacketDirection direction)
         {
-            if (Service.Accepts(packet))
+            if (Service.Accepts(packet, direction))
             {
-                base.ReportNetworkTraffic(packet);
-            } 
+                base.ReportNetworkTraffic(packet, direction);
+            }
         }
 
         protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)

@@ -58,6 +58,14 @@ namespace MadWizard.Desomnia.Network.Neighborhood.Services
             return false;
         }
 
+        public override bool Accepts(Packet packet, PacketDirection direction)
+        {
+            if (packet.Extract<TransportPacket>() is TransportPacket transport)
+                return Ports.Any(service => service.Accepts(transport, direction));
+
+            return false;
+        }
+
         public bool Serves(IPPort another) => Ports.Any(service => service == another);
 
         public override string ToString()

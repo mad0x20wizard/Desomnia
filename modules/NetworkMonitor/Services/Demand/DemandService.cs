@@ -42,6 +42,8 @@ namespace MadWizard.Desomnia.Network.Demand
         {
             if (ShouldProcess(packet))
             {
+                ReportSourceTraffic(packet);
+
                 foreach (var detector in Detectors)
                 {
                     if (detector.Examine(packet) is NetworkHost host)
@@ -52,6 +54,23 @@ namespace MadWizard.Desomnia.Network.Demand
                         }
                     }
                 }
+            }
+        }
+
+        /**
+         * Attributes the packet to the watch of its SOURCE host — outbound accounting
+         * for the local host and any other host whose traffic passes our capture point
+         * (bridged VMs). A counting-only lane: demand evaluation stays strictly
+         * destination-keyed, so wake/verify/forward logic never sees a packet from
+         * the watched host's own side.
+         */
+        private void ReportSourceTraffic(EthernetPacket packet)
+        {
+            if (packet.Extract<IPPacket>() is IPPacket ip)
+            {
+                if (Monitor.Network[ip.SourceAddress] is NetworkHost host)
+                    if (Monitor[host] is NetworkHostWatch watch)
+                        watch.ReportNetworkTraffic(packet, PacketDirection.Outbound);
             }
         }
 

@@ -32,21 +32,21 @@ namespace MadWizard.Desomnia.Network.Watch
             await base.StartWatch();
         }
 
-        protected internal override void ReportNetworkTraffic(EthernetPacket packet)
+        protected internal override void ReportNetworkTraffic(EthernetPacket packet, PacketDirection direction)
         {
             foreach (var watch in this)
             {
-                watch.ReportNetworkTraffic(packet);
+                watch.ReportNetworkTraffic(packet, direction);
             }
 
-            base.ReportNetworkTraffic(packet);
+            base.ReportNetworkTraffic(packet, direction);
         }
 
         protected void ReportNetworkTraffic(DemandEvent @event)
         {
             foreach (var packet in @event)
             {
-                ReportNetworkTraffic(packet);
+                ReportNetworkTraffic(packet, PacketDirection.Inbound); // demand is always aimed AT the host
             }
         }
 
