@@ -1,19 +1,16 @@
 ﻿using Autofac;
-using MadWizard.Desomnia.Service.Duo.Manager;
-using MadWizard.Desomnia.Session;
-using Microsoft.Extensions.Logging;
 using MadWizard.Desomnia.Events;
+using MadWizard.Desomnia.Service.Duo.Manager;
+using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia.Service.Duo
 {
-    internal class DuoStreamMonitor(DuoManager manager, SessionMonitor? sessionMonitor) : ResourceMonitor<DuoInstance>, IStartable
+    internal class DuoSessionMonitor(DuoManager manager) : ResourceMonitor<DuoInstance>, IStartable
     {
-        public required ILogger<DuoStreamMonitor> Logger { get; set; }
+        public required ILogger<DuoSessionMonitor> Logger { get; set; }
 
         void IStartable.Start()
         {
-            sessionMonitor?.Filters += watch => !this.Any(instance => instance.HasInitiated(watch.Session));
-
             Logger.LogInformation($"Monitor is enabled. Waiting for service to start...");
 
             manager.Started += DuoService_Started;

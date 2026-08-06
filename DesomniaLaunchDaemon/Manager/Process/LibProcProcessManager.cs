@@ -14,9 +14,11 @@ namespace MadWizard.Desomnia.Processes.Manager
     /// calls — which is also where the parent comes from, the thing the BCL has no cross-platform
     /// way to report, and therefore why <c>watchChildren</c> works on this platform at all.
     /// </summary>
-    internal sealed class LibProcProcessManager : PollingProcessManager
+    internal sealed class LibProcProcessManager : PollingProcessManager, IProcessMetricSupport
     {
         private KQueueProcessExitWatcher? _watcher;
+
+        public ProcessMetric SupportedMetrics => ProcessMetric.Processor | ProcessMetric.Graphics | ProcessMetric.Storage;
 
         public LibProcProcessManager(TimeSpan interval) : base(interval)
         {

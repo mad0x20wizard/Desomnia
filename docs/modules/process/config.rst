@@ -67,6 +67,8 @@ By default, this process group will only include processes with a matching image
 
 .. include:: attributes/traffic.rst
 
+.. include:: attributes/min.rst
+
 onIdle
 ++++++
 

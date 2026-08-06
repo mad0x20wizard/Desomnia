@@ -20,6 +20,24 @@ namespace MadWizard.Desomnia.Processes.Manager
         TimeSpan? ProcessorTime { get; }
 
         /// <summary>
+        /// Graphics processor time consumed since the process started, or null where nothing can
+        /// answer. Summed across every engine of every adapter the platform accounts, so – exactly
+        /// like the processor time on a multi-core machine – it can grow faster than the wall
+        /// clock. Null means "nobody could measure", never "no GPU work": a process the platform
+        /// has no graphics record of has honestly used none, and answers zero.
+        /// </summary>
+        TimeSpan? GraphicsProcessorTime => null;
+
+        /// <summary>
+        /// Whose clock <see cref="GraphicsProcessorTime"/> reads. Where a platform accounts per
+        /// process this is the process itself; where it bills a whole group – macOS keeps its
+        /// graphics time per coalition, an app together with everything it spawned – every member
+        /// answers the same key, and a watch holding several of them counts the shared clock once
+        /// instead of once per member.
+        /// </summary>
+        object GraphicsProcessorScope => this;
+
+        /// <summary>
         /// Bytes read from and written to storage since the process started, or null if it cannot
         /// be sampled (any more). "Storage" is each platform's closest honest answer — see the
         /// implementations for what exactly is counted — but never network traffic.

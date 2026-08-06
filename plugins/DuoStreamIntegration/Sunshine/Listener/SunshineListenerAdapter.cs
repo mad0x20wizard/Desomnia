@@ -1,11 +1,11 @@
 ﻿using Autofac;
+using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Service.Duo.Manager;
 using Microsoft.Extensions.Logging;
-using MadWizard.Desomnia.Events;
 
 namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
 {
-    internal class SunshineListenerAdapter(DuoManager manager) : IStartable, IDisposable
+    internal class SunshineListenerAdapter(DuoManager manager) : SunshineServiceAdapter, IStartable, IDisposable
     {
         public required ILogger<SunshineListenerAdapter> Logger { get; set; }
 
@@ -21,6 +21,9 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
         {
             foreach (var instance in manager)
             {
+                if (instance.Info.MinStreamTraffic != null)
+                    throw new FormatException("Cannot monitor MinStreamTraffic while in Listener Mode.");
+
                 instance.Started += DuoInstance_Started;
                 instance.Stopped += DuoInstance_Stopped;
 
@@ -28,7 +31,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
                 {
                     Logger.LogInformation($"Monitoring {instance}:{instance.Port} -> using fallback");
 
-                    instance.StartTracking(CreateSunshineListener(instance.Service));
+                    RegisterWatch(instance, CreateSunshineListener(instance.Service));
                 }
                 else
                 {
@@ -61,7 +64,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
             {
                 foreach (var listener in instance.OfType<SunshineListener>())
                 {
-                    instance.StopTracking(listener);
+                    UnregisterWatch(instance, listener);
 
                     listener.Dispose();
                 }

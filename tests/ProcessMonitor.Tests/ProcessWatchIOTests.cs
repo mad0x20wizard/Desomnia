@@ -12,9 +12,9 @@ namespace MadWizard.Desomnia.Processes.Tests
     /// </summary>
     public class ProcessWatchIOTests
     {
-        private static readonly IOThreshold OneMegabyte = new() { Value = 1, TrafficUnit = 1L << 20 };
+        private static readonly TransmissionThreshold OneMegabyte = new() { Amount = 1, ByteUnit = 1L << 20 };
 
-        private static ProcessWatchInfo Info(IOThreshold? minIO = null, IOThreshold? minTraffic = null, CPUThreshold? minCPU = null)
+        private static ProcessWatchInfo Info(TransmissionThreshold? minIO = null, TransmissionThreshold? minTraffic = null, ProcessingThreshold? minCPU = null)
         {
             return new ProcessWatchInfo("chrome") { Name = "Browser", MinIO = minIO, MinTraffic = minTraffic, MinCPU = minCPU };
         }
@@ -28,7 +28,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         public void UnitlessThreshold_IsRefusedAtConstruction()
         {
             // NetworkWatch reads a bare number as packets, which no process can count
-            var bare = new IOThreshold { Value = 500 };
+            var bare = new TransmissionThreshold { Amount = 500 };
 
             Assert.Throws<FormatException>(() => Watch(Info(minIO: bare)));
             Assert.Throws<FormatException>(() => Watch(Info(minTraffic: bare)));
@@ -39,7 +39,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var chrome = new FakeProcess(101, "chrome") { Cpu = TimeSpan.Zero, Disk = new ProcessInputOutput(0, 0) };
 
-            var watch = Watch(Info(minCPU: new CPUThreshold(TimeSpan.FromMilliseconds(10))), chrome);
+            var watch = Watch(Info(minCPU: new ProcessingThreshold(TimeSpan.FromMilliseconds(10))), chrome);
 
             watch.Inspect(TimeSpan.FromSeconds(2));
 
@@ -59,7 +59,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var token = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
 
-            Assert.Equal(4L << 20, Assert.IsType<ProcessUsage>(token).Storage);
+            Assert.Equal(4L << 20, token.Metrics().Storage);
         }
 
         [Fact]
@@ -93,7 +93,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var token = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
 
-            Assert.Equal(2L << 20, Assert.IsType<ProcessUsage>(token).Storage);
+            Assert.Equal(2L << 20, token.Metrics().Storage);
         }
 
         [Fact]
@@ -117,7 +117,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var chrome = new FakeProcess(101, "chrome") { Cpu = TimeSpan.Zero, Disk = new ProcessInputOutput(0, 0) };
 
-            var info = Info(minIO: OneMegabyte, minCPU: new CPUThreshold(TimeSpan.FromMilliseconds(10)));
+            var info = Info(minIO: OneMegabyte, minCPU: new ProcessingThreshold(TimeSpan.FromMilliseconds(10)));
 
             var watch = Watch(info, chrome);
 
@@ -130,10 +130,9 @@ namespace MadWizard.Desomnia.Processes.Tests
             chrome.Cpu = TimeSpan.FromSeconds(2);            // busy...
             chrome.Disk = new ProcessInputOutput(8L << 20, 0);        // ...and transferring
 
-            var token = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
-            var usage = Assert.IsType<ProcessUsage>(token);
+            var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
 
-            Assert.NotNull(usage.Time);  // both measurements ride the one token
+            Assert.NotNull(usage.ProcessingTime);  // both measurements ride the one token
             Assert.NotNull(usage.Storage);
         }
 
@@ -150,8 +149,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             chrome.Net = new ProcessInputOutput(3L << 20, 1L << 20);             // 4 MiB transferred since
 
-            var token = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
-            var usage = Assert.IsType<ProcessUsage>(token);
+            var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
 
             Assert.Equal(4L << 20, usage.Traffic);
             Assert.Null(usage.Storage);                                   // nothing measured storage
@@ -173,7 +171,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var token = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
 
-            Assert.Equal(2L << 20, Assert.IsType<ProcessUsage>(token).Storage);
+            Assert.Equal(2L << 20, token.Metrics().Storage);
         }
 
         [Fact]
@@ -217,7 +215,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var chrome = new FakeProcess(101, "chrome") { Cpu = TimeSpan.Zero, Net = null };
 
-            var info = Info(minTraffic: OneMegabyte, minCPU: new CPUThreshold(TimeSpan.FromMilliseconds(10)));
+            var info = Info(minTraffic: OneMegabyte, minCPU: new ProcessingThreshold(TimeSpan.FromMilliseconds(10)));
 
             var watch = Watch(info, chrome);
 
@@ -228,10 +226,37 @@ namespace MadWizard.Desomnia.Processes.Tests
         }
 
         [Fact]
+        public void RateThreshold_TokensCarryTheRate_NotTheAmount()
+        {
+            // each side of the token follows its own threshold's shape: the rate-configured one
+            // fills the per-second field, the absolute one keeps carrying the amount – a watch
+            // cross-wiring the two flags would fail here in both directions
+            var rate = new TransmissionThreshold { Amount = 1, ByteUnit = 1L << 20, TimeUnit = TimeSpan.FromSeconds(1) };
+
+            var chrome = new FakeProcess(101, "chrome") { Disk = new ProcessInputOutput(0, 0), Net = new ProcessInputOutput(0, 0) };
+
+            var watch = Watch(Info(minIO: rate, minTraffic: OneMegabyte), chrome);
+
+            watch.Inspect(TimeSpan.FromSeconds(2));
+
+            chrome.Disk = new ProcessInputOutput(10L << 30, 0);
+            chrome.Net = new ProcessInputOutput(4L << 20, 0);
+
+            var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
+
+            Assert.Null(usage.Storage);
+            Assert.NotNull(usage.StorageRate);
+            Assert.True(usage.StorageRate > 0);
+
+            Assert.Equal(4L << 20, usage.Traffic);
+            Assert.Null(usage.TrafficRate);
+        }
+
+        [Fact]
         public void RateThreshold_ComparesAverages()
         {
             // 1MB/s over a poll interval: a burst far above the rate must register...
-            var rate = new IOThreshold { Value = 1, TrafficUnit = 1L << 20, TimeUnit = TimeSpan.FromSeconds(1) };
+            var rate = new TransmissionThreshold { Amount = 1, ByteUnit = 1L << 20, TimeUnit = TimeSpan.FromSeconds(1) };
 
             var chrome = new FakeProcess(101, "chrome") { Disk = new ProcessInputOutput(0, 0) };
 

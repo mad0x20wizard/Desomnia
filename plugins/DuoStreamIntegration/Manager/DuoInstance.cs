@@ -1,14 +1,15 @@
-using MadWizard.Desomnia.Network.Watch;
+using MadWizard.Desomnia.Events;
+using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Service.Duo.Configuration;
 using MadWizard.Desomnia.Service.Duo.Sunshine;
+using MadWizard.Desomnia.Session;
 using MadWizard.Desomnia.Session.Manager;
 using Microsoft.Win32;
 using Nito.AsyncEx;
-using MadWizard.Desomnia.Events;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager
 {
-    public class DuoInstance : ResourceMonitor<NetworkServiceWatch>
+    public class DuoInstance : ResourceMonitor<Resource>
     {
         private readonly RegistryKey Key;
 
@@ -17,13 +18,13 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
         public DuoInstance(DuoInstanceInfo info, RegistryKey key)
         {
+            Info = info;
+
             GetEvent(nameof(Demand)).AddAction(info.OnDemand);
             GetEvent(nameof(Idle)).AddAction(info.OnIdle);
 
-            Login.AddAction(info.OnLogin);
             Started.AddAction(info.OnStart);
             Stopped.AddAction(info.OnStop);
-            Logout.AddAction(info.OnLogout);
 
             Key = key;
 
@@ -34,6 +35,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
             Service = new SunshineService(Name, Port);
         }
+
+        internal DuoInstanceInfo Info { get; private init; }
 
         public string Name      { get; private set; }
         public ushort Port      { get; private set; }
@@ -83,46 +86,19 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
         }
 
         [EventContext]
-        public ISession? Session
-        {
-            get => field;
+        public ISession? Session { get; internal set; }
 
-            internal set
-            {
-                if (field != null && value == null)
-                {
-                    field = value;
-
-                    Logout.TriggerEvent();
-                }
-
-                if (field == null && value != null)
-                {
-                    field = value;
-
-                    Login.TriggerEvent();
-                }
-            }
-        }
-
-        public event EventInvocation? Login;
         public event EventInvocation? Started;
         public event EventInvocation? Stopped;
-        public event EventInvocation? Logout;
+
+        internal event EventHandler<TimeSpan>? Inspected;
 
         public bool HasInitiated(ISession session)
         {
             return this.Name == session.ClientName && this.UserName == session.UserName;
         }
 
-        public override bool StartTracking(NetworkServiceWatch watch, bool adopt = true)
-        {
-            watch.Demand += NetworkWatch_Demand; // implement Demand bubbling generically
-
-            return base.StartTracking(watch, adopt);
-        }
-
-        private async Task NetworkWatch_Demand(Event @event)
+        internal async Task NetworkServiceWatch_Demand(Event @event)
         {
             if (@event is not InspectionEvent) // don't trigger for inspection events
             {
@@ -141,18 +117,34 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             return base.OnEventTriggering(@event);
         }
 
-        public override void StopTracking(NetworkServiceWatch watch)
-        {
-            watch.Demand -= NetworkWatch_Demand; // implement Demand bubbling generically
-
-            base.StopTracking(watch);
-        }
-
         protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
         {
-            if (base.InspectResource(interval).Any())
+            Inspected?.Invoke(this, interval);
+
+            var tokens = base.InspectResource(interval).ToArray();
+
+            if (tokens.Length > 0)
             {
-                yield return new DuoStreamUsage(Name);
+                var duo = new DuoSessionUsage(Name, UserName);
+
+                foreach (var token in tokens)
+                {
+                    switch (token)
+                    {
+                        case SessionUsage session:
+                            duo.Metrics = session.Metrics;
+                            foreach (var t in session.Tokens)
+                                duo.Tokens.Add(t);
+                            break;
+
+                        case NetworkServiceUsage network:
+                            network.Name = "Sunshine";
+                            duo.Tokens.Add(network);
+                            break;
+                    }
+                }
+
+                yield return duo;
             }
         }
 

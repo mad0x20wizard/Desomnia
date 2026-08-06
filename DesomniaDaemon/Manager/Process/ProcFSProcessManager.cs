@@ -14,9 +14,11 @@ namespace MadWizard.Desomnia.Processes.Manager
     /// genuinely new are described, and the one stat line that describes them carries the name, the
     /// parent and the session together — so <c>watchChildren</c> works on this platform at all.
     /// </summary>
-    internal sealed class ProcFSProcessManager : PollingProcessManager
+    internal sealed class ProcFSProcessManager : PollingProcessManager, IProcessMetricSupport
     {
         private EpollProcessExitWatcher? _watcher;
+
+        public ProcessMetric SupportedMetrics => ProcessMetric.Processor | ProcessMetric.Storage;
 
         public ProcFSProcessManager(TimeSpan interval) : base(interval)
         {

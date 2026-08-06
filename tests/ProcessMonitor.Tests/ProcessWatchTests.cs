@@ -1,6 +1,6 @@
 using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Processes.Manager;
-using Microsoft.Extensions.Logging.Abstractions;
+using MadWizard.Desomnia.Processes.Watch;
 using Xunit;
 
 namespace MadWizard.Desomnia.Processes.Tests
@@ -14,7 +14,7 @@ namespace MadWizard.Desomnia.Processes.Tests
     {
         internal static ProcessWatch Watch(ProcessWatchInfo info, IProcessManager manager)
         {
-            return new ProcessWatch(info) { Manager = manager, Logger = NullLogger<ProcessWatch>.Instance };
+            return new PatternProcessWatch(info) { Manager = manager };
         }
 
         private static ProcessWatch Watch(ProcessWatchInfo info, params IProcess[] processes)
@@ -105,7 +105,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var chrome = new FakeProcess(101, "chrome") { Cpu = TimeSpan.Zero };
 
-            var info = new ProcessWatchInfo("chrome") { Name = "Browser", MinCPU = new CPUThreshold(TimeSpan.FromMilliseconds(10)) };
+            var info = new ProcessWatchInfo("chrome") { Name = "Browser", MinCPU = new ProcessingThreshold(TimeSpan.FromMilliseconds(10)) };
 
             var watch = Watch(info, chrome);
 
@@ -123,7 +123,7 @@ namespace MadWizard.Desomnia.Processes.Tests
             var window = new FakeProcess(101, "chrome") { Cpu = TimeSpan.FromMinutes(1) };
             var tab = new FakeProcess(102, "chrome") { Cpu = TimeSpan.FromMinutes(1) };
 
-            var info = new ProcessWatchInfo("chrome") { Name = "Browser", MinCPU = new CPUThreshold(TimeSpan.FromMilliseconds(10)) };
+            var info = new ProcessWatchInfo("chrome") { Name = "Browser", MinCPU = new ProcessingThreshold(TimeSpan.FromMilliseconds(10)) };
 
             var source = new FakeProcessSource(window, tab);
             var watch = Watch(info, source);
@@ -143,7 +143,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var window = new FakeProcess(101, "chrome") { Cpu = TimeSpan.Zero };
 
-            var info = new ProcessWatchInfo("chrome") { Name = "Browser", MinCPU = new CPUThreshold(TimeSpan.FromMilliseconds(10)) };
+            var info = new ProcessWatchInfo("chrome") { Name = "Browser", MinCPU = new ProcessingThreshold(TimeSpan.FromMilliseconds(10)) };
 
             var source = new FakeProcessSource(window);
             var watch = Watch(info, source);
@@ -162,7 +162,7 @@ namespace MadWizard.Desomnia.Processes.Tests
             var chrome = new FakeProcess(101, "chrome") { Cpu = TimeSpan.FromMilliseconds(500) };
             var gone = new FakeProcess(102, "chrome") { Cpu = null }; // died between the poll and the cycle
 
-            var info = new ProcessWatchInfo("chrome") { Name = "Browser", MinCPU = new CPUThreshold(TimeSpan.FromMilliseconds(10)) };
+            var info = new ProcessWatchInfo("chrome") { Name = "Browser", MinCPU = new ProcessingThreshold(TimeSpan.FromMilliseconds(10)) };
 
             var watch = Watch(info, chrome, gone);
 

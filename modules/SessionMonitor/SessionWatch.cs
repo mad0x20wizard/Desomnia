@@ -1,17 +1,36 @@
 ﻿using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network.Configuration.Options;
+using MadWizard.Desomnia.Processes;
+using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
 
 
 namespace MadWizard.Desomnia.Session
 {
-    public class SessionWatch : ResourceMonitor<SessionProcessWatch>
+    public class SessionWatch : ResourceMonitor<ProcessWatch>
     {
+        /**
+         * The session-wide metric watches – one per descriptor that configured a threshold.
+         *
+         * A list rather than a single watch because a session collects its configuration from every
+         * selector that matched it (Everyone, its user, Administrator – and the Duo plugin, which
+         * applies an instance's info to an already-configured watch). Keeping one would mean the
+         * last of them silently replacing the thresholds of the others, and leaving the replaced
+         * watch subscribed to the manager's process events for the life of the session.
+         *
+         * They are deliberately not tracked as children: a child's token would be listed beside the
+         * declared process groups, where this is the session's own measurement and belongs on the
+         * session's token. So they are inspected by hand below – but not disposed, because they are
+         * resolved from the session's own lifetime scope and the container disposes them with it.
+         */
+        private readonly List<AnySessionProcessWatch> _aggregates = [];
+
         [EventContext]
         public required ISession Session { get; init; }
 
-        public required Func<SessionProcessWatchInfo, SessionProcessWatch> CreateProcessWatch { private get; init; }
+        public required Func<ProcessWatchMetrics, AnySessionProcessWatch>   CreateAnyProcessWatch   { private get; init; }
+        public required Func<SessionProcessWatchInfo, SessionProcessWatch>  CreateProcessWatch      { private get; init; }
 
         public TimeSpan? MaxIdleTime { get; private set; }
 
@@ -23,17 +42,14 @@ namespace MadWizard.Desomnia.Session
         public event EventInvocation? RemoteConnect;
         public event EventInvocation? ConsoleConnect;
 
-        // NEW behavior (release-noted, spec §9.3): a delayed onDisconnect is aborted by a
-        // reconnect and vice versa; lock/unlock likewise — expected by analogy with
-        // Idle/Demand, never implemented before
         [EventOpposite(nameof(ConsoleConnect), nameof(RemoteConnect))]
         public event EventInvocation? Disconnect;
 
-        public event EventInvocation? Unlock;
-
         [EventOpposite(nameof(Unlock))]
         public event EventInvocation? Lock;
+        public event EventInvocation? Unlock;
 
+        [EventOpposite(nameof(Login), nameof(ConsoleLogin), nameof(RemoteLogin))]
         public event EventInvocation? Logout;
 
         public SessionWatch(ISession session)
@@ -56,43 +72,71 @@ namespace MadWizard.Desomnia.Session
         private void Session_Unlocked(object? sender, EventArgs e) => Unlock.TriggerEvent();
         private void Session_Locked(object? sender, EventArgs e) => Lock.TriggerEvent();
 
-        internal void ApplyConfiguration(SessionMonitorConfig config, SessionWatchDescriptor desc)
+        internal void ApplyConfiguration(SessionMonitorConfig config, SessionWatchDescriptor desc) => 
+            ApplyConfiguration(config, (SessionWatchInfo)desc);
+
+        public void ApplyConfiguration(SessionMonitorConfig config, SessionWatchInfo info)
         {
-            if (MaxIdleTime == null || MaxIdleTime.Value < desc.MaxIdleTime)
-                MaxIdleTime = desc.MaxIdleTime;
+            if (MaxIdleTime == null || MaxIdleTime.Value < info.MaxIdleTime)
+                MaxIdleTime = info.MaxIdleTime;
 
-            Clock += desc.MakeClockOptions(config);
+            Clock += info.MakeClockOptions(config);
 
-            GetEvent(nameof(Idle)).AddAction(desc.OnIdle);
-            Login.AddAction(desc.OnLogin);
-            RemoteLogin.AddAction(desc.OnRemoteLogin);
-            ConsoleLogin.AddAction(desc.OnConsoleLogin);
-            RemoteConnect.AddAction(desc.OnRemoteConnect);
-            ConsoleConnect.AddAction(desc.OnConsoleConnect);
-            Disconnect.AddAction(desc.OnDisconnect);
-            Unlock.AddAction(desc.OnUnlock);
-            Lock.AddAction(desc.OnLock);
-            Logout.AddAction(desc.OnLogout);
+            GetEvent(nameof(Idle)).AddAction(info.OnIdle);
 
-            foreach (var info in desc.Process)
+            Login.AddAction(info.OnLogin);
+            RemoteLogin.AddAction(info.OnRemoteLogin);
+            ConsoleLogin.AddAction(info.OnConsoleLogin);
+            RemoteConnect.AddAction(info.OnRemoteConnect);
+            ConsoleConnect.AddAction(info.OnConsoleConnect);
+            Disconnect.AddAction(info.OnDisconnect);
+            Unlock.AddAction(info.OnUnlock);
+            Lock.AddAction(info.OnLock);
+            Logout.AddAction(info.OnLogout);
+
+            if (info.HasThresholds)
             {
-                this.StartTracking(CreateProcessWatch(info));
+                _aggregates.Add(CreateAnyProcessWatch(info));
+            }
+
+            foreach (var process in info.Process)
+            {
+                this.StartTracking(CreateProcessWatch(process));
             }
         }
 
         protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
         {
-            var token = new SessionUsage(Session);
+            var usage = new SessionUsage(Session);
 
-            foreach (var processToken in base.InspectResource(interval))
-                token.Tokens.Add(processToken);
+            foreach (var token in base.InspectResource(interval))
+            {
+                usage.Tokens.Add(token);
+            }
 
-            if (HadUsageSince(interval) || token.Tokens.Count > 0)
-                yield return token;
+            if (HadUsageSince(usage, interval) || usage.Tokens.Count > 0)
+            {
+                yield return usage;
+            }
         }
 
-        private bool HadUsageSince(TimeSpan interval)
+        private bool HadUsageSince(SessionUsage usage, TimeSpan interval)
         {
+            if (_aggregates.Count > 0) // user specified at least one minimum requirement
+            {
+                try
+                {
+                    foreach (var process in _aggregates.Select(a => a.Inspect(interval).First()).OfType<ProcessUsage>())
+                    {
+                        usage.Metrics = process.Metrics; // last one wins
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    return false; // the session must satisfy all metrics
+                }
+            }
+
             if (Clock.Time)
             {
                 if (Session.IsRemoteConnected && !Clock.Remote)

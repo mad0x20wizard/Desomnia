@@ -1,8 +1,22 @@
 using MadWizard.Desomnia.Processes.Manager;
 using System.Diagnostics;
+using Xunit;
 
 namespace MadWizard.Desomnia.Processes.Tests
 {
+    internal static class UsageAssert
+    {
+        /// <summary>
+        /// What the token measured – asserting on the way there that it is a process token, and
+        /// that it carries metrics at all: a watch with thresholds that yields a bare token has
+        /// lost the measurement its demand was decided on.
+        /// </summary>
+        internal static ProcessUsageMetrics Metrics(this UsageToken token)
+        {
+            return Assert.IsType<ProcessUsageMetrics>(Assert.IsType<ProcessUsage>(token).Metrics);
+        }
+    }
+
     /// <summary>
     /// A process that exists as far as anything but the OS is concerned. The two expensive members
     /// are instrumented rather than answered: <see cref="ProcessorTime"/> counts every sample so a
@@ -32,6 +46,27 @@ namespace MadWizard.Desomnia.Processes.Tests
                 CpuSamples++;
 
                 return Cpu;
+            }
+        }
+
+        /// <summary>The graphics time to report; null is a platform without a graphics clock.</summary>
+        public TimeSpan? Gpu { get; set; }
+
+        /// <summary>Whose clock <see cref="Gpu"/> is – set the same value on two processes to share one.</summary>
+        public object? Scope { get; set; }
+
+        public object GraphicsProcessorScope => Scope ?? this;
+
+        /// <summary>How often the graphics clock was asked — proof a cycle did (not) sample.</summary>
+        public int GpuSamples { get; private set; }
+
+        public TimeSpan? GraphicsProcessorTime
+        {
+            get
+            {
+                GpuSamples++;
+
+                return Gpu;
             }
         }
 
@@ -69,6 +104,18 @@ namespace MadWizard.Desomnia.Processes.Tests
         public void RaiseStopped() => Stopped?.Invoke(this, EventArgs.Empty);
 
         public void Dispose() { } // nothing real to release behind a fake
+    }
+
+    /// <summary>
+    /// A platform that keeps every counter, which is what the measurement tests are about. One
+    /// that keeps fewer is stated per test — see <see cref="ProcessMetricValidationTests"/>.
+    /// </summary>
+    internal sealed class FakeMetricSupport(ProcessMetric measurable) : IProcessMetricSupport
+    {
+        internal static readonly FakeMetricSupport Everything =
+            new(ProcessMetric.Processor | ProcessMetric.Graphics | ProcessMetric.Storage | ProcessMetric.Traffic);
+
+        public ProcessMetric SupportedMetrics => measurable;
     }
 
     /// <summary>A fixed roster of processes instead of a live OS enumeration.</summary>

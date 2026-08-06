@@ -24,6 +24,9 @@ namespace MadWizard.Desomnia.Processes.Manager
          */
         public override TimeSpan? ProcessorTime => Win32ProcessManager.QueryProcessorTime(Id);
 
+        /// <summary>The graphics clock – see <see cref="Win32GraphicsAccounting"/> for what is summed and why zero differs from null.</summary>
+        public override TimeSpan? GraphicsProcessorTime => Win32GraphicsAccounting.QueryTime(Id);
+
         /// <summary>Sampled like the processor time: a limited handle, one syscall, null once the process is gone.</summary>
         public override ProcessInputOutput? StorageData => Win32ProcessManager.QueryIO(Id);
 

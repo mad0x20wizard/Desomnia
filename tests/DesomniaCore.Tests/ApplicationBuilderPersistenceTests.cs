@@ -1,5 +1,4 @@
 using Autofac;
-using Microsoft.Extensions.Hosting;
 using Xunit;
 
 namespace MadWizard.Desomnia.Tests
@@ -86,32 +85,16 @@ namespace MadWizard.Desomnia.Tests
         // persistent registration of the builder must resolve as ApplicationBuilder regardless
         private sealed class SubclassBuilder(string configPath) : ApplicationBuilder(configPath);
 
-        private sealed class FakeFailureHandler : IApplicationFailureHandler
-        {
-            public void OnFatal(Exception exception) { }
-        }
-
-        private sealed class FailureHandlerModule : Module
-        {
-            protected internal override void LoadOnce(ContainerBuilder builder)
-                => builder.RegisterInstance(new FakeFailureHandler()).As<IApplicationFailureHandler>();
-        }
-
         [Fact]
-        public void PersistentHost_BuiltViaAPlatformSubclass_ActivatesItsHostedService()
+        public void PersistentHost_BuiltViaAPlatformSubclass_ResolvesTheBuilderAsApplicationBuilder()
         {
             // regression: RegisterInstance(this).AsSelf() registered the runtime subclass type, so
-            // the loop's ApplicationBuilder dependency was unresolvable when the host started
+            // the rebuild loop's ApplicationBuilder dependency was unresolvable
             using var builder = new SubclassBuilder(_configPath);
-            builder.RegisterModule(new FailureHandlerModule());
 
-            using var host = builder.Build();
+            using DesomniaHost host = builder.Build(); // the loop lives in the DesomniaHost wrapper
 
-            // resolving the hosted services activates ApplicationLoopService, whose constructor
-            // needs the ApplicationBuilder — this threw before the fix
-            var hosted = (IEnumerable<IHostedService>)host.Services.GetService(typeof(IEnumerable<IHostedService>))!;
-
-            Assert.Single(hosted); // the rebuild loop
+            Assert.Same(builder, host.Services.GetService(typeof(ApplicationBuilder)));
         }
 
         [Fact]

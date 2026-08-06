@@ -9,8 +9,6 @@ namespace MadWizard.Desomnia.Network.Watch
     {
         public NetworkService Service => service;
 
-        public virtual bool IsHidden { get; set; } = false;
-
         public virtual bool ShouldHandoffToSleepProxy { get; set; } = true;
 
         public AdvertiseOptions     AdvertiseOptions    { get; init; }
@@ -33,7 +31,7 @@ namespace MadWizard.Desomnia.Network.Watch
         {
             if (HadThresholdTraffic(interval, out long bytes))
             {
-                yield return new NetworkServiceUsage(Service, bytes);
+                yield return new NetworkServiceUsage(Service, bytes) { Rate = ThresholdRate(interval, bytes) };
             }
         }
     }

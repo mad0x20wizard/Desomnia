@@ -1,7 +1,7 @@
 minTraffic
 ++++++++++
 
-.. attention:: Windows only. No other platform offers a per-process network counter; there the threshold is ignored — a warning is logged once, and the group is treated as if the threshold were met, so the watch degrades to whatever the other attributes still measure.
+.. attention:: Windows only. No other platform offers a per-process network counter, and configuring ``minTraffic`` where none exists is refused outright: the service reports the watch and the attribute, and does not start. A threshold nothing measures cannot be honoured either, and a machine guarded by an attribute nobody is watching is worse than one that said so.
 
 For each process group, you can set a cumulative network traffic threshold, so that only a group actually transferring data over the network counts as usage. How the traffic is measured is chosen once, in the persistent configuration:
 
@@ -27,4 +27,4 @@ The formats match ``minIO``:
 
 A number without a binary unit is rejected, as for ``minIO``.
 
-If several thresholds are configured (``minCPU``, ``minIO``, ``minTraffic``), **all** of them have to be met for the group to count as active.
+If several thresholds are configured, **all** of them have to be met for the group to count as active — unless ``min="or"`` is set, where any single one is enough.

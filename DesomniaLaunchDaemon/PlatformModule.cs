@@ -36,6 +36,7 @@ namespace MadWizard.Desomnia.LaunchDaemon
             builder.RegisterType<LibProcProcessManager>()
                 .WithParameter(TypedParameter.From(config.ProcessManager?.PollInterval))
                 .AsImplementedInterfaces()
+                .As<IProcessMetricSupport>()
                 .As<ProcessManager>()
                 .SingleInstance()
                 .OnActivated(activated => exitWatch.Manager = activated.Instance); // FIXME

@@ -3,6 +3,7 @@ using Autofac.Core;
 using MadWizard.Desomnia.Network.SleepProxy.Registration;
 using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
+using MadWizard.Desomnia.Session.Middleware;
 
 namespace MadWizard.Desomnia.Session
 {
@@ -21,7 +22,7 @@ namespace MadWizard.Desomnia.Session
 
                 if (monitor.RegisterWithSleepProxy)
                 {
-                    // Add SMB port to SleepProxyRegistration
+                    // Add RDP port to SleepProxyRegistration
                     builder.ComponentRegistryBuilder.Registered += (sender, args) =>
                     {
                         if (args.ComponentRegistration.IsLimitedTo<SleepProxyRegistration>())
@@ -29,7 +30,6 @@ namespace MadWizard.Desomnia.Session
                                 pipeline.Use(new RDPSleepProxyRegistration());
                     };
                 }
-
             }
         }
     }

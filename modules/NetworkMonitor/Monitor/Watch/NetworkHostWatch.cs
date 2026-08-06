@@ -1,8 +1,8 @@
-﻿using MadWizard.Desomnia.Network.Demand;
+﻿using MadWizard.Desomnia.Events;
+using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Network.Neighborhood;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
-using MadWizard.Desomnia.Events;
 
 namespace MadWizard.Desomnia.Network.Watch
 {
@@ -58,22 +58,20 @@ namespace MadWizard.Desomnia.Network.Watch
             await base.StopWatch(gracefully);
         }
 
-        protected override bool ShouldInspectResource(NetworkServiceWatch service) => !service.IsHidden;
-
         protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
         {
             if (HadThresholdTraffic(interval, out long bytes))
             {
-                var token = new NetworkHostUsage(Host, bytes);
+                var usage = new NetworkHostUsage(Host, bytes);
 
                 // summarize tokens
                 foreach (var serviceToken in base.InspectResource(interval))
                     if (serviceToken is NetworkServiceUsage service)
-                        token.Tokens.Add(service);
+                        usage.Tokens.Add(service);
 
-                yield return token;
+                if (usage.Tokens.Any() || Host is not LocalHost)
+                    yield return usage;
             }
         }
-
     }
 }

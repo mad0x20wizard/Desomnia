@@ -14,29 +14,7 @@ namespace MadWizard.Desomnia.Processes.Manager
      */
     public abstract class ProcessDecorator(IProcess process) : IProcess
     {
-        private IProcess Target => process;
-
-        /// <summary>
-        /// The first layer of the given type. Decorators stack, so whoever needs a specific
-        /// layer – a metric its own decoration, a platform its concrete process – walks the
-        /// layers instead of type-testing the outermost. Throws where the cast it replaces
-        /// would have: asking for a layer that is not there is a wiring error, not a condition.
-        /// </summary>
-        public T Layer<T>() where T : IProcess
-        {
-            var layer = process;
-
-            while (true)
-            {
-                if (layer is T match)
-                    return match;
-
-                if (layer is not ProcessDecorator decorator)
-                    throw new InvalidCastException($"'{process}' carries no {typeof(T).Name} layer");
-
-                layer = decorator.Target;
-            }
-        }
+        internal IProcess Target => process;
 
         public virtual int Id => process.Id;
         public virtual int SessionId => process.SessionId;
@@ -44,6 +22,8 @@ namespace MadWizard.Desomnia.Processes.Manager
         public virtual string? ImagePath => process.ImagePath;
 
         public virtual TimeSpan? ProcessorTime => process.ProcessorTime;
+        public virtual TimeSpan? GraphicsProcessorTime => process.GraphicsProcessorTime;
+        public virtual object GraphicsProcessorScope => process.GraphicsProcessorScope;
         public virtual ProcessInputOutput? StorageData => process.StorageData;
         public virtual ProcessInputOutput? NetworkData => process.NetworkData;
 
@@ -70,14 +50,26 @@ namespace MadWizard.Desomnia.Processes.Manager
         {
             public T Layer<T>() where T : IProcess
             {
-                if (process is ProcessDecorator decorator)
+                do
                 {
-                    return decorator.Layer<T>();
-                }
+                    switch (process)
+                    {
+                        case T target:
+                            return target;
 
-                throw new InvalidCastException($"'{process}' carries no {typeof(T).Name} layer");
+                        case ProcessDecorator decorator when decorator is T targetDecorator:
+                            return targetDecorator;
+
+                        case ProcessDecorator unwrap:
+                            process = unwrap.Target;
+                            continue;
+
+                        default:
+                            throw new InvalidCastException($"'{process}' carries no {typeof(T).Name} layer");
+                    }
+                }
+                while (true);
             }
         }
     }
-
 }

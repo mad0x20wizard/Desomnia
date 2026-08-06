@@ -10,7 +10,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Services
 {
     public class WatchedServiceInfo() : ServiceInfo()
     {
-        public IOThreshold? MinTraffic { get; set; }
+        public TransmissionThreshold? MinTraffic { get; set; }
 
         // Options
         #region                 AdvertiseOptions

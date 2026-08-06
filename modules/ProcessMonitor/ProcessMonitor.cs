@@ -1,5 +1,6 @@
 ﻿using Autofac;
 using MadWizard.Desomnia.Processes.Configuration;
+using MadWizard.Desomnia.Processes.Watch;
 using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia.Processes
@@ -8,16 +9,22 @@ namespace MadWizard.Desomnia.Processes
     {
         public required ILogger<ProcessMonitor> Logger { get; set; }
 
-        public required Func<ProcessWatchInfo, ProcessWatch> CreateWatch { private get; init; }
+        public required Func<ProcessWatchMetrics, AnyProcessWatch>  CreateAnyProcessWatch   { private get; init; }
+        public required Func<ProcessWatchInfo, PatternProcessWatch> CreateProcessWatch      { private get; init; }
 
         void IStartable.Start()
         {
             GetEvent(nameof(Idle)).AddAction(config.OnIdle);
             GetEvent(nameof(Demand)).AddAction(config.OnDemand);
 
+            if (config.HasThresholds)
+            {
+                StartTracking(CreateAnyProcessWatch(config));
+            }
+
             foreach (var info in config.Process)
             {
-                StartTracking(CreateWatch(info));
+                StartTracking(CreateProcessWatch(info));
             }
 
             Logger.LogDebug("Startup complete; {Count} procceses watched.", config.Process.Count);

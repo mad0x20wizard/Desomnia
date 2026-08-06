@@ -1,30 +1,25 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Globalization;
-using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
-namespace MadWizard.Desomnia.Configuration
+namespace MadWizard.Desomnia.Session.Configuration
 {
     [TypeConverter(typeof(SessionMatcherConverter))]
-    public class SessionMatcher
+    public class SessionSelector
     {
         private List<string>? _patterns;
 
-        private SessionMatcher()
+        private SessionSelector()
         {
 
         }
 
-        public SessionMatcher(string pattern)
+        public SessionSelector(string pattern)
         {
             _patterns = [pattern];
         }
 
-        public SessionMatcher(IEnumerable<string> patterns)
+        public SessionSelector(IEnumerable<string> patterns)
         {
             _patterns = patterns.ToList();
         }
@@ -45,10 +40,10 @@ namespace MadWizard.Desomnia.Configuration
             return false;
         }
 
-        public static SessionMatcher None => new() { _patterns = [] };
-        public static SessionMatcher Any => new() { _patterns = null };
+        public static SessionSelector None => new() { _patterns = [] };
+        public static SessionSelector Any => new() { _patterns = null };
 
-        public static SessionMatcher operator +(SessionMatcher a, SessionMatcher? b)
+        public static SessionSelector operator +(SessionSelector a, SessionSelector? b)
         {
             if (b == null)
                 return a;
@@ -72,11 +67,11 @@ namespace MadWizard.Desomnia.Configuration
             if (value is string str)
             {
                 if (str == "*" || str == "true")
-                    return SessionMatcher.Any;
+                    return SessionSelector.Any;
                 else if (str == "false")
-                    return SessionMatcher.None;
+                    return SessionSelector.None;
                 else
-                    return new SessionMatcher(str);
+                    return new SessionSelector(str);
             }
 
             return null;

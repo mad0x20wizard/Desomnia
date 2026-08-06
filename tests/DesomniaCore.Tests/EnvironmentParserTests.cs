@@ -1,4 +1,5 @@
 using MadWizard.Desomnia.Configuration.Binding;
+using MadWizard.Desomnia.Configuration.Model;
 using MadWizard.Desomnia.Environments;
 using System.Xml.Linq;
 using Xunit;
@@ -37,11 +38,11 @@ namespace MadWizard.Desomnia.Tests
             Assert.Equal("home", blocks[0].DisplayName);
             Assert.Equal("home", blocks[0].Name);
             Assert.False(blocks[0].IsDefault);
-            Assert.Equal([("network", "10.0.0.0/8")], blocks[0].ConditionAttributes);
+            Assert.Equal([new ConditionAttribute(null, "network", "10.0.0.0/8", "network")], blocks[0].ConditionAttributes);
 
             Assert.Equal("power=\"ac\"", blocks[1].DisplayName);
             Assert.Null(blocks[1].Name);
-            Assert.Equal([("power", "ac")], blocks[1].ConditionAttributes);
+            Assert.Equal([new ConditionAttribute(null, "power", "ac", "power")], blocks[1].ConditionAttributes);
 
             Assert.Equal("default", blocks[2].DisplayName);
             Assert.True(blocks[2].IsDefault);
@@ -59,9 +60,12 @@ namespace MadWizard.Desomnia.Tests
 
             var content = blocks[0].Content;
 
-            Assert.Equal("SystemMonitor", content.Name.LocalName);
-            Assert.False(content.HasAttributes); // added transparently, without any attributes
-            Assert.Equal("NetworkMonitor", Assert.Single(content.Elements()).Name.LocalName);
+            Assert.Equal("SystemMonitor", content.Name);
+
+            var child = Assert.Single(content.Children); // added transparently, without any attributes
+
+            Assert.Equal(ConfigNodeKind.Element, child.Kind);
+            Assert.Equal("NetworkMonitor", child.Name);
         }
 
         [Fact]
@@ -73,7 +77,11 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """).Blocks;
 
-            Assert.Equal("sleepless", blocks[0].Content.Attribute("onDemand")?.Value);
+            var attribute = Assert.Single(blocks[0].Content.Children);
+
+            Assert.Equal(ConfigNodeKind.Attribute, attribute.Kind);
+            Assert.True(attribute.HasName("onDemand"));
+            Assert.Equal("sleepless", attribute.Value);
         }
 
         [Fact]
@@ -85,7 +93,7 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """).Blocks;
 
-            Assert.Null(blocks[0].Content.Attribute("version"));
+            Assert.DoesNotContain(blocks[0].Content.Children, child => child.HasName("version"));
         }
 
         [Fact]

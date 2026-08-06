@@ -5,7 +5,7 @@ using System.ServiceProcess;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager
 {
-    internal class DuoPollingManager(DuoStreamMonitorConfig config) : DuoManager(config)
+    internal class DuoPollingManager(DuoSessionMonitorConfig config) : DuoManager(config)
     {
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -37,7 +37,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                             // ignore these
                             case ServiceControllerStatus.StartPending:
                             case ServiceControllerStatus.StopPending:
-                                continue;
+                                goto wait;
                         }
 
                         status = Service.Status;
@@ -46,6 +46,16 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                     }
                     catch (InvalidOperationException ex) when (ex.InnerException is Win32Exception win && win.NativeErrorCode == 1060)
                     {
+                        if (status == ServiceControllerStatus.Running)
+                        {
+                            // uninstalled while running — reset the state
+                            // machine, or a reinstall never re-triggers
+                            TriggerStopped(); 
+                                              
+
+                            status = ServiceControllerStatus.Stopped;
+                        }
+
                         if (!serviceNotFound) // log only once
                         {
                             Logger.LogWarning(ex, "Duo service not found.");
@@ -58,6 +68,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                         Logger.LogError(ex, "Error checking instances.");
                     }
 
+                wait:  
                     await Task.Delay(config.PollInterval, stoppingToken);
                 }
             }

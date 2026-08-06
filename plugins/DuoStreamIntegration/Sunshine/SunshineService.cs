@@ -3,7 +3,7 @@ using System.Net;
 
 namespace MadWizard.Desomnia.Service.Duo.Sunshine
 {
-    public class SunshineService(string name, ushort port) : TransportNetworkService($"Sunshine/{name}", new(IPProtocol.TCP, port))
+    public class SunshineService(string name, ushort port) : TransportNetworkService($"Sunshine<{name}>", new(IPProtocol.TCP, port))
     {
         // TCP
         internal IPPort HTTP      => new(IPProtocol.TCP, (ushort)(port + 0));

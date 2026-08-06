@@ -91,11 +91,17 @@ namespace MadWizard.Desomnia.Processes.Manager
         }
 
         /**
-         * The two counter pairs have no BCL fallback to reach for – System.Diagnostics.Process
-         * simply has nothing to offer – so the base answers "cannot sample" and only a platform
-         * that actually measured something overrides. That keeps an un-ported platform failing
-         * visibly (the watch warns and stops trusting the threshold) instead of failing wrong.
+         * The counter pairs and the graphics clock have no BCL fallback to reach for –
+         * System.Diagnostics.Process simply has nothing to offer – so the base answers "cannot
+         * sample" and only a platform that actually measured something overrides. That keeps an
+         * un-ported platform failing visibly (the watch warns and stops trusting the threshold)
+         * instead of failing wrong.
          */
+        public virtual TimeSpan? GraphicsProcessorTime => null;
+
+        /// <summary>Its own, until a platform says its graphics clock is shared with others.</summary>
+        public virtual object GraphicsProcessorScope => this;
+
         public virtual ProcessInputOutput? StorageData => null;
         public virtual ProcessInputOutput? NetworkData => null;
 

@@ -1,9 +1,14 @@
 ﻿using Autofac;
+using Autofac.Core;
 using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Service.Duo.Configuration;
 using MadWizard.Desomnia.Service.Duo.Manager;
 using MadWizard.Desomnia.Service.Duo.Sunshine.Listener;
 using MadWizard.Desomnia.Service.Duo.Sunshine.Watch;
+using MadWizard.Desomnia.Session;
+using MadWizard.Desomnia.Session.Configuration;
+using MadWizard.Desomnia.Session.Manager;
+using System.ComponentModel;
 using System.ServiceProcess;
 using WindowsFirewallHelper;
 
@@ -13,17 +18,20 @@ namespace MadWizard.Desomnia.Service.Duo
     {
         protected override void Load(ContainerBuilder builder, DuoConfig config)
         {
-            if (config.DuoStreamMonitor is DuoStreamMonitorConfig duo)
+            if (config.DuoSessionMonitor is DuoSessionMonitorConfig duo)
             {
-                var monitor = builder.RegisterType<DuoStreamMonitor>()
+                // DuoManager requires an ISessionManager (only present in service mode),
+                // so the whole monitor block degrades to inert without one
+                var monitorDuo = builder.RegisterType<DuoSessionMonitor>()
+                    .OnlyIf(reg => reg.IsRegistered(new TypedService(typeof(ISessionManager))))
                     .WithParameter(TypedParameter.From(duo))
                     .AsImplementedInterfaces().AsSelf()
                     .SingleInstance();
 
-                monitor.OnActivated(args =>
+                monitorDuo.OnActivated(args =>
                 {
-                    ((IEventSystem)args.Instance)[nameof(DuoStreamMonitor.Idle)].AddAction(duo.OnIdle);
-                    ((IEventSystem)args.Instance)[nameof(DuoStreamMonitor.Demand)].AddAction(duo.OnDemand);
+                    ((IEventSystem)args.Instance)[nameof(DuoSessionMonitor.Idle)].AddAction(duo.OnIdle);
+                    ((IEventSystem)args.Instance)[nameof(DuoSessionMonitor.Demand)].AddAction(duo.OnDemand);
                 });
 
                 if (!duo.UsePolling)
@@ -35,6 +43,7 @@ namespace MadWizard.Desomnia.Service.Duo
                         if (service.Version >= DuoEventManager.MinVersion)
                         {
                             builder.RegisterType<DuoEventManager>().As<DuoManager>()
+                                .OnlyIf(reg => reg.IsRegistered(new TypedService(typeof(ISessionManager))))
                                 .WithParameter(TypedParameter.From(duo))
                                 .AsImplementedInterfaces()
                                 .SingleInstance();
@@ -42,13 +51,21 @@ namespace MadWizard.Desomnia.Service.Duo
                             goto skipPolling;
                         }
                     }
-                    catch (InvalidOperationException)
+                    catch (Exception ex) when
+                    (ex is Win32Exception
+                        or FileNotFoundException
+                        or FormatException
+                        or ArgumentException   // Version.Parse on structurally odd FileVersion strings
+                        or OverflowException
+                        or InvalidDataException
+                        or InvalidOperationException)
                     {
-                        // Duo Service is not available
+                        // Duo Service is not available (or its version is unreadable)
                     }
                 }
 
                 builder.RegisterType<DuoPollingManager>().As<DuoManager>()
+                    .OnlyIf(reg => reg.IsRegistered(new TypedService(typeof(ISessionManager))))
                     .WithParameter(TypedParameter.From(duo))
                     .AsImplementedInterfaces()
                     .SingleInstance();
@@ -62,13 +79,21 @@ namespace MadWizard.Desomnia.Service.Duo
                 // generation until application shutdown)
                 builder.RegisterType<DuoInstance>().AsSelf().ExternallyOwned();
 
-                if (config.UseFallback)
+                if (config.SessionMonitor is SessionMonitorConfig monitorSession)
+                    builder.RegisterType<SessionWatchAdapter>()
+                        .OnlyIf(reg => reg.IsRegistered(new TypedService(typeof(SessionMonitor))))
+                        .WithParameter(new TypedParameter(typeof(SessionMonitorConfig), monitorSession))
+                        .AsImplementedInterfaces()
+                        .SingleInstance();
+
+                if (config.UseListener)
                 {
                     builder.RegisterModule<SunshineListenerModule>();
                 }
                 else
                 {
                     builder.RegisterType<NetworkPluginModule>()
+                        .OnlyIf(reg => reg.IsRegistered(new TypedService(typeof(DuoManager))))
                         .As<Desomnia.Network.PluginModule>()
                         .SingleInstance();
                 }
@@ -90,6 +115,7 @@ namespace MadWizard.Desomnia.Service.Duo
             listener.OnActivated(args => args.Instance.Inspect(TimeSpan.Zero));
 
             builder.RegisterType<SunshineListenerAdapter>()
+                .OnlyIf(reg => reg.IsRegistered(new TypedService(typeof(DuoManager))))
                 .AsImplementedInterfaces()
                 .SingleInstance();
         }

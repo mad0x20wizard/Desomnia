@@ -2,42 +2,54 @@
 using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Network.Context;
 using MadWizard.Desomnia.Network.Neighborhood;
+using MadWizard.Desomnia.Network.Watch;
 using MadWizard.Desomnia.Service.Duo.Manager;
 using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
 {
-    internal class SunshineServiceContextAdapter(DuoManager manager) : INetworkService
+    internal class SunshineServiceContextAdapter(DuoManager manager) : SunshineServiceAdapter, INetworkService
     {
         public required ILogger<SunshineServiceContextAdapter> Logger { get; set; }
 
         public required NetworkContext Context { private get; init; }
 
-        private Dictionary<DuoInstance, SunshineServiceContext> _services = [];
+        private NetworkHostContext LocalHostContext => Context.First(ctx => ctx.Host is LocalHost);
+
+        readonly Dictionary<DuoInstance, SunshineServiceContext> _contexts = [];
 
         async Task INetworkService.Startup()
         {
-            WatchInstances();
+            LocalHostContext.Watch?.InspectionFilter += IsNotSunshineServiceWatch;
 
+            // subscribe first — a Started fired mid-WatchInstances is then
+            // deduplicated by the ContainsKey guard instead of being missed
             manager.Started += WatchInstances;
-            manager.Stopped += UnWatchInstaces;
+            manager.Stopped += UnWatchInstances;
+
+            WatchInstances();
         }
 
         private void WatchInstances(object? sender = null, EventArgs? e = null)
         {
-            var ctxLocalHost = Context.First(ctx => ctx.Host is LocalHost);
-
             foreach (var instance in manager) using (Context.Network.Mutex.Lock())
             {
+                if (_contexts.ContainsKey(instance))
+                    continue; // Startup() raced manager.Started for the same generation
+
                 try
                 {
                     Logger.LogInformation($"Monitoring {instance}:{instance.Port}" + (instance.IsRunning == true ? " (running)" : ""));
 
-                    var context = ctxLocalHost.CreateWatchedService<SunshineServiceContext>(TypedParameter.From(instance.Service));
+                    var context = LocalHostContext.CreateWatchedService<SunshineServiceContext>
+                    (
+                        TypedParameter.From(instance.Service), 
+                        TypedParameter.From(instance.Info.MinStreamTraffic)
+                    );
 
-                    instance.StartTracking(context.Watch);
+                    RegisterWatch(instance, context.Watch);
 
-                    _services.Add(instance, context);
+                    _contexts.Add(instance, context);
                 }
                 catch (Exception ex)
                 {
@@ -46,24 +58,31 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
             }
         }
 
-        private void UnWatchInstaces(object? sender = null, EventArgs? e = null)
+        private bool IsNotSunshineServiceWatch(NetworkServiceWatch watch) => watch.Service is not SunshineService;
+
+        private void UnWatchInstances(object? sender = null, EventArgs? e = null)
         {
-            foreach (var srv in _services) using (Context.Network.Mutex.Lock())
+            using (Context.Network.Mutex.Lock())
             {
-                srv.Key.StopTracking(srv.Value.Watch);
+                foreach ((var instance, var ctx) in _contexts)
+                {
+                    UnregisterWatch(instance, ctx.Watch);
 
-                srv.Value.Dispose();
+                    ctx.Dispose();
+                }
+
+                _contexts.Clear();
             }
-
-            _services.Clear();
         }
 
         async Task INetworkService.Shutdown(NetworkShutdownReason reason)
         {
-            manager.Stopped -= UnWatchInstaces;
+            LocalHostContext.Watch?.InspectionFilter -= IsNotSunshineServiceWatch;
+
+            manager.Stopped -= UnWatchInstances;
             manager.Started -= WatchInstances;
 
-            UnWatchInstaces();
+            UnWatchInstances();
         }
     }
 }

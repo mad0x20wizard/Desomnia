@@ -37,6 +37,7 @@ namespace MadWizard.Desomnia.Service
             builder.RegisterType<TraceEventProcessManager>()
                 .PropertiesAutowired(PropertyWiringOptions.AllowCircularDependencies)
                 .AsImplementedInterfaces()
+                .As<IProcessMetricSupport>()
                 .As<ProcessManager>()
                 .SingleInstance()
                 .AsSelf();

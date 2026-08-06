@@ -9,7 +9,7 @@ namespace MadWizard.Desomnia.Network.Watch
         private long _countBytes;
         private long _countPackets;
 
-        public IOThreshold? Threshold { get; set; }
+        public TransmissionThreshold? Threshold { get; set; }
 
         internal protected virtual Task StartWatch() => Task.CompletedTask;
         internal protected virtual Task StopWatch(bool gracefully)  => Task.CompletedTask;
@@ -33,24 +33,37 @@ namespace MadWizard.Desomnia.Network.Watch
             await base.TriggerDemandAsync(@event);
         }
 
+        /**
+         * The speed to report alongside a demand, or null where the threshold asked about an
+         * amount (or about packets, which have no size to average) – the token then says what was
+         * measured in the same terms the question was put in, and says nothing where it cannot.
+         */
+        protected double? ThresholdRate(TimeSpan since, long bytes)
+        {
+            if (Threshold is not { ByteUnit: not null, TimeUnit: not null } || since <= TimeSpan.Zero)
+                return null;
+
+            return bytes / since.TotalSeconds;
+        }
+
         protected bool HadThresholdTraffic(TimeSpan since, out long bytes)
         {
             try
             {
                 bytes = _countBytes; long packets = _countPackets;
 
-                if (Threshold is IOThreshold speed)
+                if (Threshold is TransmissionThreshold speed)
                 {
                     double value, minValue;
-                    if (speed.TrafficUnit is long traffic)
+                    if (speed.ByteUnit is long traffic)
                     {
                         value = _countBytes;
-                        minValue = speed.Value * traffic;
+                        minValue = speed.Amount * traffic;
                     }
                     else
                     {
                         value = _countPackets;
-                        minValue = speed.Value;
+                        minValue = speed.Amount;
                     }
 
                     if (speed.TimeUnit is TimeSpan time)

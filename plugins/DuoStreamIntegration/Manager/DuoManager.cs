@@ -9,20 +9,20 @@ using System.ServiceProcess;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager
 {
-    public abstract class DuoManager(DuoStreamMonitorConfig config) : BackgroundService, IIEnumerable<DuoInstance>
+    public abstract class DuoManager(DuoSessionMonitorConfig config) : BackgroundService, IIEnumerable<DuoInstance>
     {
         const int DEFAULT_TIMEOUT = 30000;
 
         const string REGISTRY_KEY = "SOFTWARE\\Duo";
         const ushort DEFAULT_PORT = 38299;
 
+        internal IDuoWebManager? API;
+
         public required ILogger<DuoManager> Logger { get; set; }
 
         public required ISessionManager SessionManager { private get; init; }
 
         public required Func<DuoInstanceInfo, RegistryKey, DuoInstance> CreateInstance { private get; init; }
-
-        internal IDuoWebManager? API;
 
         protected ServiceController Service => field ??= new(config.ServiceName);
 
@@ -50,14 +50,19 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
             ServicePID = servicePID ?? Service.PID;
 
-            Logger.LogInformation("Service is running at: '{path}' ({version}) -> PID {pid}", servicePath, serviceVersion, servicePID);
+            Logger.LogInformation("Service is running at: '{path}' ({version}) -> PID {pid}", servicePath, serviceVersion, ServicePID);
 
             API = RestService.For<IDuoWebManager>("http://localhost:" + Port);
 
-            foreach (var stale in Instances)  // externally owned — dispose the replaced generation
-                stale.Dispose();
+            // externally owned — dispose the replaced generation, but only after its
+            // successor is published: adapters claim watches concurrently and must
+            // never adopt into an already-disposed instance
+            var stale = Instances;
 
             Instances = LoadInstances();
+
+            foreach (var old in stale)
+                old.Dispose();
 
             await TriggerRefresh();
 
@@ -69,9 +74,15 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
         protected async Task TriggerRefresh()
         {
+            if (API is not IDuoWebManager api)
+                return; // the service stopped concurrently
+
             foreach (var instance in this) using (await instance.RefreshMutex.LockAsync())
             {
-                bool? wasRunning = instance.IsRunning, shouldBeRunning = await API!.QueryInstance(instance.Name);
+                if (instance.IsDisposed)
+                    continue; // a dying generation — don't touch its registry key
+
+                bool? wasRunning = instance.IsRunning, shouldBeRunning = await api.QueryInstance(instance.Name);
 
                 if (shouldBeRunning.Value)
                     instance.IsRunning = instance.IsSandboxed || (instance.SessionID != null);
@@ -96,10 +107,14 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
             this.Stopped?.Invoke(this, EventArgs.Empty);
 
-            foreach (var instance in this)
-                instance.Dispose();
+            // swap instead of Clear() — enumerators handed out to other threads
+            // (inspection loop, session events) must never see in-place mutation
+            var stale = Instances;
 
-            Instances.Clear();
+            Instances = [];
+
+            foreach (var instance in stale)
+                instance.Dispose();
 
             ServicePID = null;
 
@@ -111,23 +126,38 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             using RegistryKey instancesKey = OpenInstancesKey();
 
             var instances = new List<DuoInstance>();
-            foreach (var name in instancesKey.GetSubKeyNames())
+
+            try
             {
-                var info = config[name] ?? new DuoInstanceInfo { Name = name };
+                foreach (var name in instancesKey.GetSubKeyNames())
+                {
+                    var info = config[name] ?? new DuoInstanceInfo { Name = name };
 
-                info.OnDemand ??= config.OnInstanceDemand;
-                info.OnIdle ??= config.OnInstanceIdle;
+                    info.OnDemand   ??= config.OnInstanceDemand;
+                    info.OnIdle     ??= config.OnInstanceIdle;
 
-                info.OnLogin ??= config.OnInstanceLogin;
-                info.OnStart ??= config.OnInstanceStarted;
-                info.OnStop ??= config.OnInstanceStopped;
-                info.OnLogout ??= config.OnInstanceLogout;
+                    info.OnLogin    ??= config.OnInstanceLogin;
+                    info.OnStart    ??= config.OnInstanceStarted;
+                    info.OnStop     ??= config.OnInstanceStopped;
+                    info.OnLogout   ??= config.OnInstanceLogout;
 
-                var instance = CreateInstance(info, instancesKey.OpenSubKey(name!, writable: true)!);
+                    info.PreventIdleIfStreaming ??= config.PreventIdleIfStreaming;
 
-                instance.Session = SessionManager.FirstOrDefault(instance.HasInitiated);
+                    var instance = CreateInstance(info, instancesKey.OpenSubKey(name!, writable: true)!);
 
-                instances.Add(instance);
+                    instance.Session = SessionManager.FirstOrDefault(instance.HasInitiated);
+
+                    instances.Add(instance);
+                }
+            }
+            catch
+            {
+                // a failed generation is never published — dispose the partial build
+                // (open writable registry keys!), or every adoption retry leaks a batch
+                foreach (var instance in instances)
+                    instance.Dispose();
+
+                throw;
             }
 
             return instances;
@@ -135,9 +165,16 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
         public async Task Start(DuoInstance instance, int timeout = DEFAULT_TIMEOUT)
         {
+            if (API is not IDuoWebManager api)
+            {
+                Logger.LogWarning($"Cannot start {instance} -> Duo service is not running.");
+
+                return;
+            }
+
             Logger.LogInformation($"Starting {instance}...");
 
-            await API!.StartInstance(instance.Name);
+            await api.StartInstance(instance.Name);
 
             if (instance.IsRunning != true)
             {
@@ -163,9 +200,16 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
         public async Task Stop(DuoInstance instance, int timeout = 5000)
         {
+            if (API is not IDuoWebManager api)
+            {
+                Logger.LogWarning($"Cannot stop {instance} -> Duo service is not running.");
+
+                return;
+            }
+
             Logger.LogInformation($"Stopping {instance}...");
 
-            await API!.StopInstance(instance.Name);
+            await api.StopInstance(instance.Name);
 
             if (instance.IsRunning != false)
             {

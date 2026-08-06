@@ -36,6 +36,7 @@ namespace MadWizard.Desomnia.Daemon
             builder.RegisterType<ProcFSProcessManager>()
                 .WithParameter(TypedParameter.From(config.ProcessManager?.PollInterval))
                 .AsImplementedInterfaces()
+                .As<IProcessMetricSupport>()
                 .As<ProcessManager>()
                 .SingleInstance()
                 .AsSelf()

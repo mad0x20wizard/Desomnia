@@ -2,8 +2,10 @@ using Autofac;
 using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Configuration.Binding;
 using MadWizard.Desomnia.Environments;
+using MadWizard.Desomnia.Environments.Export;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Xml;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Xml.Linq;
 using Xunit;
 
@@ -24,39 +26,77 @@ namespace MadWizard.Desomnia.Tests
 
         public void Dispose() => Directory.Delete(_directory, recursive: true);
 
+        // the canonical harness: the physical source, the monitor (the application container
+        // fills the required logger via the LoggingModule; here we do) and the pipeline stage
+        // between them, with the persistent container standing in via Conditions()
+        private static (ConfigurationPipeline Pipeline, EnvironmentMonitor Monitor) CreatePipeline(string path, FakeCondition? toggle = null)
+        {
+            var source = new ExtendedXmlConfigurationSource(path);
+
+            var monitor = new EnvironmentMonitor { Logger = NullLogger.Instance };
+
+            var pipeline = new ConfigurationPipeline(source, path, PersistentConfiguration.Empty, monitor, Conditions(toggle))
+            {
+                Logger = NullLogger.Instance,
+            };
+
+            return (pipeline, monitor);
+        }
+
+        private static IConfiguration BuildConfiguration(ConfigurationPipeline pipeline)
+            => new ConfigurationBuilder().Add(pipeline.EffectiveSource).Build();
+
         [Fact]
-        public void Detect_LegacySystemMonitorRoot_ReturnsNull()
+        public void Start_LegacySystemMonitorRoot_IsPassthrough()
         {
             var path = WriteConfig("""<SystemMonitor version="1" />""");
 
-            Assert.Null(EnvironmentMonitor.Detect(path));
+            var (pipeline, _) = CreatePipeline(path);
+
+            pipeline.Start();
+
+            Assert.False(pipeline.Augmenting);
         }
 
         [Fact]
-        public void Detect_LegacyDialectWithBareAttributes_ReturnsNull()
+        public void Start_LegacyDialectWithBareAttributes_IsFatal()
         {
-            // value-less attributes make the file not well-formed; the legacy provider handles them
+            // value-less attributes make the file not well-formed; the legacy dialect is
+            // gone, so this now fails at boot instead of falling back to a legacy provider
             var path = WriteConfig("""<SystemMonitor version="1"><NetworkMonitor><traffic must /></NetworkMonitor></SystemMonitor>""");
 
-            Assert.Null(EnvironmentMonitor.Detect(path));
+            var (pipeline, _) = CreatePipeline(path);
+
+            var ex = Assert.Throws<ConfigurationValueException>(pipeline.Start);
+
+            Assert.Contains("well-formed", ex.Message);
         }
 
         [Fact]
-        public void Detect_MissingFile_ReturnsNull()
+        public void Start_MissingFile_IsPassthrough()
         {
-            Assert.Null(EnvironmentMonitor.Detect(Path.Combine(_directory, "missing.xml")));
+            var (pipeline, _) = CreatePipeline(Path.Combine(_directory, "missing.xml"));
+
+            pipeline.Start(); // the non-optional provider reports the missing file, not the pipeline
+
+            Assert.False(pipeline.Augmenting);
         }
 
         [Fact]
-        public void Detect_UnknownRoot_Throws()
+        public void Start_UnknownRoot_Throws()
         {
             var path = WriteConfig("""<WrongRoot version="1" />""");
 
-            Assert.Throws<ConfigurationValueException>(() => EnvironmentMonitor.Detect(path));
+            var (pipeline, _) = CreatePipeline(path);
+
+            var ex = Assert.Throws<ConfigurationValueException>(pipeline.Start);
+
+            Assert.Contains("SystemMonitor", ex.Message);
+            Assert.Contains("EnvironmentMonitor", ex.Message);
         }
 
         [Fact]
-        public void Detect_BareAttributeBelowEnvironmentRoot_ThrowsWithHint()
+        public void Start_BareAttributeBelowEnvironmentRoot_IsFatal()
         {
             var path = WriteConfig("""
                 <EnvironmentMonitor version="1">
@@ -64,13 +104,15 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            var ex = Assert.Throws<ConfigurationValueException>(() => EnvironmentMonitor.Detect(path));
+            var (pipeline, _) = CreatePipeline(path);
+
+            var ex = Assert.Throws<ConfigurationValueException>(pipeline.Start);
 
             Assert.Contains("well-formed", ex.Message);
         }
 
         [Fact]
-        public void ApplyAndBind_StampsVersionAndMergesActiveBlocks()
+        public void StartAndBind_StampsVersionAndMergesActiveBlocks()
         {
             var path = WriteConfig("""
                 <EnvironmentMonitor version="1">
@@ -80,28 +122,27 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            var environment = EnvironmentMonitor.Detect(path);
+            var (pipeline, _) = CreatePipeline(path);
 
-            Assert.NotNull(environment);
+            pipeline.Start();
 
-            var source = new ExtendedXmlConfigurationSource(path);
+            Assert.True(pipeline.Augmenting);
 
-            environment.Apply(source, Conditions());
-
-            var configuration = new ConfigurationBuilder().Add(source).Build();
+            var configuration = BuildConfiguration(pipeline);
 
             Assert.Equal("fallback", configuration["marker"]); // inactive block skipped, default merged
+            Assert.Equal("1", configuration["version"]);       // stamped from the <EnvironmentMonitor> root
 
             var config = StrictConfigurationBinder.Get<SystemMonitorConfig>(configuration, o => o.BindNonPublicProperties = true);
 
             Assert.NotNull(config);
-            Assert.Equal(1u, config.Version); // stamped from the <EnvironmentMonitor> root
+            Assert.Equal(1u, config.Version);
             Assert.Equal(TimeSpan.FromMinutes(5), config.Timeout);
             Assert.True(config.KeepDisplayAwake);
         }
 
         [Fact]
-        public void Apply_UnknownConditionAttribute_Throws()
+        public void Start_UnknownConditionAttribute_Throws()
         {
             var path = WriteConfig("""
                 <EnvironmentMonitor version="1">
@@ -109,10 +150,9 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, _) = CreatePipeline(path);
 
-            var ex = Assert.Throws<ConfigurationValueException>(() =>
-                environment.Apply(new ExtendedXmlConfigurationSource(path), Conditions()));
+            var ex = Assert.Throws<ConfigurationValueException>(pipeline.Start);
 
             Assert.Contains("powr", ex.Message);
         }
@@ -129,15 +169,11 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, _) = CreatePipeline(path);
 
-            var source = new ExtendedXmlConfigurationSource(path);
+            pipeline.Start();
 
-            environment.Apply(source, Conditions());
-
-            var configuration = new ConfigurationBuilder().Add(source).Build();
-
-            Assert.Equal(expectedMarker, configuration["marker"]);
+            Assert.Equal(expectedMarker, BuildConfiguration(pipeline)["marker"]);
         }
 
         [Fact]
@@ -153,13 +189,11 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, _) = CreatePipeline(path);
 
-            var source = new ExtendedXmlConfigurationSource(path);
+            pipeline.Start();
 
-            environment.Apply(source, Conditions());
-
-            var configuration = new ConfigurationBuilder().Add(source).Build();
+            var configuration = BuildConfiguration(pipeline);
 
             Assert.Null(configuration["marker"]);
             Assert.Null(configuration["fallback"]);
@@ -178,15 +212,11 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, _) = CreatePipeline(path);
 
-            var source = new ExtendedXmlConfigurationSource(path);
+            pipeline.Start();
 
-            environment.Apply(source, Conditions());
-
-            var configuration = new ConfigurationBuilder().Add(source).Build();
-
-            Assert.Equal(expectedMarker, configuration["marker"]);
+            Assert.Equal(expectedMarker, BuildConfiguration(pipeline)["marker"]);
         }
 
         [Theory]
@@ -203,15 +233,11 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, _) = CreatePipeline(path);
 
-            var source = new ExtendedXmlConfigurationSource(path);
+            pipeline.Start();
 
-            environment.Apply(source, Conditions());
-
-            var configuration = new ConfigurationBuilder().Add(source).Build();
-
-            Assert.Equal(expectedMarker, configuration["marker"]);
+            Assert.Equal(expectedMarker, BuildConfiguration(pipeline)["marker"]);
         }
 
         [Fact]
@@ -226,13 +252,11 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, _) = CreatePipeline(path);
 
-            var source = new ExtendedXmlConfigurationSource(path);
+            pipeline.Start();
 
-            environment.Apply(source, Conditions());
-
-            var configuration = new ConfigurationBuilder().Add(source).Build();
+            var configuration = BuildConfiguration(pipeline);
 
             Assert.Equal("a", configuration["first"]);
             Assert.Null(configuration["second"]);
@@ -252,13 +276,11 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, _) = CreatePipeline(path);
 
-            var source = new ExtendedXmlConfigurationSource(path);
+            pipeline.Start();
 
-            environment.Apply(source, Conditions());
-
-            var configuration = new ConfigurationBuilder().Add(source).Build();
+            var configuration = BuildConfiguration(pipeline);
 
             Assert.Equal(expectedMarker, configuration["marker"]);
             Assert.Equal("other", configuration["keep"]);
@@ -275,16 +297,19 @@ namespace MadWizard.Desomnia.Tests
                 """);
 
             var toggle = new FakeCondition(satisfied: true);
-            var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, monitor) = CreatePipeline(path, toggle);
 
-            environment.Apply(new ExtendedXmlConfigurationSource(path), Conditions(toggle));
+            pipeline.Start();
 
-            Assert.False(environment.HasEffectiveConfigChanged(out _));
+            monitor.Reevaluate(); // nothing changed yet
+            Assert.False(monitor.ReloadToken.IsCancellationRequested);
 
             toggle.Satisfied = false; // "home" drops out -> "away" is revived
 
-            Assert.True(environment.HasEffectiveConfigChanged(out string reason));
-            Assert.Contains("away", reason);
+            monitor.Reevaluate();
+
+            Assert.True(monitor.ReloadToken.IsCancellationRequested);
+            Assert.Equal("1min", BuildConfiguration(pipeline)["timeout"]);
         }
 
         [Theory]
@@ -299,15 +324,11 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, _) = CreatePipeline(path);
 
-            var source = new ExtendedXmlConfigurationSource(path);
+            pipeline.Start();
 
-            environment.Apply(source, Conditions());
-
-            var configuration = new ConfigurationBuilder().Add(source).Build();
-
-            Assert.Equal(expectedMarker, configuration["marker"]);
+            Assert.Equal(expectedMarker, BuildConfiguration(pipeline)["marker"]);
         }
 
         [Theory]
@@ -324,15 +345,11 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, _) = CreatePipeline(path);
 
-            var source = new ExtendedXmlConfigurationSource(path);
+            pipeline.Start();
 
-            environment.Apply(source, Conditions());
-
-            var configuration = new ConfigurationBuilder().Add(source).Build();
-
-            Assert.Equal(expectedMarker, configuration["marker"]);
+            Assert.Equal(expectedMarker, BuildConfiguration(pipeline)["marker"]);
         }
 
         [Theory]
@@ -349,15 +366,11 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, _) = CreatePipeline(path);
 
-            var source = new ExtendedXmlConfigurationSource(path);
+            pipeline.Start();
 
-            environment.Apply(source, Conditions());
-
-            var configuration = new ConfigurationBuilder().Add(source).Build();
-
-            Assert.Equal(expectedMarker, configuration["marker"]);
+            Assert.Equal(expectedMarker, BuildConfiguration(pipeline)["marker"]);
         }
 
         [Theory]
@@ -373,13 +386,11 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, _) = CreatePipeline(path);
 
-            var source = new ExtendedXmlConfigurationSource(path);
+            pipeline.Start();
 
-            environment.Apply(source, Conditions());
-
-            var configuration = new ConfigurationBuilder().Add(source).Build();
+            var configuration = BuildConfiguration(pipeline);
 
             Assert.Equal(first, configuration["first"]);
             Assert.Equal(second, configuration["second"]);
@@ -398,15 +409,11 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, _) = CreatePipeline(path);
 
-            var source = new ExtendedXmlConfigurationSource(path);
+            pipeline.Start();
 
-            environment.Apply(source, Conditions());
-
-            var configuration = new ConfigurationBuilder().Add(source).Build();
-
-            Assert.Equal(expectedMarker, configuration["marker"]);
+            Assert.Equal(expectedMarker, BuildConfiguration(pipeline)["marker"]);
         }
 
         [Fact]
@@ -420,16 +427,19 @@ namespace MadWizard.Desomnia.Tests
                 """);
 
             var toggle = new FakeCondition(satisfied: false);
-            var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, monitor) = CreatePipeline(path, toggle);
 
-            environment.Apply(new ExtendedXmlConfigurationSource(path), Conditions(toggle));
+            pipeline.Start();
 
-            Assert.False(environment.HasEffectiveConfigChanged(out _));
+            monitor.Reevaluate(); // nothing changed yet
+            Assert.False(monitor.ReloadToken.IsCancellationRequested);
 
             toggle.Satisfied = true; // "vpn" comes up -> "work" gains its required environment
 
-            Assert.True(environment.HasEffectiveConfigChanged(out string reason));
-            Assert.Contains("work", reason);
+            monitor.Reevaluate();
+
+            Assert.True(monitor.ReloadToken.IsCancellationRequested);
+            Assert.Equal("work", BuildConfiguration(pipeline)["marker"]);
         }
 
         [Theory]
@@ -446,15 +456,11 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, _) = CreatePipeline(path);
 
-            var source = new ExtendedXmlConfigurationSource(path);
+            pipeline.Start();
 
-            environment.Apply(source, Conditions());
-
-            var configuration = new ConfigurationBuilder().Add(source).Build();
-
-            Assert.Equal(expectedMarker, configuration["marker"]);
+            Assert.Equal(expectedMarker, BuildConfiguration(pipeline)["marker"]);
         }
 
         [Fact]
@@ -467,15 +473,12 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, _) = CreatePipeline(path);
 
-            var source = new ExtendedXmlConfigurationSource(path);
+            pipeline.Start();
 
-            environment.Apply(source, Conditions());
-
-            var configuration = new ConfigurationBuilder().Add(source).Build();
-
-            Assert.Equal("5min", configuration["timeout"]); // priority resolves the conflict, even under onConflict="error"
+            // priority resolves the conflict, even under onConflict="error"
+            Assert.Equal("5min", BuildConfiguration(pipeline)["timeout"]);
         }
 
         [Fact]
@@ -489,11 +492,15 @@ namespace MadWizard.Desomnia.Tests
 
             var outputPath = Path.Combine(_directory, "effective.xml");
 
-            using (var environment = EnvironmentMonitor.Detect(path)!)
-            {
-                Assert.False(File.Exists(outputPath)); // written on Apply, not on Detect
+            var (pipeline, monitor) = CreatePipeline(path);
 
-                environment.Apply(new ExtendedXmlConfigurationSource(path), Conditions());
+            using (var exporter = new EffectiveXmlExporter { Logger = NullLogger.Instance })
+            {
+                monitor.EffectiveChanged += exporter.Export;
+
+                Assert.False(File.Exists(outputPath)); // written on Start, not before
+
+                pipeline.Start();
 
                 Assert.True(File.Exists(outputPath));
 
@@ -520,9 +527,13 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            using var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, monitor) = CreatePipeline(path);
 
-            environment.Apply(new ExtendedXmlConfigurationSource(path), Conditions());
+            using var exporter = new EffectiveXmlExporter { Logger = NullLogger.Instance };
+
+            monitor.EffectiveChanged += exporter.Export;
+
+            pipeline.Start();
 
             Assert.True(File.Exists(outputPath));
         }
@@ -536,11 +547,13 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            Assert.Throws<ConfigurationValueException>(() => EnvironmentMonitor.Detect(path));
+            var (pipeline, _) = CreatePipeline(path);
+
+            Assert.Throws<ConfigurationValueException>(pipeline.Start);
         }
 
         [Fact]
-        public void HasEffectiveConfigChanged_ReflectsConditionChanges()
+        public void Reevaluate_CancelsTheReloadToken_OnlyWhenTheEffectiveConfigChanged()
         {
             var path = WriteConfig("""
                 <EnvironmentMonitor version="1">
@@ -549,20 +562,23 @@ namespace MadWizard.Desomnia.Tests
                 """);
 
             var toggle = new FakeCondition(satisfied: true);
-            var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, monitor) = CreatePipeline(path, toggle);
 
-            environment.Apply(new ExtendedXmlConfigurationSource(path), Conditions(toggle));
+            pipeline.Start();
 
-            Assert.False(environment.HasEffectiveConfigChanged(out _));
+            monitor.Reevaluate(); // the conditions are unchanged -> no reload
+
+            Assert.False(monitor.ReloadToken.IsCancellationRequested);
 
             toggle.Satisfied = false;
 
-            Assert.True(environment.HasEffectiveConfigChanged(out string reason));
-            Assert.Contains("Environment ->", reason);
+            monitor.Reevaluate(); // the effective configuration changed -> reload
+
+            Assert.True(monitor.ReloadToken.IsCancellationRequested);
         }
 
         [Fact]
-        public void Activate_InjectsTheEffectiveConfigurationIntoEveryBuildSource()
+        public void Start_ServesTheEffectiveConfigurationToEveryBuild()
         {
             var path = WriteConfig("""
                 <EnvironmentMonitor version="1">
@@ -571,18 +587,14 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            using var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, _) = CreatePipeline(path);
 
-            environment.Activate(new HashSet<string>(), Conditions());
+            pipeline.Start();
 
-            // the monitor computed the effective config once; every per-build source is injected with it
+            // the monitor computed the effective config once; every per-build source serves it
             foreach (var _ in Enumerable.Range(0, 2))
             {
-                var source = new ExtendedXmlConfigurationSource(path);
-
-                environment.InjectInto(source);
-
-                var configuration = new ConfigurationBuilder().Add(source).Build();
+                var configuration = BuildConfiguration(pipeline);
 
                 Assert.Equal("on", configuration["marker"]);
                 Assert.Equal("5min", configuration["timeout"]);
@@ -600,22 +612,19 @@ namespace MadWizard.Desomnia.Tests
                 """);
 
             var toggle = new FakeCondition(satisfied: true);
-            using var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, monitor) = CreatePipeline(path, toggle);
 
-            environment.Activate(new HashSet<string>(), Conditions(toggle));
+            pipeline.Start();
 
-            var source = new ExtendedXmlConfigurationSource(path);
-            environment.InjectInto(source); // arm the reload token for this "build"
+            monitor.ArmReload(); // arm the reload token for this "build"
 
             toggle.Satisfied = false; // "on" drops out -> the default ("off") applies
 
-            environment.Reevaluate();
+            monitor.Reevaluate();
 
-            Assert.True(environment.ReloadToken.IsCancellationRequested); // the loop rebuilds
+            Assert.True(monitor.ReloadToken.IsCancellationRequested); // the loop rebuilds
 
-            var next = new ExtendedXmlConfigurationSource(path);
-            environment.InjectInto(next);
-            Assert.Equal("off", new ConfigurationBuilder().Add(next).Build()["marker"]);
+            Assert.Equal("off", BuildConfiguration(pipeline)["marker"]);
         }
 
         [Fact]
@@ -627,20 +636,19 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            using var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, monitor) = CreatePipeline(path);
 
-            environment.Activate(new HashSet<string>(), Conditions());
+            pipeline.Start();
 
-            var source = new ExtendedXmlConfigurationSource(path);
-            environment.InjectInto(source);
+            monitor.ArmReload();
 
-            environment.Reevaluate();
+            monitor.Reevaluate();
 
-            Assert.False(environment.ReloadToken.IsCancellationRequested);
+            Assert.False(monitor.ReloadToken.IsCancellationRequested);
         }
 
         [Fact]
-        public void Reload_PicksUpEditedEnvironmentBlocks()
+        public void CheckForChanges_PicksUpEditedEnvironmentBlocks()
         {
             var path = WriteConfig("""
                 <EnvironmentMonitor version="1">
@@ -648,13 +656,11 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            using var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, _) = CreatePipeline(path);
 
-            environment.Activate(new HashSet<string>(), Conditions());
+            pipeline.Start();
 
-            var before = new ExtendedXmlConfigurationSource(path);
-            environment.InjectInto(before);
-            Assert.Equal("before", new ConfigurationBuilder().Add(before).Build()["marker"]);
+            Assert.Equal("before", BuildConfiguration(pipeline)["marker"]);
 
             // the configuration file is edited between rebuilds
             File.WriteAllText(path, """
@@ -663,15 +669,13 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            environment.Reload();
+            pipeline.CheckForChanges();
 
-            var after = new ExtendedXmlConfigurationSource(path);
-            environment.InjectInto(after);
-            Assert.Equal("after", new ConfigurationBuilder().Add(after).Build()["marker"]);
+            Assert.Equal("after", BuildConfiguration(pipeline)["marker"]);
         }
 
         [Fact]
-        public void Reload_WithAnInvalidEdit_KeepsTheCurrentEnvironments_WithoutThrowing()
+        public void CheckForChanges_WithAnInvalidEdit_IsFatal_ButKeepsServingTheLastGoodConfiguration()
         {
             var path = WriteConfig("""
                 <EnvironmentMonitor version="1">
@@ -679,13 +683,12 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            using var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, monitor) = CreatePipeline(path);
 
-            environment.Activate(new HashSet<string>(), Conditions());
+            pipeline.Start();
 
-            var before = new ExtendedXmlConfigurationSource(path);
-            environment.InjectInto(before);
-            Assert.Equal("good", new ConfigurationBuilder().Add(before).Build()["marker"]);
+            var configuration = BuildConfiguration(pipeline);
+            Assert.Equal("good", configuration["marker"]);
 
             // a well-formed but invalid edit: a condition attribute nothing registers
             File.WriteAllText(path, """
@@ -694,18 +697,20 @@ namespace MadWizard.Desomnia.Tests
                 </EnvironmentMonitor>
                 """);
 
-            // validate-then-commit: the invalid edit must neither throw nor be applied
-            environment.Reload();
+            // an edit the process cannot apply is fatal by design: exit and let the
+            // service manager restart the application
+            pipeline.CheckForChanges();
 
-            Assert.False(environment.ReloadToken.IsCancellationRequested); // no reload signalled
+            Assert.True(monitor.ReloadToken.IsCancellationRequested); // the fatal wake-up for the loop
 
-            var after = new ExtendedXmlConfigurationSource(path);
-            environment.InjectInto(after);
-            Assert.Equal("good", new ConfigurationBuilder().Add(after).Build()["marker"]); // unchanged
+            Assert.Throws<ConfigurationValueException>(pipeline.ThrowIfFailed);
+
+            // until the process exits, the last good configuration stays served
+            Assert.Equal("good", configuration["marker"]);
         }
 
         [Fact]
-        public void InjectInto_ArmsAFreshReloadToken_ForEachBuild()
+        public void ArmReload_ArmsAFreshReloadToken_ForEachBuild()
         {
             // the boot window: a token armed for one build is independent of the next, so a change
             // that lands during a build cancels that build's token and is never lost
@@ -717,21 +722,21 @@ namespace MadWizard.Desomnia.Tests
                 """);
 
             var toggle = new FakeCondition(satisfied: true);
-            using var environment = EnvironmentMonitor.Detect(path)!;
+            var (pipeline, monitor) = CreatePipeline(path, toggle);
 
-            environment.Activate(new HashSet<string>(), Conditions(toggle));
+            pipeline.Start();
 
-            environment.InjectInto(new ExtendedXmlConfigurationSource(path));
-            var first = environment.ReloadToken;
+            monitor.ArmReload();
+            var first = monitor.ReloadToken;
 
             toggle.Satisfied = false;
-            environment.Reevaluate(); // cancels the first build's token
+            monitor.Reevaluate(); // cancels the first build's token
 
             Assert.True(first.IsCancellationRequested);
 
             // the next build arms a fresh, uncancelled token
-            environment.InjectInto(new ExtendedXmlConfigurationSource(path));
-            Assert.False(environment.ReloadToken.IsCancellationRequested);
+            monitor.ArmReload();
+            Assert.False(monitor.ReloadToken.IsCancellationRequested);
         }
 
         private sealed class FakeCondition(bool satisfied) : IEnvironmentCondition

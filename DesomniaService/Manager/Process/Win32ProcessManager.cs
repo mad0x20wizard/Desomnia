@@ -3,8 +3,10 @@ using System.Runtime.InteropServices;
 
 namespace MadWizard.Desomnia.Processes.Manager
 {
-    public partial class Win32ProcessManager : ListenerAwareProcessManager
+    public partial class Win32ProcessManager : ListenerAwareProcessManager, IProcessMetricSupport
     {
+        public ProcessMetric SupportedMetrics => ProcessMetric.Processor | ProcessMetric.Graphics | ProcessMetric.Storage | ProcessMetric.Traffic;
+
         /**
          * The processor time this process has used, or null once it can no longer be sampled.
          *
