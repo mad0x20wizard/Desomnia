@@ -1,5 +1,4 @@
 using MadWizard.Desomnia;
-using Microsoft.Extensions.Hosting;
 
 if (!Environment.IsPrivilegedProcess)
     throw new NotSupportedException("The application must be run with root privileges.");

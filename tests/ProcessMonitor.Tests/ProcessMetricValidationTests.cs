@@ -106,6 +106,19 @@ namespace MadWizard.Desomnia.Processes.Tests
         }
 
         [Fact]
+        public void UnitlessThreshold_FailsTheResolve()
+        {
+            // NetworkWatch reads a bare number as packets, which no process can count – and read
+            // as bytes, a naked number per interval would be satisfied by noise
+            using var container = Container(ProcessMetric.Storage | ProcessMetric.Traffic);
+
+            var bare = new TransmissionThreshold { Amount = 500 };
+
+            Assert.IsType<FormatException>(Cause(Assert.ThrowsAny<Exception>(() => Resolve(container, Info(minIO: bare)))));
+            Assert.IsType<FormatException>(Cause(Assert.ThrowsAny<Exception>(() => Resolve(container, Info(minTraffic: bare)))));
+        }
+
+        [Fact]
         public void WithoutThresholds_ThePlatformIsNeverAsked()
         {
             // a watch that measures nothing needs no counter, and must not be refused by a

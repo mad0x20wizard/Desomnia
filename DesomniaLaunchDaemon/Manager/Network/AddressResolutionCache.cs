@@ -5,9 +5,9 @@ using System.Net.Sockets;
 
 namespace MadWizard.Desomnia.Network.Manager
 {
-    internal class ArpNdpCache : ILocalAddressMapping
+    internal class AddressResolutionCache : ILocalAddressMapping
     {
-        public required ILogger<ArpNdpCache> Logger { private get; init; }
+        public required ILogger<AddressResolutionCache> Logger { private get; init; }
 
         void ILocalAddressMapping.Update(IPAddress ip, PhysicalAddress mac)
         {

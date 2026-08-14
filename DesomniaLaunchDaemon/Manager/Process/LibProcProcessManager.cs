@@ -22,7 +22,7 @@ namespace MadWizard.Desomnia.Processes.Manager
 
         public LibProcProcessManager(TimeSpan interval) : base(interval)
         {
-            // the same bargain the Windows ETW manager strikes: the kernel is only asked to report
+            // the kernel is only asked to report
             // anything while somebody is actually listening for it
             ListenerCountChanged += (sender, count) => ConfigureWatcher();
         }
@@ -103,6 +103,5 @@ namespace MadWizard.Desomnia.Processes.Manager
 
             base.Dispose();
         }
-
     }
 }

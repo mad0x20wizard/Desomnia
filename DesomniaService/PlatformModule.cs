@@ -1,7 +1,6 @@
 ﻿using Autofac;
 using Autofac.Core;
 using MadWizard.Desomnia.Display.Manager;
-using MadWizard.Desomnia.Environments;
 using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Network.Bridges;
@@ -12,7 +11,6 @@ using MadWizard.Desomnia.Processes.Manager;
 using MadWizard.Desomnia.Processes.Manager.Metrics;
 using MadWizard.Desomnia.Processes.Middleware;
 using MadWizard.Desomnia.Service.Actions;
-using MadWizard.Desomnia.Service.Configuration;
 using MadWizard.Desomnia.Session.Manager;
 using Microsoft.Extensions.Configuration;
 
@@ -24,16 +22,23 @@ namespace MadWizard.Desomnia.Service
 
         protected override void LoadOnce(ContainerBuilder builder, IConfiguration configuration)
         {
-            var config = Bind<ServiceConfig>(configuration);
+            RegisterPowerManager(builder);
+            RegisterProcessManager(builder);
+            RegisterNetworkInterfaceManager(builder);
+            RegisterDisplayManager(builder);
+        }
 
+        #region Persistent Managers
+        private static void RegisterPowerManager(ContainerBuilder builder)
+        {
             builder.RegisterType<PowerManager>()
                 .AsImplementedInterfaces()
                 .SingleInstance()
                 .AsSelf();
+        }
 
-            builder.RegisterType<PowerSourceCondition>()
-                .Named<IEnvironmentCondition>("power");
-
+        private static void RegisterProcessManager(ContainerBuilder builder)
+        {
             builder.RegisterType<TraceEventProcessManager>()
                 .PropertiesAutowired(PropertyWiringOptions.AllowCircularDependencies)
                 .AsImplementedInterfaces()
@@ -46,24 +51,27 @@ namespace MadWizard.Desomnia.Service
             // keep: the manager holds every process' lifetime, and the persistent container
             // would otherwise remember a disposal reference for each of the hundreds a startup
             // materialises. The exit watch rides the registration pipeline, where the concrete
-            // process is still unwrapped.
+            // process is still unwrapped (the process module hooks its parent resolver onto
+            // the same pipeline, for every platform's registration at once).
             builder.RegisterType<Win32Process>().As<IProcess>()
                 .ConfigurePipeline(pipeline => pipeline.Use(new ProcessExitWatch()))
                 .ExternallyOwned();
 
-            // The precise traffic meter is a plugin to the trace session: registered, it rides
-            // along and books into the decoration that wraps every process; absent, the processes
-            // answer with the passive IO-counter approximation. Future per-process metrics follow
-            // the same pattern – a registration and a decoration, not a manager or process change.
-            if (config.ProcessManager.WatchTraffic == ProcessTrafficWatch.Active)
-            {
-                builder.RegisterDecorator<ProcessTrafficLayer, IProcess>();
+            // The precise traffic meter, always in place and never idling: the decoration
+            // subscribes itself to the listener on its first NetworkData sample, and the
+            // listener's kernel session exists only while subscribed accounts do. There is no
+            // passive fallback to configure against anymore – the IO counters' Other bucket
+            // measured device-control chatter, not the network.
+            builder.RegisterDecorator<ProcessTrafficAccount, IProcess>();
 
-                builder.RegisterType<ProcessTrafficMetric>()
-                    .As<ITraceEventMetric>()
-                    .SingleInstance();
-            }
+            builder.RegisterType<TraceEventTrafficListener>()
+                .As<IProcessTrafficMeter>()
+                .SingleInstance()
+                .AsSelf();
+        }
 
+        private static void RegisterNetworkInterfaceManager(ContainerBuilder builder)
+        {
             // takes over from the platform-neutral matcher the NetworkMonitor module registers
             // with PreserveExistingDefaults (its LoadOnce runs after this one), so conditions
             // and the application match interfaces by their display name and SSID as well
@@ -77,7 +85,10 @@ namespace MadWizard.Desomnia.Service
                 .As<INetworkInterfaceManager>()
                 .SingleInstance()
                 .AsSelf();
+        }
 
+        private static void RegisterDisplayManager(ContainerBuilder builder)
+        {
             // the display manager lives in the persistent container, so it survives a
             // configuration rebuild (the same problem as macOS, ahead of Windows soft-disconnect);
             // created only on first demand, and recorded so a config-less rebuild can re-attach
@@ -86,20 +97,29 @@ namespace MadWizard.Desomnia.Service
                 .SingleInstance()
                 .AsSelf();
         }
+        #endregion
 
         protected override void Load(ContainerBuilder builder)
         {
-            // Address mappings
+            RegisterActions(builder);
+
+            RegisterNetworkManager(builder);
+            RegisterNetworkSessionManager(builder);
+
+            // global host->IP mappings
             builder.RegisterType<HostsManager>()
                 .WithParameter(TypedParameter.From(HostsFilePath))
                 .AsImplementedInterfaces()
                 .SingleInstance();
+        }
+
+        private static void RegisterNetworkManager(ContainerBuilder builder)
+        {
             builder.RegisterType<NetshNeighborCache>()
                 .AsImplementedInterfaces()
                 .InstancePerNetwork()
                 .AsSelf();
 
-            // Wake-on-LAN adapter
             builder.RegisterComposite<WindowsWakeOnLANManager, IWakeOnLANManager>();
             {
                 builder.RegisterType<CIMNetAdapterPowerManagement>()
@@ -109,8 +129,10 @@ namespace MadWizard.Desomnia.Service
                     .AsImplementedInterfaces()
                     .InstancePerNetwork();
             }
+        }
 
-            // Implementing Network-Session-Managers
+        private static void RegisterNetworkSessionManager(ContainerBuilder builder)
+        {
             builder.RegisterType<CIMNetworkSessionManager>()
                 .AsImplementedInterfaces()
                 .SingleInstance()
@@ -124,8 +146,6 @@ namespace MadWizard.Desomnia.Service
                 .AsImplementedInterfaces()
                 .SingleInstance()
                 .AsSelf();
-
-            RegisterActions(builder);
         }
 
         private static void RegisterActions(ContainerBuilder builder)

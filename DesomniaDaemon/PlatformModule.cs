@@ -3,7 +3,6 @@ using MadWizard.Desomnia.Daemon.Configuration;
 using MadWizard.Desomnia.Daemon.DBus;
 using MadWizard.Desomnia.Daemon.DBus.Interface;
 using MadWizard.Desomnia.Daemon.DBus.Interface.Adapter;
-using MadWizard.Desomnia.Environments;
 using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Network.Manager;
 using MadWizard.Desomnia.Power.Manager;
@@ -25,32 +24,44 @@ namespace MadWizard.Desomnia.Daemon
         {
             var config = Bind<DaemonConfig>(configuration);
 
+            RegisterProcessManager(builder, config);
+            RegisterPowerManager(builder, config);
+
+            // the network interface manager lives in the persistent container, so it survives a
+            // configuration rebuild with its disable intents and took-down bookkeeping intact;
+            // created only on first demand, and recorded so a config-less rebuild can re-attach
+            builder.RegisterType<IPNetworkInterfaceManager>()
+                .As<INetworkInterfaceManager>()
+                .SingleInstance()
+                .AsSelf();
+        }
+
+        private static void RegisterProcessManager(ContainerBuilder builder, DaemonConfig config)
+        {
             // Takes the place of the module's own polling fallback (its registration steps aside
             // for any IProcessManager already registered, and platform modules load first): same
             // polling, but a poll that finds nothing new is a single directory read here.
-            // the middleware below cannot resolve the manager – the first processes are created
-            // inside the manager's own activation, where a resolve-back would trip Autofac's
-            // self-construction guard – so the slot is wired by hand once the manager stands
-            var exitWatch = new ProcessExitWatch();
-
             builder.RegisterType<ProcFSProcessManager>()
-                .WithParameter(TypedParameter.From(config.ProcessManager?.PollInterval))
+                .WithParameter(TypedParameter.From(config.ProcessManager.PollInterval))
                 .AsImplementedInterfaces()
                 .As<IProcessMetricSupport>()
                 .As<ProcessManager>()
                 .SingleInstance()
-                .AsSelf()
-                .OnActivated(activated => exitWatch.Manager = activated.Instance); // FIXME
+                .AsSelf();
 
             // Externally owned, because the container must not track what it did not get to
             // keep: the manager holds every process' lifetime, and the persistent container
             // would otherwise remember a disposal reference for each of the hundreds a startup
             // materialises. The exit watch rides the registration pipeline, where the concrete
-            // process is still unwrapped.
+            // process is still unwrapped (the process module hooks its parent resolver onto
+            // the same pipeline, for every platform's registration at once).
             builder.RegisterType<LinuxProcess>().As<IProcess>()
-                .ConfigurePipeline(pipeline => pipeline.Use(exitWatch))
+                .ConfigurePipeline(pipeline => pipeline.Use(new ProcessExitWatch()))
                 .ExternallyOwned();
+        }
 
+        private static void RegisterPowerManager(ContainerBuilder builder, DaemonConfig config)
+        {
             // Implementing Power-Manager
             if (config.UseDBus && HasSystemDBus())
             {
@@ -77,20 +88,9 @@ namespace MadWizard.Desomnia.Daemon
             }
 
             // machine-lifetime power probe, backing the "power" condition of every rebuild
-            builder.RegisterType<SysfsPowerSourceProbe>()
+            builder.RegisterType<SysfsPowerSource>()
                 .As<IPowerSource>()
                 .SingleInstance();
-
-            // the network interface manager lives in the persistent container, so it survives a
-            // configuration rebuild with its disable intents and took-down bookkeeping intact;
-            // created only on first demand, and recorded so a config-less rebuild can re-attach
-            builder.RegisterType<IPNetworkInterfaceManager>()
-                .As<INetworkInterfaceManager>()
-                .SingleInstance()
-                .AsSelf();
-
-            builder.RegisterType<PowerSourceCondition>()
-                .Named<IEnvironmentCondition>("power");
         }
 
         protected override void Load(ContainerBuilder builder)

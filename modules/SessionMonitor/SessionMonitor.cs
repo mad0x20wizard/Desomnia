@@ -126,23 +126,15 @@ namespace MadWizard.Desomnia.Session
         }
         #endregion
 
-        protected override IEnumerable<UsageToken> InspectResource(SessionWatch watch, TimeSpan interval)
+        protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
         {
-            try
+            // check if the watches are still backed by the manager (fix for Windows bug)
+            foreach (var missing in _sessionScopes.Keys.Except(manager).ToArray())
             {
-                return base.InspectResource(watch, interval);
+                UnTrackSession(missing);
             }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Could not inspect session.");
 
-                if (!manager.Any(sesison => sesison == watch.Session))
-                {
-                    UnTrackSession(watch.Session);
-                }
-
-                return [];
-            }
+            return base.InspectResource(interval);
         }
 
         async Task IHostedService.StopAsync(CancellationToken cancellationToken)

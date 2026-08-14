@@ -24,11 +24,11 @@ namespace MadWizard.Desomnia.Processes.Manager
     {
         None        = 0,
 
-        /// <summary>minCPU – <see cref="IProcess.ProcessorTime"/>.</summary>
+        /// <summary>minCPU     – <see cref="IProcess.ProcessorTime"/>.</summary>
         Processor   = 1 << 0,
-        /// <summary>minGPU – <see cref="IProcess.GraphicsProcessorTime"/>.</summary>
+        /// <summary>minGPU     – <see cref="IProcess.GraphicsProcessorTime"/>.</summary>
         Graphics    = 1 << 1,
-        /// <summary>minIO – <see cref="IProcess.StorageData"/>.</summary>
+        /// <summary>minIO      – <see cref="IProcess.StorageData"/>.</summary>
         Storage     = 1 << 2,
         /// <summary>minTraffic – <see cref="IProcess.NetworkData"/>.</summary>
         Traffic     = 1 << 3,
@@ -43,5 +43,16 @@ namespace MadWizard.Desomnia.Processes.Manager
     public sealed class DefaultProcessMetricSupport : IProcessMetricSupport
     {
         public ProcessMetric SupportedMetrics => ProcessMetric.Processor;
+    }
+
+    internal class ProcessMetricSupportCollector(IEnumerable<IProcessMetricSupport> supporter) : IProcessMetricSupport
+    {
+        ProcessMetric IProcessMetricSupport.SupportedMetrics
+        {
+            get
+            {
+                return supporter.Aggregate(ProcessMetric.None, (metrics, support) => metrics |= support.SupportedMetrics);
+            }
+        }
     }
 }

@@ -15,19 +15,7 @@ namespace MadWizard.Desomnia.Processes.Manager
             this.ListenerCountChanged += (sender, @event) => ConfigureSession();
         }
 
-        /**
-         * The metrics riding this session – registered by configuration, empty by default. Each
-         * declares the kernel keywords it needs, reads its events off the shared source, and
-         * books what it measures into the process objects itself; the manager never asks one
-         * anything back, so a new per-process measurement is a new registration, never another
-         * change here. The session's flags are the union of what the metrics ask for, fixed at
-         * enable time.
-         */
-        public IEnumerable<ITraceEventMetric> Metrics { private get; init; } = [];
-
         private bool IsProcessing => _traceEventSession?.IsActive ?? false;
-
-        public override void Start() => ConfigureSession();
 
         private void ConfigureSession()
         {
@@ -56,22 +44,13 @@ namespace MadWizard.Desomnia.Processes.Manager
         {
             Logger.LogDebug("Subscribing to process trace events...");
 
-            var keywords = Metrics.Select(m => m.Keywords).Aggregate(KernelTraceEventParser.Keywords.Process, (keywords, k) => keywords |= k);
-
+            // process lifetime and nothing else – the traffic meter runs its own session
+            // (TraceEventTrafficListener), so metering demand never restarts this one and
+            // no process start or stop is lost to a keyword change
             _traceEventSession = new("Desomnia::ProcessManager");
-            _traceEventSession.EnableKernelProvider(keywords);
+            _traceEventSession.EnableKernelProvider(KernelTraceEventParser.Keywords.Process);
             _traceEventSession.Source.Kernel.ProcessStart += ETW_ProcessStart;
             _traceEventSession.Source.Kernel.ProcessStop += ETW_ProcessStop;
-
-            foreach (var metric in Metrics)
-            {
-                // reset on the way in, not only on the way out: the teardown never joins the pump
-                // thread, so a handler caught mid-flight can write after the stop-side Reset – but
-                // never after this one, because nothing pumps before Process() below
-                metric.Reset();
-
-                metric.Subscribe(_traceEventSession.Source.Kernel);
-            }
 
             // The session is captured rather than re-read from the field: a stop/start cycle can
             // replace the field before this task's thread ever runs, and a stale task adopting
@@ -90,11 +69,6 @@ namespace MadWizard.Desomnia.Processes.Manager
 
                 _traceEventSession.Dispose();
                 _traceEventSession = null;
-
-                foreach (var metric in Metrics)
-                {
-                    metric.Reset();
-                }
 
                 Logger.LogDebug("Unsubscribed from process trace events");
             }
@@ -117,12 +91,11 @@ namespace MadWizard.Desomnia.Processes.Manager
 
                 /**
                  * A dead pump must take its session with it. The OS keeps the session alive after
-                 * the pumping thread dies, so IsProcessing would stay true while nothing updates a
-                 * counter again – and a frozen counter is a 0-byte delta, which reads as a group
-                 * gone idle: the one lie the metering must never tell (a stopped session answers
-                 * null instead, and the watch assumes demand). Torn down, the next rebuild – or a
-                 * listener change – starts a fresh session; restarting from here would just spin
-                 * if whatever killed the pump is not done killing.
+                 * the pumping thread dies, so IsProcessing would stay true while no process event
+                 * is ever delivered again – a roster frozen on its last diff, with every watch
+                 * believing it. Torn down, the next enumeration falls back to a refresh and the
+                 * next rebuild – or listener change – starts a fresh session; restarting from
+                 * here would just spin if whatever killed the pump is not done killing.
                  */
                 lock (this)
                 {

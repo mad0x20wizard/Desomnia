@@ -7,9 +7,8 @@ namespace MadWizard.Desomnia.Daemon.Configuration
     {
         public bool UseDBus { get; set; } = true;
 
-        public PowerManagerConfig PowerManager { get; set; } = new();
-
-        public ProcessManagerConfig ProcessManager { get; set; } = new();
+        public PowerManagerConfig   PowerManager    { get; set; } = new();
+        public ProcessManagerConfig ProcessManager  { get; set; } = new();
 
     }
 }

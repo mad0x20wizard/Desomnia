@@ -10,7 +10,7 @@ namespace MadWizard.Desomnia.Processes.Manager
     /// object the base creates lazily, and neither happens unless the configuration asked
     /// for it.
     /// </summary>
-    internal sealed class LinuxProcess(ProcessInformation entry, IProcess? parent) : ProcessHandle(entry, parent)
+    internal sealed class LinuxProcess(ProcessInformation entry) : ProcessHandle(entry)
     {
         public override string? ImagePath => ProcFs.ReadExecutablePath(Id);
 

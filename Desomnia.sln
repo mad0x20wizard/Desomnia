@@ -76,6 +76,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProcessMonitor.Tests", "tes
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DesomniaDaemon.Tests", "tests\DesomniaDaemon.Tests\DesomniaDaemon.Tests.csproj", "{D9F8631D-1F63-4858-8B4B-EC08D8B2FFFE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DesomniaLaunchDaemon.Tests", "tests\DesomniaLaunchDaemon.Tests\DesomniaLaunchDaemon.Tests.csproj", "{8F0828BE-D985-48F8-A5EC-72DCA8BFE005}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -398,6 +400,18 @@ Global
 		{D9F8631D-1F63-4858-8B4B-EC08D8B2FFFE}.Release|x64.Build.0 = Release|Any CPU
 		{D9F8631D-1F63-4858-8B4B-EC08D8B2FFFE}.Release|x86.ActiveCfg = Release|Any CPU
 		{D9F8631D-1F63-4858-8B4B-EC08D8B2FFFE}.Release|x86.Build.0 = Release|Any CPU
+		{8F0828BE-D985-48F8-A5EC-72DCA8BFE005}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8F0828BE-D985-48F8-A5EC-72DCA8BFE005}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8F0828BE-D985-48F8-A5EC-72DCA8BFE005}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{8F0828BE-D985-48F8-A5EC-72DCA8BFE005}.Debug|x64.Build.0 = Debug|Any CPU
+		{8F0828BE-D985-48F8-A5EC-72DCA8BFE005}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{8F0828BE-D985-48F8-A5EC-72DCA8BFE005}.Debug|x86.Build.0 = Debug|Any CPU
+		{8F0828BE-D985-48F8-A5EC-72DCA8BFE005}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8F0828BE-D985-48F8-A5EC-72DCA8BFE005}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8F0828BE-D985-48F8-A5EC-72DCA8BFE005}.Release|x64.ActiveCfg = Release|Any CPU
+		{8F0828BE-D985-48F8-A5EC-72DCA8BFE005}.Release|x64.Build.0 = Release|Any CPU
+		{8F0828BE-D985-48F8-A5EC-72DCA8BFE005}.Release|x86.ActiveCfg = Release|Any CPU
+		{8F0828BE-D985-48F8-A5EC-72DCA8BFE005}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -429,6 +443,7 @@ Global
 		{8DF0B389-312A-4F9E-A5CB-4FB04B8D072B} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{D308029B-23C4-4CCF-9135-B82691849ED0} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{D9F8631D-1F63-4858-8B4B-EC08D8B2FFFE} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{8F0828BE-D985-48F8-A5EC-72DCA8BFE005} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {D83C4742-EE14-422A-8E0F-EBAD8CC961DB}

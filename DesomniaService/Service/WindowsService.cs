@@ -142,7 +142,7 @@ namespace MadWizard.Desomnia.Service
                 Start-Service -Name {this.ServiceName}
             ";
 
-            System.Diagnostics.Process.Start(new ProcessStartInfo
+            Process.Start(new ProcessStartInfo
             {
                 FileName = "powershell.exe",
                 Arguments = $"-NoProfile -NonInteractive -WindowStyle Hidden -Command \"{ps}\"",

@@ -3,7 +3,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace MadWizard.Desomnia.Processes.Manager
 {
-    internal class Win32Process(ProcessInformation info, IProcess? parent) : ProcessHandle(info, parent)
+    internal class Win32Process(ProcessInformation info) : ProcessHandle(info)
     {
         public required ILogger Logger { private get; init; }
 
@@ -30,13 +30,10 @@ namespace MadWizard.Desomnia.Processes.Manager
         /// <summary>Sampled like the processor time: a limited handle, one syscall, null once the process is gone.</summary>
         public override ProcessInputOutput? StorageData => Win32ProcessManager.QueryIO(Id);
 
-        /**
-         * The passive approximation, and nothing else: precise metering is not this class'
-         * business any more – when it is configured, a decorator wraps this process and answers
-         * from the account the meter books into, falling back to exactly this member. That keeps
-         * every future metric a wrapper away instead of another region in here.
-         */
-        public override ProcessInputOutput? NetworkData => Win32ProcessManager.QueryTraffic(Id);
+        // No NetworkData here, deliberately: the kernel keeps no per-process network counter a
+        // handle could be asked for (the IO counters' Other bucket measures device-control
+        // chatter, not the network), so the base answers "cannot sample" and the metering
+        // decorator around this process is the only one who can do better.
         #endregion
 
         /**

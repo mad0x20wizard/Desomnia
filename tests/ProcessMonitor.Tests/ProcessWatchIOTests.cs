@@ -24,15 +24,8 @@ namespace MadWizard.Desomnia.Processes.Tests
             return ProcessWatchTests.Watch(info, new FakeProcessSource(processes));
         }
 
-        [Fact]
-        public void UnitlessThreshold_IsRefusedAtConstruction()
-        {
-            // NetworkWatch reads a bare number as packets, which no process can count
-            var bare = new TransmissionThreshold { Amount = 500 };
-
-            Assert.Throws<FormatException>(() => Watch(Info(minIO: bare)));
-            Assert.Throws<FormatException>(() => Watch(Info(minTraffic: bare)));
-        }
+        // the unit-less refusal moved to the resolve pipeline with the rest of the threshold
+        // questions – see ProcessMetricValidationTests.UnitlessThreshold_FailsTheResolve
 
         [Fact]
         public void WithoutThreshold_IOIsNeverSampled()

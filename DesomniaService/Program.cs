@@ -1,7 +1,6 @@
 using Autofac;
 using MadWizard.Desomnia;
 using MadWizard.Desomnia.Service.Windows;
-using Microsoft.Extensions.Hosting;
 using System.Diagnostics;
 using System.Reflection;
 

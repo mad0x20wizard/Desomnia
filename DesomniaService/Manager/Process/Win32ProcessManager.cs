@@ -48,27 +48,6 @@ namespace MadWizard.Desomnia.Processes.Manager
         }
 
         /**
-         * The passive traffic approximation: the third pair of the same six counters QueryIO
-         * reads. All Winsock transfers land in the Other bucket (sockets are driven through
-         * NtDeviceIoControlFile), so its growth is a cheap "this process is talking to the
-         * network" signal – one syscall, no standing cost, and honest about being approximate:
-         * fast-path receives escape the accounting, every non-socket IOCTL lands in the same
-         * numbers, and the bucket knows no direction, so the whole count rides the received
-         * side. The precise meter (<?global ProcessManager:watchTraffic="active"?>) books its
-         * payload bytes straight into the process, which answers with those instead – this is
-         * the fallback for every process nothing books into.
-         */
-        internal static ProcessInputOutput? QueryTraffic(int pid)
-        {
-            using var process = OpenHandle(pid);
-
-            if (process.IsInvalid || !GetProcessIoCounters(process, out IO_COUNTERS counters))
-                return null;
-
-            return new ProcessInputOutput((long)counters.OtherTransferCount, 0);
-        }
-
-        /**
          * Whether the process has ended – or null when that cannot be told from here.
          *
          * A process handle is signalled once the process it names has terminated, which is the whole
@@ -126,8 +105,8 @@ namespace MadWizard.Desomnia.Processes.Manager
          * machine with 478 processes, describing one pid: 15 us here against 6.2 ms through the BCL.
          *
          * Deliberately not the parent as well, cheap though it would be from the same handle: it is
-         * QueryParentProcess that verifies the parent against pid reuse, and TriggerStart calls that
-         * only when ParentId is still unknown. Filling it in here would skip the check.
+         * QueryParentProcess that verifies the parent against pid reuse, and the parent resolver
+         * calls that only when ParentId is still unknown. Filling it in here would skip the check.
          */
         protected override ProcessInformation? QueryProcess(int pid)
         {

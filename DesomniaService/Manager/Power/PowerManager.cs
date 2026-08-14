@@ -15,10 +15,10 @@ namespace MadWizard.Desomnia.Power.Manager
     {
         public required ILogger<PowerManager> Logger { private get; init; }
 
-        private bool _hasShutdownPrivilege = false;
-
         public event EventHandler? Suspended;
         public event EventHandler? ResumeSuspended;
+
+        private bool _hasShutdownPrivilege = false;
 
         #region Power Status lifecycle
         void IStartable.Start()
@@ -133,7 +133,7 @@ namespace MadWizard.Desomnia.Power.Manager
         {
             Dictionary<PowerRequestsType, List<PowerRequest>> requestsByType = [];
 
-            using System.Diagnostics.Process process = new()
+            using Process process = new()
             {
                 StartInfo = new()
                 {
@@ -202,9 +202,9 @@ namespace MadWizard.Desomnia.Power.Manager
         {
             if (!_hasShutdownPrivilege)
             {
-                Logger.LogDebug("Shutdown privilege needed, trying to enable...");
+                Logger.LogDebug("Shutdown privilege needed, trying to adjust...");
 
-                if (!OpenProcessToken(System.Diagnostics.Process.GetCurrentProcess().Handle, TokenAccess.TOKEN_ADJUST_PRIVILEGES | TokenAccess.TOKEN_QUERY, out IntPtr tokenHandle))
+                if (!OpenProcessToken(Process.GetCurrentProcess().Handle, TokenAccess.TOKEN_ADJUST_PRIVILEGES | TokenAccess.TOKEN_QUERY, out nint tokenHandle))
                     throw new Win32Exception(Marshal.GetLastWin32Error());
 
                 if (!LookupPrivilegeValue(null, SE_SHUTDOWN_NAME, out LUID luid))
@@ -212,15 +212,15 @@ namespace MadWizard.Desomnia.Power.Manager
 
                 TOKEN_PRIVILEGES tp = new()
                 {
-                    PrivilegeCount = 1,
-                    Luid = luid,
-                    Attributes = SE_PRIVILEGE_ENABLED
+                    Luid            = luid,
+                    Attributes      = SE_PRIVILEGE_ENABLED,
+                    PrivilegeCount  = 1,
                 };
 
-                if (!AdjustTokenPrivileges(tokenHandle, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero))
+                if (!AdjustTokenPrivileges(tokenHandle, false, ref tp, 0, nint.Zero, nint.Zero))
                     throw new Win32Exception(Marshal.GetLastWin32Error());
 
-                Logger.LogDebug("Shutdown privilege enabled");
+                Logger.LogDebug("Shutdown privilege aquired");
 
                 _hasShutdownPrivilege = true;
             }

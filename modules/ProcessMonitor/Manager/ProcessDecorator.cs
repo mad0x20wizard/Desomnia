@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using Autofac.Features.Decorators;
+using System.Diagnostics;
 
 namespace MadWizard.Desomnia.Processes.Manager
 {
@@ -12,36 +13,41 @@ namespace MadWizard.Desomnia.Processes.Manager
      * a cast to ProcessHandle, a native handle – unwraps explicitly rather than assuming the
      * roster hands out concrete types.
      */
-    public abstract class ProcessDecorator(IProcess process) : IProcess
+    public abstract class ProcessDecorator : IProcess
     {
-        internal IProcess Target => process;
+        internal IProcess Target { get; init; }
 
-        public virtual int Id => process.Id;
-        public virtual int SessionId => process.SessionId;
-        public virtual string Name => process.Name;
-        public virtual string? ImagePath => process.ImagePath;
+        public ProcessDecorator(IProcess process, IDecoratorContext context)
+        {
+            Target = process;
+        }
 
-        public virtual TimeSpan? ProcessorTime => process.ProcessorTime;
-        public virtual TimeSpan? GraphicsProcessorTime => process.GraphicsProcessorTime;
-        public virtual object GraphicsProcessorScope => process.GraphicsProcessorScope;
-        public virtual ProcessInputOutput? StorageData => process.StorageData;
-        public virtual ProcessInputOutput? NetworkData => process.NetworkData;
+        public virtual int Id => Target.Id;
+        public virtual int SessionId => Target.SessionId;
+        public virtual string Name => Target.Name;
+        public virtual string? ImagePath => Target.ImagePath;
 
-        public virtual IProcess? Parent => process.Parent;
+        public virtual TimeSpan? ProcessorTime => Target.ProcessorTime;
+        public virtual TimeSpan? GraphicsProcessorTime => Target.GraphicsProcessorTime;
+        public virtual object GraphicsProcessorScope => Target.GraphicsProcessorScope;
+        public virtual ProcessInputOutput? StorageData => Target.StorageData;
+        public virtual ProcessInputOutput? NetworkData => Target.NetworkData;
 
-        public virtual bool HasStopped => process.HasStopped;
+        public virtual IProcess? Parent => Target.Parent;
 
-        public virtual Process Native => process.Native;
+        public virtual bool HasStopped => Target.HasStopped;
 
-        public virtual Task Stop(TimeSpan timeout = default) => process.Stop(timeout);
+        public virtual Process Native => Target.Native;
+
+        public virtual Task Stop(TimeSpan timeout = default) => Target.Stop(timeout);
 
         public event EventHandler? Stopped
         {
-            add => process.Stopped += value;
-            remove => process.Stopped -= value;
+            add => Target.Stopped += value;
+            remove => Target.Stopped -= value;
         }
 
-        public virtual void Dispose() => process.Dispose();
+        public virtual void Dispose() => Target.Dispose();
     }
 
     public static class ProcessDecoratorExt

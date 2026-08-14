@@ -1,21 +1,17 @@
 minTraffic
 ++++++++++
 
-.. attention:: Windows only. No other platform offers a per-process network counter, and configuring ``minTraffic`` where none exists is refused outright: the service reports the watch and the attribute, and does not start. A threshold nothing measures cannot be honoured either, and a machine guarded by an attribute nobody is watching is worse than one that said so.
+.. attention:: Windows and macOS only. Linux offers no per-process network counter, and configuring ``minTraffic`` where none exists is refused outright: the service reports the watch and the attribute, and does not start. A threshold nothing measures cannot be honoured either, and a machine guarded by an attribute nobody is watching is worse than one that said so.
 
-For each process group, you can set a cumulative network traffic threshold, so that only a group actually transferring data over the network counts as usage. How the traffic is measured is chosen once, in the persistent configuration:
+For each process group, you can set a cumulative network traffic threshold, so that only a group actually transferring data over the network counts as usage.
 
-.. code:: xml
+Metered are actual TCP and UDP payload bytes per process — the same numbers the system's own tools show in their per-process network columns. Both platforms meter on demand: nothing is measured until a process a ``minTraffic`` threshold applies to is first sampled, and the metering stops when the last such process is gone. A configuration without ``minTraffic`` therefore pays nothing at all.
 
-  <?global ProcessManager:watchTraffic="passive" ?>
+**Windows** reads them from a kernel event tracing (ETW) session. While it runs, the kernel reports every packet-sized network event on the machine — so the cost is continuous for exactly as long as a matching process runs.
 
-Unlike the attributes on this page, this directive goes at the **top of the configuration file, outside the root element** — placed inside, the service refuses to start. It is read once at startup: changing it requires a service restart (editing it while the service runs deliberately triggers one).
+**macOS** reads them from the kernel's own per-flow counters instead, asking once per monitor cycle rather than being told continuously; between cycles the metering costs nothing. Because there is no public interface for those counters, the daemon speaks the private one the system's tools use, and checks at startup that it still understands what the running kernel answers. Where it does not — a macOS whose layout this build has never seen — a configured ``minTraffic`` is refused like an unsupported platform, with the details in the log. Metering needs no additional privileges beyond those the daemon already runs with.
 
-``passive`` (default)
-    The traffic is approximated from the kernel's per-process IO counters — one system call per watched process, no standing cost. The approximation is honest but rough: it counts all device-control IO of the process (which is where socket transfers land, but not only them), receives on the kernel's fast path escape it entirely, and it cannot tell sent from received. Configure thresholds with slack, and treat it as "this process is talking to the network" rather than as an exact meter.
-
-``active``
-    The traffic is metered from kernel event tracing (ETW): actual TCP and UDP payload bytes per process, the same source the Resource Monitor's per-process network column uses. Precise, at the price of the service watching every packet-sized kernel event on the machine while process watches are active. A process the meter has never seen transfer anything answers from the passive approximation instead.
+.. note:: On macOS, traffic belonging to a socket one process opened *on behalf of* another is counted for the process it was opened for, not for the one doing the transferring.
 
 The formats match ``minIO``:
 

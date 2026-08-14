@@ -15,7 +15,7 @@ namespace MadWizard.Desomnia.Processes.Manager
      * thread of every one of them. A platform that can do better overrides the members it has a
      * cheaper answer for, and every one of them is written to be answerable lazily.
      */
-    public class ProcessHandle(ProcessInformation info, IProcess? parent = null) : IProcess
+    public class ProcessHandle(ProcessInformation info) : IProcess
     {
         protected readonly CompositeDisposable _heldResources = [];
 
@@ -44,7 +44,7 @@ namespace MadWizard.Desomnia.Processes.Manager
             }
         } = info.Native;
 
-        public IProcess? Parent => parent;
+        public IProcess? Parent { get; internal set; }
 
         public int Id => info.Id;
         public int SessionId => info.SessionId ?? Native.SessionId;
