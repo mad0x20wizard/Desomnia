@@ -13,8 +13,8 @@ namespace MadWizard.Desomnia
     /// iteration builds a fresh inner application host and runs it until the
     /// <see cref="EnvironmentMonitor"/>'s reload signal (a file change or a condition
     /// change) or a process stop. The loop lives HERE, outside any container, so a fatal
-    /// error — an invalid first build, a bad configuration edit, a changed persistent
-    /// configuration — escapes <see cref="Run"/> back to the process entry point (which
+    /// error — an invalid first build, a bad configuration edit, a switched configuration
+    /// mode — escapes <see cref="Run"/> back to the process entry point (which
     /// logs it and exits non-zero; the service manager restarts the application).
     /// A reload re-enters the loop in-process and never touches the persistent lifetime;
     /// an inner host that stops WITHOUT a reload pending (a deliberate stop such as the
@@ -150,8 +150,8 @@ namespace MadWizard.Desomnia
             }
             catch (Exception ex) when (!stopping.IsCancellationRequested)
             {
-                // an invalid configuration (the first build, a bad edit, a changed persistent
-                // configuration) or an unexpected loop fault: exit with an error code and let
+                // an invalid configuration (the first build, a bad edit, a switched configuration
+                // mode) or an unexpected loop fault: exit with an error code and let
                 // the service manager restart the application
                 _fatal = ex;
 

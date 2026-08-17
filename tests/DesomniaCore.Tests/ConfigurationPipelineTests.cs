@@ -13,8 +13,9 @@ namespace MadWizard.Desomnia.Tests
 {
     /// <summary>
     /// The configuration pipeline: mode detection, the change pump into the monitor, and
-    /// the fatal-exit policy for changes the running process cannot apply (bad edits,
-    /// changed &lt;?global?&gt; directives, a switched root).
+    /// the fatal-exit policy for changes the running process cannot apply (bad edits, a
+    /// switched root). The &lt;?global?&gt; directives are the root host's configuration,
+    /// not the pipeline's business - a change of them is neither fatal nor a rebuild.
     /// </summary>
     public class ConfigurationPipelineTests : IDisposable
     {
@@ -52,15 +53,13 @@ namespace MadWizard.Desomnia.Tests
             return builder.Build();
         }
 
-        private (ConfigurationPipeline Pipeline, EnvironmentMonitor Monitor) CreatePipeline(
-            FakeCondition? toggle = null, PersistentConfiguration? persistent = null)
+        private (ConfigurationPipeline Pipeline, EnvironmentMonitor Monitor) CreatePipeline(FakeCondition? toggle = null)
         {
             var source = new ExtendedXmlConfigurationSource(_path);
 
             var monitor = new EnvironmentMonitor { Logger = NullLogger.Instance };
 
-            var pipeline = new ConfigurationPipeline(source,
-                persistent ?? PersistentConfiguration.Empty, monitor, Conditions(toggle))
+            var pipeline = new ConfigurationPipeline(source, monitor, Conditions(toggle))
             {
                 Logger = NullLogger.Instance,
             };
@@ -108,56 +107,69 @@ namespace MadWizard.Desomnia.Tests
             Assert.False(token.IsCancellationRequested);
         }
 
-        #endregion
+        [Fact]
+        internal void Passthrough_UnchangedData_DoesNotReload()
+        {
+            WriteConfig("""<SystemMonitor version="6" />""");
 
-        #region Fatal changes
+            var (pipeline, monitor) = CreatePipeline();
+            pipeline.Start();
+
+            var token = monitor.ReloadToken;
+
+            // formatting and comments are not data - the host would read the same configuration
+            WriteConfig("""
+                <!-- reformatted -->
+                <SystemMonitor   version="6"   />
+                """);
+            pipeline.CheckForChanges();
+
+            Assert.False(token.IsCancellationRequested);
+        }
 
         [Fact]
-        internal void ChangedGlobalDirective_IsFatal()
+        internal void Passthrough_ChangedGlobalDirective_IsNeitherFatalNorARebuild()
         {
             WriteConfig("""
                 <?global useDBus="false" ?>
                 <SystemMonitor version="6" />
                 """);
 
-            var source = new ExtendedXmlConfigurationSource(_path);
-            var persistent = PersistentConfiguration.LoadFrom(source);
-
-            var (pipeline, monitor) = CreatePipeline(persistent: persistent);
+            var (pipeline, monitor) = CreatePipeline();
             pipeline.Start();
 
             var token = monitor.ReloadToken;
 
+            // the directives are the root host's configuration: its own nested source follows
+            // them (IOptionsMonitor), the application host has nothing to rebuild for
             WriteConfig("""
                 <?global useDBus="true" ?>
                 <SystemMonitor version="6" />
                 """);
             pipeline.CheckForChanges();
 
-            Assert.True(token.IsCancellationRequested); // the fatal wake-up for the loop
+            Assert.False(token.IsCancellationRequested);
 
-            var ex = Assert.Throws<ConfigurationValueException>(pipeline.ThrowIfFailed);
-            Assert.Contains("persistent", ex.Message, StringComparison.OrdinalIgnoreCase);
-        }
+            pipeline.ThrowIfFailed();
 
-        [Fact]
-        internal void RemovedGlobalDirective_IsFatal_Too()
-        {
-            WriteConfig("""
-                <?global useDBus="false" ?>
-                <SystemMonitor version="6" />
-                """);
-
-            var source = new ExtendedXmlConfigurationSource(_path);
-
-            var (pipeline, _) = CreatePipeline(persistent: PersistentConfiguration.LoadFrom(source));
-            pipeline.Start();
-
+            // ... and a removed directive is no different
             WriteConfig("""<SystemMonitor version="6" />""");
             pipeline.CheckForChanges();
 
-            Assert.Throws<ConfigurationValueException>(pipeline.ThrowIfFailed);
+            Assert.False(token.IsCancellationRequested);
+
+            pipeline.ThrowIfFailed();
+
+            // the pipeline still tracks the data: a real edit after that rebuilds
+            WriteConfig("""<SystemMonitor version="6" timeout="00:10:00" />""");
+            pipeline.CheckForChanges();
+
+            Assert.True(token.IsCancellationRequested);
         }
+
+        #endregion
+
+        #region Fatal changes
 
         [Fact]
         internal void SwitchedRootElement_IsFatal()
@@ -284,6 +296,19 @@ namespace MadWizard.Desomnia.Tests
             pipeline.CheckForChanges();
 
             Assert.False(token.IsCancellationRequested);
+
+            // neither does an added <?global?> directive (the root host's configuration)
+            WriteConfig("""
+                <?global useDBus="true" ?>
+                <EnvironmentMonitor version="6">
+                  <Environment test="true"><SystemMonitor marker="same" /></Environment>
+                </EnvironmentMonitor>
+                """);
+            pipeline.CheckForChanges();
+
+            Assert.False(token.IsCancellationRequested);
+
+            pipeline.ThrowIfFailed();
         }
 
         [Fact]

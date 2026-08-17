@@ -1,4 +1,5 @@
 using MadWizard.Desomnia.Configuration;
+using MadWizard.Desomnia.Configuration.Binding;
 using MadWizard.Desomnia.Configuration.Model;
 using MadWizard.Desomnia.Configuration.Xml;
 using Microsoft.Extensions.FileProviders;
@@ -17,8 +18,12 @@ namespace Microsoft.Extensions.Configuration.Xml
      * CONSUMES the same reader output and exposes its own configuration source to the host;
      * this source reaches the host directly only in passthrough mode. File watching is the
      * stock FileConfigurationSource machinery (ReloadOnChange via IFileProvider.Watch).
+     *
+     * The <?global?> processing instructions outside the root element are NOT part of this
+     * source's data: they are the root host's configuration, served by the nested RootSource
+     * (see IRootConfigurationSource) - same file, same provider, same watch.
      */
-    public class ExtendedXmlConfigurationSource : XmlConfigurationSource, IPersistentConfigurationSource
+    public class ExtendedXmlConfigurationSource : XmlConfigurationSource, IRootConfigurationSource
     {
         /// <summary>Which element names form collections of complex items - derived from the
         /// modules' configuration types, shared with the environment merger.</summary>
@@ -34,7 +39,20 @@ namespace Microsoft.Extensions.Configuration.Xml
             ReloadOnChange = reloadOnChange;
 
             ResolveFileProvider();
+
+            RootSource = new XmlRootConfigurationSource(this);
         }
+
+        /// <summary>
+        /// The nested source carrying the <c>&lt;?global key="value"?&gt;</c> processing
+        /// instructions outside the root element — the root host's configuration (see
+        /// <see cref="IRootConfigurationSource"/>). It reads the same file through the same file
+        /// provider and follows this source's <see cref="FileConfigurationSource.ReloadOnChange"/>
+        /// (taken when the root host builds it, so a flag set after construction counts). A
+        /// missing file yields no entries: this source's own, non-optional provider reports the
+        /// missing file when the application configuration is built.
+        /// </summary>
+        public IConfigurationSource RootSource { get; }
 
         /// <summary>
         /// Registers an explicit name builder for nameless elements of the given collection.
@@ -58,36 +76,6 @@ namespace Microsoft.Extensions.Configuration.Xml
             Collections.AddCollectionElementsOf(configType);
 
             return this;
-        }
-
-        /// <summary>
-        /// Reads the <c>&lt;?global key="value"?&gt;</c> processing instructions outside the
-        /// root element — the persistent (process-lifetime) configuration, read before any
-        /// container is built. A missing file yields no entries (the non-optional provider
-        /// reports the missing file when the application configuration is built).
-        /// </summary>
-        public IEnumerable<KeyValuePair<string, string>> LoadPersistentConfiguration()
-        {
-            using var stream = TryOpenFile();
-
-            if (stream is null)
-                return [];
-
-            return XmlConfigurationReader.Read(stream).GlobalDirectives
-                .Select(directive => new KeyValuePair<string, string>(directive.Key, directive.Value))
-                .ToList();
-        }
-
-        private Stream? TryOpenFile()
-        {
-            if (FileProvider?.GetFileInfo(Path!) is { Exists: true, IsDirectory: false } file)
-                return file.CreateReadStream();
-
-            // no file provider resolved yet (a relative path before EnsureDefaults)
-            if (FileProvider is null && Path is string path && File.Exists(path))
-                return File.OpenRead(path);
-
-            return null;
         }
 
         public override IConfigurationProvider Build(IConfigurationBuilder builder)
@@ -143,6 +131,85 @@ namespace Microsoft.Extensions.Configuration.Xml
 
         /// <summary>Child keys in document order (the stock provider would sort them),
         /// so collection binding sees items exactly as they were written.</summary>
+        public override IEnumerable<string> GetChildKeys(IEnumerable<string> earlierKeys, string? parentPath)
+            => _data.GetChildKeys(earlierKeys, parentPath);
+    }
+
+    /// <summary>
+    /// The nested source of an <see cref="ExtendedXmlConfigurationSource"/>: the <c>&lt;?global?&gt;</c>
+    /// directives, i.e. the ROOT HOST's configuration (not the root element's - the directives
+    /// live outside of it). A file source of its own, so the stock provider machinery applies
+    /// (missing-file handling, watching, reload delay); it mirrors the parent's file settings
+    /// at build time, when they are final.
+    /// </summary>
+    sealed class XmlRootConfigurationSource(ExtendedXmlConfigurationSource parent) : FileConfigurationSource
+    {
+        public override IConfigurationProvider Build(IConfigurationBuilder builder)
+        {
+            // the parent's settings as they are NOW: ReloadOnChange is decided after construction
+            // (the command line), and a relative path resolves its provider only in EnsureDefaults
+            FileProvider    = parent.FileProvider;
+            Path            = parent.Path!; // never null: the parent's constructor insists
+            ReloadOnChange  = parent.ReloadOnChange;
+            ReloadDelay     = parent.ReloadDelay;
+
+            // a missing file yields no entries; the parent's non-optional provider is the one
+            // that reports it (when the application configuration is built)
+            Optional = true;
+
+            EnsureDefaults(builder);
+
+            return new XmlRootConfigurationProvider(this);
+        }
+    }
+
+    sealed class XmlRootConfigurationProvider(XmlRootConfigurationSource source) : FileConfigurationProvider(source)
+    {
+        static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+
+        OrderedConfigurationData _data = OrderedConfigurationData.Empty;
+
+        bool _loaded;
+
+        public override void Load(Stream stream)
+        {
+            try
+            {
+                _data = new OrderedConfigurationData(Entries(XmlConfigurationReader.Read(stream).GlobalDirectives));
+            }
+            catch (Exception ex) when (_loaded)
+            {
+                // a bad edit on the reload path: keep serving the last good data (the stock
+                // behavior of clearing the data would feed the options system an empty root
+                // configuration); the effective configuration's own reload reports the edit
+                Logger.Warn(ex, $"Failed to reload the <?global?> directives of '{source.Path}'; keeping the current root configuration.");
+                return;
+            }
+
+            Data = _data.Data;
+
+            _loaded = true;
+        }
+
+        private static IEnumerable<KeyValuePair<string, string?>> Entries(IEnumerable<GlobalDirective> directives)
+        {
+            HashSet<string> keys = new(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var directive in directives)
+            {
+                if (!keys.Add(directive.Key))
+                    throw new ConfigurationValueException($"Duplicate <?global?> directive key '{directive.Key}'.");
+
+                yield return new(directive.Key, directive.Value);
+            }
+        }
+
+        /// <summary>Last-good data, not the base class's <c>Data</c> — which the stock reload
+        /// path clears when the watched file is momentarily missing (an editor's delete+rename
+        /// save) without ever calling <see cref="Load(Stream)"/>.</summary>
+        public override bool TryGet(string key, out string? value)
+            => _data.Data.TryGetValue(key, out value);
+
         public override IEnumerable<string> GetChildKeys(IEnumerable<string> earlierKeys, string? parentPath)
             => _data.GetChildKeys(earlierKeys, parentPath);
     }

@@ -56,7 +56,7 @@ namespace MadWizard.Desomnia.Configuration.Xml
         private static List<GlobalDirective> ReadGlobalDirectives(XDocument document)
         {
             // a <?global?> below the root would suggest scoped semantics that do not exist -
-            // the persistent configuration is process-wide, so it must stay outside the root
+            // the root configuration is process-wide, so it must stay outside the root
             if (document.Root!.DescendantNodes().OfType<XProcessingInstruction>()
                 .FirstOrDefault(IsGlobalDirective) is XProcessingInstruction misplaced)
             {
@@ -124,7 +124,7 @@ namespace MadWizard.Desomnia.Configuration.Xml
     }
 
     /// <summary>One <c>&lt;?global key="value"?&gt;</c> processing instruction: a single entry
-    /// of the persistent configuration, where <see cref="Key"/> is the full configuration path
+    /// of the root (process-lifetime) configuration, where <see cref="Key"/> is the full configuration path
     /// (e.g. "ProcessManager:pollInterval").</summary>
     internal sealed record GlobalDirective(string Key, string Value);
 

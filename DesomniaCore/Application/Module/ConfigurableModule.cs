@@ -9,14 +9,40 @@ namespace MadWizard.Desomnia
 {
     public abstract class ConfigurableModule : Module
     {
+        private IConfiguration? _rootConfig;
+
         protected internal virtual XDocument MigrateConfiguration(XDocument configuration, uint version) => configuration;
 
         protected internal virtual void ConfigureConfigurationSource(ExtendedXmlConfigurationSource source) { }
 
+        #region Root configuration
+        protected internal override void BuildOnce(HostApplicationBuilder builder)
+        {
+            base.BuildOnce(builder);
+
+            _rootConfig = builder.Configuration;
+        }
+
+        protected internal override void LoadOnce(ContainerBuilder builder) => LoadOnce(builder, _rootConfig!);
+
+        /// <summary>
+        /// The configuration-aware convenience overload of <see cref="LoadOnce(ContainerBuilder)"/>:
+        /// it receives the root host's configuration — the same <see cref="IConfiguration"/> as
+        /// <see cref="BuildOnce"/>'s <c>builder.Configuration</c>, i.e. the <c>&lt;?global key="value"?&gt;</c>
+        /// directives of the configuration file — so a module can bind its own process-bound
+        /// options (each binds the sections it needs, ignoring the rest) and register accordingly.
+        /// The configuration may be empty (root configuration is optional); bind against defaults.
+        /// A value bound here is the boot-time value for the life of the process — for one that
+        /// follows the file, wire an <c>IOptionsMonitor&lt;T&gt;</c> in <see cref="BuildOnce"/>
+        /// instead. The default implementation forwards to the argument-less overload.
+        /// </summary>
+        protected virtual void LoadOnce(ContainerBuilder builder, IConfiguration config) { }
+        #endregion
+
         static protected T Bind<T>(IConfiguration configuration)
         {
             // the strict binder returns null only for a configuration with no keys at all
-            // (invalid values throw instead) - a legitimately empty persistent configuration
+            // (invalid values throw instead) - a legitimately empty root configuration
             // then binds to the type's defaults
             return StrictConfigurationBinder.Get<T>(configuration, opt => opt.BindNonPublicProperties = true) ?? Activator.CreateInstance<T>();
         }
@@ -37,6 +63,7 @@ namespace MadWizard.Desomnia
             source.AddCollectionElementsOf(typeof(T));
         }
 
+        #region Application configuration
         protected internal override void Build(HostApplicationBuilder builder)
         {
             base.Build(builder);
@@ -51,5 +78,6 @@ namespace MadWizard.Desomnia
         protected sealed override void Load(ContainerBuilder builder) => Load(builder, Config);
 
         protected abstract void Load(ContainerBuilder builder, T config);
+        #endregion
     }
 }

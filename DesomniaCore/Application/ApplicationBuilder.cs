@@ -33,11 +33,6 @@ namespace MadWizard.Desomnia
 
         protected readonly ExtendedXmlConfigurationSource _source;
 
-        // the boot-time snapshot of the source's persistent configuration (the <?global?>
-        // directives); read in Build(), before any container exists, and immutable from then
-        // on - a reload that yields different entries is fatal (restart to apply)
-        private PersistentConfiguration _persistentConfiguration = PersistentConfiguration.Empty;
-
         readonly List<Module> _modules = [];
 
         // the persistent host and its Autofac container (the machine-lifetime scope). Built once by
@@ -166,23 +161,6 @@ namespace MadWizard.Desomnia
         }
         #endregion
 
-        protected virtual void ConfigureConfigurationSource(IConfigurationSource source)
-        {
-            if (source is ExtendedXmlConfigurationSource xml)
-            {
-                // the collection-element knowledge must exist before the pipeline reads the file
-                // (the merger and the flattener need it); contributed by every configurable module
-                foreach (var module in _modules.OfType<ConfigurableModule>())
-                {
-                    module.ConfigureConfigurationSource(xml);
-                }
-
-                // the persistent configuration must exist before the container it configures;
-                // a malformed configuration file is fatal here - there is nothing to fall back to
-                _persistentConfiguration = PersistentConfiguration.LoadFrom(_source);
-            }
-        }
-
         #region Build Application Host
         /// <summary>
         /// Builds the persistent host — the process-lifetime Microsoft.Extensions host whose
@@ -191,19 +169,26 @@ namespace MadWizard.Desomnia
         /// otherwise), every module's <see cref="Module.LoadOnce(ContainerBuilder, Microsoft.Extensions.Configuration.IConfiguration)"/>
         /// singletons and the configuration authorities — and returns it wrapped in the
         /// <see cref="ApplicationHost"/>, whose loop builds, runs and rebuilds the inner application
-        /// hosts. Only a genuine process stop or a fatal configuration brings it down; a fatal
+        /// hosts. Its configuration is the root configuration (see <see cref="LoadRootConfiguration"/>),
+        /// which every module sees in <see cref="Module.BuildOnce"/> before the container is built.
+        /// Only a genuine process stop or a fatal configuration brings it down; a fatal
         /// escapes <see cref="ApplicationHost.Run"/> to the entry point with a non-zero exit code.
         /// </summary>
         public ApplicationHost Build()
         {
-            ConfigureConfigurationSource(_source);
-
             var builder = new HostApplicationBuilder(DefaultSettings);
+
+            LoadRootConfiguration(builder, _source);
 
             ConfigureLogging(builder.Logging);
             ConfigureServices(builder.Services);
 
             builder.ConfigureContainer(new AutofacServiceProviderFactory(), ConfigureContainer);
+
+            foreach (var module in _modules)
+            {
+                module.BuildOnce(builder);
+            }
 
             var host = builder.Build();
 
@@ -268,6 +253,12 @@ namespace MadWizard.Desomnia
 
         protected virtual void ConfigureServices(IServiceCollection services) { }
 
+        /// <summary>
+        /// Fills the persistent container. <paramref name="configuration"/> is the root host's
+        /// configuration (see <see cref="LoadRootConfiguration"/>), handed to the modules'
+        /// <c>LoadOnce</c> as its convenience argument; a value bound from it here is the
+        /// boot-time value for the life of the process (only the options interfaces follow a reload).
+        /// </summary>
         protected virtual void ConfigureContainer(ContainerBuilder container)
         {
             container.RegisterModule<LoggingModule>();
@@ -282,13 +273,36 @@ namespace MadWizard.Desomnia
                 .AsImplementedInterfaces().AsSelf()
                 .SingleInstance();
 
-            // the boot snapshot, so the configuration pipeline can detect a changed
-            // persistent configuration on reload (which is fatal: restart to apply)
-            container.RegisterInstance(_persistentConfiguration).AsSelf().ExternallyOwned();
-
             foreach (var module in _modules)
             {
-                module.LoadOnce(container, _persistentConfiguration.Configuration);
+                module.LoadOnce(container);
+            }
+        }
+
+        /// <summary>
+        /// Makes the root host's <see cref="HostApplicationBuilder.Configuration"/> the authority
+        /// over the root configuration: the physical source's nested root source (the
+        /// <c>&lt;?global?&gt;</c> directives; see <see cref="IRootConfigurationSource"/>) is added
+        /// like any other source, so the modules read it through the builder in
+        /// <see cref="Module.BuildOnce"/> and the persistent services bind it through the standard
+        /// options interfaces — an <c>IOptionsMonitor&lt;T&gt;</c> follows the file when auto-reload
+        /// is on. A source without root support leaves the configuration empty.
+        /// </summary>
+        private void LoadRootConfiguration(HostApplicationBuilder builder, IConfigurationSource source)
+        {
+            if (source is ExtendedXmlConfigurationSource xml)
+            {
+                // the collection-element knowledge must exist before the pipeline reads the file
+                // (the merger and the flattener need it); contributed by every configurable module
+                foreach (var module in _modules.OfType<ConfigurableModule>())
+                {
+                    module.ConfigureConfigurationSource(xml);
+                }
+            }
+
+            if (source is IRootConfigurationSource root)
+            {
+                builder.Configuration.Sources.Add(root.RootSource);
             }
         }
         #endregion
@@ -302,11 +316,11 @@ namespace MadWizard.Desomnia
         {
             var builder = new HostApplicationBuilder(DefaultApplicationSettings);
 
+            LoadConfiguration(builder);
+
             ConfigureApplicationServices(builder.Services);
 
             builder.ConfigureContainer(new AutofacServiceProviderFactory(), ConfigureApplicationContainer);
-
-            LoadConfiguration(builder);
 
             foreach (var module in _modules)
             {

@@ -1,5 +1,5 @@
 using Autofac;
-using MadWizard.Desomnia.Configuration;
+using MadWizard.Desomnia.Configuration.Model;
 using MadWizard.Desomnia.Configuration.Binding;
 using MadWizard.Desomnia.Configuration.Xml;
 using Microsoft.Extensions.Configuration;
@@ -23,9 +23,10 @@ namespace MadWizard.Desomnia.Environments
     /// re-reads the file on every settled edit and pumps the re-parsed blocks into the
     /// monitor. Changes the running process cannot apply are FATAL by design — the
     /// application exits with an error code and relies on the service manager to restart
-    /// it: a change of the persistent configuration (the <c>&lt;?global?&gt;</c>
-    /// directives), a change of the root element (mode switch), and any invalid edit
-    /// (malformed XML, unknown conditions, bad values).</para>
+    /// it: a change of the root element (mode switch), and any invalid edit (malformed
+    /// XML, unknown conditions, bad values). The <c>&lt;?global?&gt;</c> directives are
+    /// not the pipeline's business: they are the root host's configuration, served (and
+    /// reloaded) by the source's own nested root source.</para>
     /// </summary>
     internal sealed class ConfigurationPipeline : IStartable, IDisposable
     {
@@ -37,7 +38,6 @@ namespace MadWizard.Desomnia.Environments
 
         readonly ExtendedXmlConfigurationSource _source;
         readonly string _configPath;
-        readonly PersistentConfiguration _persistentConfiguration;
         readonly EnvironmentMonitor _monitor;
         readonly ILifetimeScope _scope;
 
@@ -49,6 +49,10 @@ namespace MadWizard.Desomnia.Environments
         // reports the same content skips the re-parse
         string? _readText;
 
+        // passthrough only: the flattened data of the current generation - the rebuild
+        // criterion (the augmenting mode's monitor compares its effective data the same way)
+        IReadOnlyList<KeyValuePair<string, string?>>? _pairs;
+
         // a change the process cannot apply: recorded here, surfaced to the application
         // loop through ThrowIfFailed after the reload signal wakes it
         Exception? _failure;
@@ -58,12 +62,10 @@ namespace MadWizard.Desomnia.Environments
 
         bool _disposed;
 
-        public ConfigurationPipeline(ExtendedXmlConfigurationSource source,
-            PersistentConfiguration persistentConfiguration, EnvironmentMonitor monitor, ILifetimeScope scope)
+        public ConfigurationPipeline(ExtendedXmlConfigurationSource source, EnvironmentMonitor monitor, ILifetimeScope scope)
         {
             _source = source;
             _configPath = source.FullPath!;
-            _persistentConfiguration = persistentConfiguration;
             _monitor = monitor;
             _scope = scope;
 
@@ -107,6 +109,10 @@ namespace MadWizard.Desomnia.Environments
                         _monitor.Initialize(settings, blocks, _source.Collections, conditions);
 
                         EffectiveSource = _monitor.ConfigurationSource;
+                    }
+                    else
+                    {
+                        _pairs = Flatten(file);
                     }
                 }
 
@@ -198,10 +204,6 @@ namespace MadWizard.Desomnia.Environments
         {
             var file = XmlConfigurationReader.Read(text);
 
-            if (!_persistentConfiguration.Matches(Entries(file)))
-                throw new ConfigurationValueException("The persistent configuration (the <?global?> directives) " +
-                    "changed; it configures the persistent container and can only be applied by a restart.");
-
             bool augmenting = DetectAugmenting(file.RootName);
 
             if (augmenting != _augmenting)
@@ -212,8 +214,17 @@ namespace MadWizard.Desomnia.Environments
 
             if (!augmenting)
             {
-                // no environments to re-merge - the loop rebuilds, and the host's provider
-                // re-reads the file
+                // no environments to re-merge: if the data the host reads changed, the loop
+                // rebuilds and the host's provider re-reads the file. An edit that leaves the
+                // data alone - formatting, comments, the <?global?> directives (which the root
+                // host's own source follows) - is no reason to restart the application.
+                var pairs = Flatten(file);
+
+                if (_pairs is not null && _pairs.SequenceEqual(pairs))
+                    return;
+
+                _pairs = pairs;
+
                 _monitor.SignalReloadRequest("Configuration file changed");
                 return;
             }
@@ -307,8 +318,9 @@ namespace MadWizard.Desomnia.Environments
             return outputPath;
         }
 
-        private static IEnumerable<KeyValuePair<string, string>> Entries(XmlConfigurationFile file)
-            => file.GlobalDirectives.Select(directive => new KeyValuePair<string, string>(directive.Key, directive.Value));
+        /// <summary>The data the host's provider would serve for the file (passthrough mode).</summary>
+        private IReadOnlyList<KeyValuePair<string, string?>> Flatten(XmlConfigurationFile file)
+            => ConfigNodeFlattener.Flatten(file.ToConfigNode(), _source.Collections);
 
         #endregion
 

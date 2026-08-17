@@ -109,7 +109,7 @@ namespace MadWizard.Desomnia.Tests
             {
                 builder.RegisterModule(module);
 
-                builder.Build(); // the persistent host, held by the builder
+                using var host = builder.Build(); // the persistent host, disposed with the block
 
                 using (var app1 = builder.BuildApplication())
                     first = (IPersistentService)app1.Services.GetService(typeof(IPersistentService))!;
@@ -125,7 +125,7 @@ namespace MadWizard.Desomnia.Tests
                 Assert.False(((PersistentService)first).Disposed);
             }
 
-            // disposing the builder disposes the persistent host — and with it the container
+            // disposing the persistent host disposes its container - and with it the instance
             Assert.True(((PersistentService)first).Disposed);
         }
 
