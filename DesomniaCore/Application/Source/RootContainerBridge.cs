@@ -20,7 +20,7 @@ namespace MadWizard.Desomnia
     /// predicate keeps those behind (each application build runs its own), and exports only the
     /// modules' services. No frozen snapshot: the predicate is re-applied on every resolve.</para>
     /// </summary>
-    internal sealed class FrameworkContainerBridge : IRegistrationSource
+    internal sealed class RootContainerBridge : IRegistrationSource
     {
         // Autofac's internal collection-ordering key: bridged registrations inherit the
         // persistent registration's sequence number, so application-side IEnumerable<T>
@@ -31,9 +31,9 @@ namespace MadWizard.Desomnia
         private readonly ILifetimeScope _container;
         private readonly Func<Type, bool> _export;
 
-        internal FrameworkContainerBridge(ILifetimeScope container) : this(container, ExportsModuleServices) { }
+        internal RootContainerBridge(ILifetimeScope container) : this(container, ExportsModuleServices) { }
 
-        internal FrameworkContainerBridge(ILifetimeScope container, Func<Type, bool> export)
+        internal RootContainerBridge(ILifetimeScope container, Func<Type, bool> export)
         {
             ValidateLifetimes(container, export);
 

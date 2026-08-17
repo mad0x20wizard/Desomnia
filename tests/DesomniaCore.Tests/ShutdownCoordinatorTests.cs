@@ -155,7 +155,7 @@ namespace MadWizard.Desomnia.Tests
             using var persistent = Build(b => b.RegisterType<Stoppable>().As<IAsyncStoppable>().AsSelf().SingleInstance());
 
             var builder = new ContainerBuilder();
-            builder.RegisterSource(new FrameworkContainerBridge(persistent));
+            builder.RegisterSource(new RootContainerBridge(persistent));
             using var application = builder.Build();
 
             var stoppable = application.Resolve<Stoppable>();

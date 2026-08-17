@@ -25,7 +25,7 @@ namespace MadWizard.Desomnia
         /// bridged resolve surfaces one). Per-scope lifetimes are rejected, and
         /// open-generic registrations are not bridged — register closed types.
         /// Every registration is bridged into each application container by the
-        /// <see cref="FrameworkContainerBridge"/>, so the application resolves and uses
+        /// <see cref="RootContainerBridge"/>, so the application resolves and uses
         /// the services but never disposes them.
         /// </summary>
         protected internal virtual void LoadOnce(ContainerBuilder builder) { }

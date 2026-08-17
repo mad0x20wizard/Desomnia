@@ -44,7 +44,7 @@ namespace MadWizard.Desomnia.Tests
         {
             var builder = new ContainerBuilder();
 
-            builder.RegisterSource(new FrameworkContainerBridge(persistent));
+            builder.RegisterSource(new RootContainerBridge(persistent));
 
             configure?.Invoke(builder);
 
@@ -138,7 +138,7 @@ namespace MadWizard.Desomnia.Tests
         {
             using var persistent = BuildPersistent(_ => { });
 
-            var source = new FrameworkContainerBridge(persistent);
+            var source = new RootContainerBridge(persistent);
 
             Assert.Empty(((IRegistrationSource)source).RegistrationsFor(new TypedService(typeof(ILifetimeScope)), _ => []));
             Assert.Empty(((IRegistrationSource)source).RegistrationsFor(new TypedService(typeof(IComponentContext)), _ => []));
@@ -189,7 +189,7 @@ namespace MadWizard.Desomnia.Tests
         {
             using var persistent = BuildPersistent(b => b.RegisterType<Adapter>().As<IAdapter>());
 
-            Assert.Throws<InvalidOperationException>(() => FrameworkContainerBridge.ValidateLifetimes(persistent));
+            Assert.Throws<InvalidOperationException>(() => RootContainerBridge.ValidateLifetimes(persistent));
         }
 
         [Fact]
@@ -200,7 +200,7 @@ namespace MadWizard.Desomnia.Tests
             using var persistent = BuildPersistent(b =>
                 b.RegisterType<SecondAdapter>().As<IAdapter>().InstancePerLifetimeScope());
 
-            Assert.Throws<InvalidOperationException>(() => FrameworkContainerBridge.ValidateLifetimes(persistent));
+            Assert.Throws<InvalidOperationException>(() => RootContainerBridge.ValidateLifetimes(persistent));
         }
 
         [Fact]
@@ -213,7 +213,7 @@ namespace MadWizard.Desomnia.Tests
                 b.RegisterType<SecondAdapter>().AsSelf(); // non-disposable transient
             });
 
-            FrameworkContainerBridge.ValidateLifetimes(persistent);
+            RootContainerBridge.ValidateLifetimes(persistent);
         }
 
         [Fact]
@@ -224,7 +224,7 @@ namespace MadWizard.Desomnia.Tests
             // letting the persistent root track instances until process exit
             using var persistent = BuildPersistent(b => b.Register(_ => (IAdapter)new Adapter()));
 
-            FrameworkContainerBridge.ValidateLifetimes(persistent); // blind to the delegate
+            RootContainerBridge.ValidateLifetimes(persistent); // blind to the delegate
 
             using var app = BuildApplication(persistent);
 

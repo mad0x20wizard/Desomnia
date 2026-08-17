@@ -15,7 +15,7 @@ namespace MadWizard.Desomnia.Application.Lifetime
     /// the service stopped only once every teardown has run, bounded by
     /// <c>HostOptions.ShutdownTimeout</c>. Container disposal, which the process lifetime
     /// does NOT wait for, is thereby left with nothing slow to do.
-    /// <para>This namespace stays behind the <see cref="FrameworkContainerBridge"/> by
+    /// <para>This namespace stays behind the <see cref="RootContainerBridge"/> by
     /// design: the coordinator is persistent-host infrastructure, never an application
     /// service.</para>
     /// </summary>

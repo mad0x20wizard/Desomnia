@@ -11,7 +11,7 @@ namespace MadWizard.Desomnia
             // (e.g. the DisplayMonitor's OnlyIf IDisplayManager) see them at build time. The bridge's
             // export policy keeps the persistent host's framework services (hosting, options, the
             // loop) out of the inner container — it runs its own.
-            builder.RegisterSource(new FrameworkContainerBridge(root));
+            builder.RegisterSource(new RootContainerBridge(root));
 
             var logging = root.Resolve<ILoggerFactory>();
 
