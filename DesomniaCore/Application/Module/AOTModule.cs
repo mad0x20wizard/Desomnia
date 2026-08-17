@@ -6,7 +6,7 @@ namespace MadWizard.Desomnia
     {
         protected override void Load(ContainerBuilder builder)
         {
-            builder.RegisterSource(new AOTMetadataViewSupport());
+            builder.RegisterSource(new AOTMetadataCompatibility());
         }
     }
 }

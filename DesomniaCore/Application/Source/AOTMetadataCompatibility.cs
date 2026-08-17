@@ -37,7 +37,7 @@ namespace MadWizard.Desomnia
         Justification = "Metadata view types are preserved whole via the trimmer root descriptor (preserve=all).")]
     [UnconditionalSuppressMessage("Trimming", "IL2075",
         Justification = "Metadata view types are preserved whole via the trimmer root descriptor (preserve=all).")]
-    internal sealed class AOTMetadataViewSupport : IRegistrationSource
+    internal sealed class AOTMetadataCompatibility : IRegistrationSource
     {
         public bool IsAdapterForIndividualComponents => false;
 
