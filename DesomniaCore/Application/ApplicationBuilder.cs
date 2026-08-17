@@ -169,7 +169,7 @@ namespace MadWizard.Desomnia
         /// otherwise), every module's <see cref="Module.LoadOnce(ContainerBuilder, Microsoft.Extensions.Configuration.IConfiguration)"/>
         /// singletons and the configuration authorities — and returns it wrapped in the
         /// <see cref="ApplicationHost"/>, whose loop builds, runs and rebuilds the inner application
-        /// hosts. Its configuration is the root configuration (see <see cref="LoadRootConfiguration"/>),
+        /// hosts. Its configuration is the root configuration (see <see cref="LoadConfiguration"/>),
         /// which every module sees in <see cref="Module.BuildOnce"/> before the container is built.
         /// Only a genuine process stop or a fatal configuration brings it down; a fatal
         /// escapes <see cref="ApplicationHost.Run"/> to the entry point with a non-zero exit code.
@@ -178,7 +178,7 @@ namespace MadWizard.Desomnia
         {
             var builder = new HostApplicationBuilder(DefaultSettings);
 
-            LoadRootConfiguration(builder, _source);
+            LoadConfiguration(builder);
 
             ConfigureLogging(builder.Logging);
             ConfigureServices(builder.Services);
@@ -195,6 +195,33 @@ namespace MadWizard.Desomnia
             _root = host.Services.GetAutofacRoot();
 
             return new ApplicationHost(host, this);
+        }
+
+        /// <summary>
+        /// Makes the root host's <see cref="HostApplicationBuilder.Configuration"/> the authority
+        /// over the root configuration: the physical source's nested root source (the
+        /// <c>&lt;?global?&gt;</c> directives; see <see cref="IRootConfigurationSource"/>) is added
+        /// like any other source, so the modules read it through the builder in
+        /// <see cref="Module.BuildOnce"/> and the persistent services bind it through the standard
+        /// options interfaces — an <c>IOptionsMonitor&lt;T&gt;</c> follows the file when auto-reload
+        /// is on. A source without root support leaves the configuration empty.
+        /// </summary>
+        private void LoadConfiguration(HostApplicationBuilder builder)
+        {
+            if (_source is ExtendedXmlConfigurationSource xml)
+            {
+                // the collection-element knowledge must exist before the pipeline reads the file
+                // (the merger and the flattener need it); contributed by every configurable module
+                foreach (var module in _modules.OfType<ConfigurableModule>())
+                {
+                    module.ConfigureConfigurationSource(xml);
+                }
+            }
+
+            if (_source is IRootConfigurationSource root)
+            {
+                builder.Configuration.Sources.Add(root.RootSource);
+            }
         }
 
         protected virtual void ConfigureLogging(ILoggingBuilder builder)
@@ -255,7 +282,7 @@ namespace MadWizard.Desomnia
 
         /// <summary>
         /// Fills the persistent container. <paramref name="configuration"/> is the root host's
-        /// configuration (see <see cref="LoadRootConfiguration"/>), handed to the modules'
+        /// configuration (see <see cref="LoadConfiguration"/>), handed to the modules'
         /// <c>LoadOnce</c> as its convenience argument; a value bound from it here is the
         /// boot-time value for the life of the process (only the options interfaces follow a reload).
         /// </summary>
@@ -278,33 +305,6 @@ namespace MadWizard.Desomnia
                 module.LoadOnce(container);
             }
         }
-
-        /// <summary>
-        /// Makes the root host's <see cref="HostApplicationBuilder.Configuration"/> the authority
-        /// over the root configuration: the physical source's nested root source (the
-        /// <c>&lt;?global?&gt;</c> directives; see <see cref="IRootConfigurationSource"/>) is added
-        /// like any other source, so the modules read it through the builder in
-        /// <see cref="Module.BuildOnce"/> and the persistent services bind it through the standard
-        /// options interfaces — an <c>IOptionsMonitor&lt;T&gt;</c> follows the file when auto-reload
-        /// is on. A source without root support leaves the configuration empty.
-        /// </summary>
-        private void LoadRootConfiguration(HostApplicationBuilder builder, IConfigurationSource source)
-        {
-            if (source is ExtendedXmlConfigurationSource xml)
-            {
-                // the collection-element knowledge must exist before the pipeline reads the file
-                // (the merger and the flattener need it); contributed by every configurable module
-                foreach (var module in _modules.OfType<ConfigurableModule>())
-                {
-                    module.ConfigureConfigurationSource(xml);
-                }
-            }
-
-            if (source is IRootConfigurationSource root)
-            {
-                builder.Configuration.Sources.Add(root.RootSource);
-            }
-        }
         #endregion
 
         #region Build Application
@@ -316,7 +316,7 @@ namespace MadWizard.Desomnia
         {
             var builder = new HostApplicationBuilder(DefaultApplicationSettings);
 
-            LoadConfiguration(builder);
+            LoadApplicationConfiguration(builder);
 
             ConfigureApplicationServices(builder.Services);
 
@@ -328,6 +328,22 @@ namespace MadWizard.Desomnia
             }
 
             return builder.Build();
+        }
+
+        private void LoadApplicationConfiguration(HostApplicationBuilder builder)
+        {
+            if (_root is not ILifetimeScope scope)
+                throw new Exception("Configuration must be loaded after root scope.");
+
+            // start the configuration pipeline now (read the file, feed the monitor, watch
+            // for changes), so its change sources run before the loop builds the first inner
+            // host. A configuration problem here is fatal - there is nothing to fall back to.
+            var pipeline = scope.Resolve<ConfigurationPipeline>();
+            var monitor = scope.Resolve<EnvironmentMonitor>();
+
+            monitor.ResetReloadToken();
+
+            builder.Configuration.Sources.Add(pipeline.EffectiveSource);
         }
 
         private void ConfigureApplicationServices(IServiceCollection services)
@@ -364,22 +380,6 @@ namespace MadWizard.Desomnia
             {
                 container.RegisterModule(module);
             }
-        }
-
-        private void LoadConfiguration(HostApplicationBuilder builder)
-        {
-            if (_root is not ILifetimeScope scope)
-                throw new Exception("Configuration must be loaded after root scope.");
-
-            // start the configuration pipeline now (read the file, feed the monitor, watch
-            // for changes), so its change sources run before the loop builds the first inner
-            // host. A configuration problem here is fatal - there is nothing to fall back to.
-            var pipeline    = scope.Resolve<ConfigurationPipeline>();
-            var monitor     = scope.Resolve<EnvironmentMonitor>();
-
-            monitor.ResetReloadToken();
-
-            builder.Configuration.Sources.Add(pipeline.EffectiveSource);
         }
         #endregion
     }
