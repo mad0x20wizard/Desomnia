@@ -35,7 +35,7 @@ namespace MadWizard.Desomnia.Display.Manager
     /// All callbacks run on a dedicated CFRunLoop thread (see <see cref="RunLoopThread"/>);
     /// the lock guards cross-thread readers.
     /// </summary>
-    public partial class MacOSDisplayManager : RunLoopThread, IDisplayManager
+    public partial class MacOSDisplayManager : RunLoopThread, IDisplayManager, IAsyncStoppable
     {
         private const string DISPLAY_PIPE_CLASS = "AppleCLCD2";
         private const string AV_SERVICE_CLASS = "DCPAVServiceProxy";
@@ -1072,6 +1072,18 @@ namespace MadWizard.Desomnia.Display.Manager
             && !_holds.ContainsKey(display.Identity);
 
         #endregion
+
+        /// <summary>The stop phase (see <see cref="IAsyncStoppable"/>): stops the run-loop
+        /// thread and runs <see cref="Cleanup"/> — the soft-disconnect restore — while the
+        /// process lifetime still waits (launchd's SIGTERM window). The inherited
+        /// <see cref="RunLoopThread.Dispose"/> remains the backstop; <see cref="RunLoopThread.Stop"/>
+        /// is idempotent, so whichever runs second finds nothing to do.</summary>
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            Stop();
+
+            return Task.CompletedTask;
+        }
 
         protected override void Cleanup()
         {

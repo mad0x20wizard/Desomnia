@@ -3,10 +3,9 @@ using NLog;
 namespace MadWizard.Desomnia.Environments
 {
     /// <summary>
-    /// Observes the resolved environment conditions for the life of the monitor (across
-    /// configuration rebuilds). Change events are debounced; when the debounce elapses the
-    /// monitor re-evaluates and, if the effective configuration changed, raises its
-    /// <see cref="EnvironmentMonitor.Changed"/> event.
+    /// Observes one configuration generation's resolved environment conditions. Change
+    /// events are debounced; when the debounce elapses the monitor re-evaluates and, if the
+    /// effective configuration changed, publishes it and signals the reload.
     /// </summary>
     internal sealed class EnvironmentWatcher : IDisposable
     {

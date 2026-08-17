@@ -35,7 +35,7 @@ namespace MadWizard.Desomnia.Tests
 
             var monitor = new EnvironmentMonitor { Logger = NullLogger.Instance };
 
-            var pipeline = new ConfigurationPipeline(source, path, PersistentConfiguration.Empty, monitor, Conditions(toggle))
+            var pipeline = new ConfigurationPipeline(source, PersistentConfiguration.Empty, monitor, Conditions(toggle))
             {
                 Logger = NullLogger.Instance,
             };
@@ -494,10 +494,8 @@ namespace MadWizard.Desomnia.Tests
 
             var (pipeline, monitor) = CreatePipeline(path);
 
-            using (var exporter = new EffectiveXmlExporter { Logger = NullLogger.Instance })
+            using (var exporter = new EffectiveXMLExporter(monitor) { Logger = NullLogger.Instance })
             {
-                monitor.EffectiveChanged += exporter.Export;
-
                 Assert.False(File.Exists(outputPath)); // written on Start, not before
 
                 pipeline.Start();
@@ -529,9 +527,7 @@ namespace MadWizard.Desomnia.Tests
 
             var (pipeline, monitor) = CreatePipeline(path);
 
-            using var exporter = new EffectiveXmlExporter { Logger = NullLogger.Instance };
-
-            monitor.EffectiveChanged += exporter.Export;
+            using var exporter = new EffectiveXMLExporter(monitor) { Logger = NullLogger.Instance };
 
             pipeline.Start();
 
@@ -616,7 +612,7 @@ namespace MadWizard.Desomnia.Tests
 
             pipeline.Start();
 
-            monitor.ArmReload(); // arm the reload token for this "build"
+            monitor.ResetReloadToken(); // arm the reload token for this "build"
 
             toggle.Satisfied = false; // "on" drops out -> the default ("off") applies
 
@@ -640,7 +636,7 @@ namespace MadWizard.Desomnia.Tests
 
             pipeline.Start();
 
-            monitor.ArmReload();
+            monitor.ResetReloadToken();
 
             monitor.Reevaluate();
 
@@ -726,7 +722,7 @@ namespace MadWizard.Desomnia.Tests
 
             pipeline.Start();
 
-            monitor.ArmReload();
+            monitor.ResetReloadToken();
             var first = monitor.ReloadToken;
 
             toggle.Satisfied = false;
@@ -735,7 +731,7 @@ namespace MadWizard.Desomnia.Tests
             Assert.True(first.IsCancellationRequested);
 
             // the next build arms a fresh, uncancelled token
-            monitor.ArmReload();
+            monitor.ResetReloadToken();
             Assert.False(monitor.ReloadToken.IsCancellationRequested);
         }
 

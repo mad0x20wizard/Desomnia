@@ -5,7 +5,7 @@ if (!Environment.IsPrivilegedProcess)
 
 using var mutex = new SystemMutex("MadWizard.Desomnia", true);
 
-using (var builder = new DesomniaLaunchDaemonBuilder(args))
+var builder = new DesomniaLaunchDaemonBuilder(args);
 {
     builder.RegisterModule<MadWizard.Desomnia.CoreModule>();
 
@@ -27,7 +27,10 @@ using (var builder = new DesomniaLaunchDaemonBuilder(args))
     builder.RegisterPluginModules();
 #endif
 
-    builder.Build().Run();
+    using (var host = builder.Build())
+    {
+        host.Run();
+    }
 }
 
 return Environment.ExitCode;

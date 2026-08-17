@@ -1,4 +1,4 @@
-using System.Xml.Linq;
+using MadWizard.Desomnia.Configuration.Model;
 
 namespace MadWizard.Desomnia.Environments
 {
@@ -26,11 +26,11 @@ namespace MadWizard.Desomnia.Environments
         /// <summary>Name of another environment that must not be applied for this block to apply (see the onlyIfNot attribute).</summary>
         public string? OnlyIfNot { get; init; }
 
-        /// <summary>Condition attributes (everything except "name"), in document order.</summary>
-        public required IReadOnlyList<(string Name, string Value)> ConditionAttributes { get; init; }
+        /// <summary>Condition attributes (everything that is not structural), in document order.</summary>
+        public required IReadOnlyList<ConditionAttribute> ConditionAttributes { get; init; }
 
-        /// <summary>The block's content, normalized to a &lt;SystemMonitor&gt; container.</summary>
-        public required XElement Content { get; init; }
+        /// <summary>The block's content, normalized to an abstract &lt;SystemMonitor&gt; container.</summary>
+        public required ConfigNode Content { get; init; }
 
         /// <summary>Resolved from <see cref="ConditionAttributes"/> by the module hook.</summary>
         public IReadOnlyList<IEnvironmentCondition> Conditions { get; set; } = [];

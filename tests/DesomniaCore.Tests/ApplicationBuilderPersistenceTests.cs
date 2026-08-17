@@ -81,20 +81,21 @@ namespace MadWizard.Desomnia.Tests
             protected override void Load(ContainerBuilder builder, TestConfig config) => Received.Add(config);
         }
 
-        // the real builders are platform subclasses (DesomniaWindowsServiceBuilder, ...); the
-        // persistent registration of the builder must resolve as ApplicationBuilder regardless
+        // the real builders are platform subclasses (DesomniaWindowsServiceBuilder, ...)
         private sealed class SubclassBuilder(string configPath) : ApplicationBuilder(configPath);
 
         [Fact]
-        public void PersistentHost_BuiltViaAPlatformSubclass_ResolvesTheBuilderAsApplicationBuilder()
+        public void PersistentHost_DoesNotExposeTheBuilderAsAService()
         {
-            // regression: RegisterInstance(this).AsSelf() registered the runtime subclass type, so
-            // the rebuild loop's ApplicationBuilder dependency was unresolvable
-            using var builder = new SubclassBuilder(_configPath);
+            // the loop lives in the ApplicationHost wrapper, which receives the builder through
+            // its constructor: nothing resolves the builder from a container anymore, and no
+            // registration may leak it back in (upper layers must not see the framework)
+            var builder = new SubclassBuilder(_configPath);
 
-            using DesomniaHost host = builder.Build(); // the loop lives in the DesomniaHost wrapper
+            using ApplicationHost host = builder.Build();
 
-            Assert.Same(builder, host.Services.GetService(typeof(ApplicationBuilder)));
+            Assert.Null(host.Services.GetService(typeof(ApplicationBuilder)));
+            Assert.Null(host.Services.GetService(typeof(SubclassBuilder)));
         }
 
         [Fact]
@@ -104,7 +105,7 @@ namespace MadWizard.Desomnia.Tests
 
             IPersistentService first, second;
 
-            using (var builder = new ApplicationBuilder(_configPath))
+            var builder = new ApplicationBuilder(_configPath);
             {
                 builder.RegisterModule(module);
 
@@ -131,7 +132,7 @@ namespace MadWizard.Desomnia.Tests
         [Fact]
         public void RelationshipTypesUsedInsideThePersistentContainer_DoNotShadowAppRegistrationsOnRebuild()
         {
-            using var builder = new ApplicationBuilder(_configPath);
+            var builder = new ApplicationBuilder(_configPath);
 
             builder.RegisterModule(new CollectionPersistentModule());
             builder.RegisterModule(new AppServiceModule());
@@ -197,7 +198,7 @@ namespace MadWizard.Desomnia.Tests
             {
                 var module = new ConfigurableTestModule();
 
-                using var builder = new ApplicationBuilder(envPath);
+                var builder = new ApplicationBuilder(envPath);
 
                 builder.RegisterModule(new ConditionModule());
                 builder.RegisterModule(module);
@@ -221,7 +222,7 @@ namespace MadWizard.Desomnia.Tests
         {
             var module = new ConfigurableTestModule();
 
-            using var builder = new ApplicationBuilder(_configPath);
+            var builder = new ApplicationBuilder(_configPath);
 
             builder.RegisterModule(module);
 

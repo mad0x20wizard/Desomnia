@@ -2,13 +2,13 @@ using Autofac;
 using Autofac.Builder;
 using Autofac.Core;
 using Autofac.Core.Lifetime;
-using Autofac.Core.Resolving;
+using Autofac.Features.Decorators;
 
 namespace MadWizard.Desomnia
 {
     /// <summary>
     /// Bridges the persistent container into a per-configuration application container.
-    /// Every service a module registered in <see cref="Module.LoadOnce(ContainerBuilder, string[])"/>
+    /// Every service a module registered in <see cref="Module.LoadOnce(ContainerBuilder, Microsoft.Extensions.Configuration.IConfiguration)"/>
     /// is answered dynamically: resolution delegates to the persistent container, and the bridged
     /// registrations are externally owned, so a configuration rebuild never disposes the persistent
     /// instances or the OS state they hold. Because this is a registration source, build-time gates
@@ -20,7 +20,7 @@ namespace MadWizard.Desomnia
     /// predicate keeps those behind (each application build runs its own), and exports only the
     /// modules' services. No frozen snapshot: the predicate is re-applied on every resolve.</para>
     /// </summary>
-    internal sealed class PersistentServiceSource : IRegistrationSource
+    internal sealed class FrameworkContainerBridge : IRegistrationSource
     {
         // Autofac's internal collection-ordering key: bridged registrations inherit the
         // persistent registration's sequence number, so application-side IEnumerable<T>
@@ -31,36 +31,15 @@ namespace MadWizard.Desomnia
         private readonly ILifetimeScope _container;
         private readonly Func<Type, bool> _export;
 
-        internal PersistentServiceSource(ILifetimeScope container)
-            : this(container, ExportsModuleServices) { }
+        internal FrameworkContainerBridge(ILifetimeScope container) : this(container, ExportsModuleServices) { }
 
-        internal PersistentServiceSource(ILifetimeScope container, Func<Type, bool> export)
+        internal FrameworkContainerBridge(ILifetimeScope container, Func<Type, bool> export)
         {
+            ValidateLifetimes(container, export);
+
             _container = container;
             _export = export;
         }
-
-        /// <summary>The default export policy: only the modules' own services cross the bridge into
-        /// the inner container. Everything framework — the hosting lifetime and hosted services,
-        /// logging, options, Autofac's own relationship (<c>IEnumerable&lt;T&gt;</c>,
-        /// <c>Func&lt;T&gt;</c>) and self (<see cref="ILifetimeScope"/>, <see cref="IComponentContext"/>)
-        /// registrations, and <see cref="IStartable"/> (which each inner build would start again) —
-        /// lives in a <c>System</c>/<c>Microsoft</c>/<c>Autofac</c> namespace and stays behind, so
-        /// the inner host runs its own.</summary>
-        internal static bool ExportsModuleServices(Type serviceType)
-        {
-            var ns = serviceType.Namespace;
-
-            return ns is not null
-                && !ns.StartsWith("System", StringComparison.Ordinal)
-                && !ns.StartsWith("Microsoft", StringComparison.Ordinal)
-                && !ns.StartsWith("Autofac", StringComparison.Ordinal);
-        }
-
-        // a registration crosses the bridge if any of its services is exported; a registration all
-        // of whose services are framework/relationship types stays private to the persistent host
-        private bool IsExported(IComponentRegistration registration)
-            => registration.Services.OfType<IServiceWithType>().Any(service => _export(service.ServiceType));
 
         /// <summary>Rejects the lifetimes the persistent container cannot carry. An owned
         /// DISPOSABLE transient: every resolve would be tracked by the persistent root's
@@ -80,6 +59,14 @@ namespace MadWizard.Desomnia
             foreach (var registration in container.ComponentRegistry.Registrations)
             {
                 if (!registration.Services.OfType<IServiceWithType>().Any(service => export(service.ServiceType)))
+                    continue;
+
+                // A decorator registration reads as an owned disposable transient, but is not one:
+                // its instances follow the ownership of the registration they decorate – measured
+                // against Autofac 9.3.1, a decorator over an ExternallyOwned service is not
+                // tracked. The decorated registration is validated on its own above, so the
+                // decorator adds nothing the check does not already see.
+                if (registration.Services.Any(service => service is DecoratorService))
                     continue;
 
                 if (registration.Sharing == InstanceSharing.Shared)
@@ -110,9 +97,32 @@ namespace MadWizard.Desomnia
             }
         }
 
-        public bool IsAdapterForIndividualComponents => false;
+        /// <summary>The default export policy: only the modules' own services cross the bridge into
+        /// the inner container. Everything framework — the hosting lifetime and hosted services,
+        /// logging, options, Autofac's own relationship (<c>IEnumerable&lt;T&gt;</c>,
+        /// <c>Func&lt;T&gt;</c>) and self (<see cref="ILifetimeScope"/>, <see cref="IComponentContext"/>)
+        /// registrations, and <see cref="IStartable"/> (which each inner build would start again) —
+        /// lives in a <c>System</c>/<c>Microsoft</c>/<c>Autofac</c> namespace and stays behind, so
+        /// the inner host runs its own.</summary>
+        internal static bool ExportsModuleServices(Type serviceType)
+        {
+            var ns = serviceType.Namespace;
 
-        public IEnumerable<IComponentRegistration> RegistrationsFor(Service service, Func<Service, IEnumerable<ServiceRegistration>> registrationAccessor)
+            return ns is not null
+                && !ns.StartsWith("MadWizard.Desomnia.Application.Lifetime", StringComparison.Ordinal)
+                && !ns.StartsWith("System", StringComparison.Ordinal)
+                && !ns.StartsWith("Microsoft", StringComparison.Ordinal)
+                && !ns.StartsWith("Autofac", StringComparison.Ordinal);
+        }
+
+        // a registration crosses the bridge if any of its services is exported; a registration all
+        // of whose services are framework/relationship types stays private to the persistent host
+        private bool IsExported(IComponentRegistration registration)
+            => registration.Services.OfType<IServiceWithType>().Any(service => _export(service.ServiceType));
+
+        bool IRegistrationSource.IsAdapterForIndividualComponents => false;
+
+        IEnumerable<IComponentRegistration> IRegistrationSource.RegistrationsFor(Service service, Func<Service, IEnumerable<ServiceRegistration>> registrationAccessor)
         {
             if (service is not IServiceWithType typed || !_export(typed.ServiceType))
                 yield break;

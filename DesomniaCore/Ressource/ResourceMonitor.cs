@@ -7,7 +7,8 @@ namespace MadWizard.Desomnia
 
     public class ResourceMonitor<T> : ResourceMonitor, IIEnumerable<T> where T : IInspectable
     {
-        public event Func<T, bool>? Filters;
+        public event Func<T, bool>? TrackingFilter;
+        public event Func<T, bool>? InspectionFilter;
 
         public event EventHandler<InspectableEventArgs<T>>? TrackingStarted;
         public event EventHandler<InspectableEventArgs<T>>? TrackingStopped;
@@ -19,9 +20,9 @@ namespace MadWizard.Desomnia
 
         private bool ShouldTrackRessource(T inspectable)
         {
-            if (Filters != null)
+            if (TrackingFilter != null)
             {
-                foreach (Func<T, bool> filter in Filters.GetInvocationList().Cast<Func<T, bool>>())
+                foreach (Func<T, bool> filter in TrackingFilter.GetInvocationList().Cast<Func<T, bool>>())
                     if (!filter(inspectable))
                         return false;
             }
@@ -77,7 +78,17 @@ namespace MadWizard.Desomnia
             }
         }
 
-        protected virtual bool ShouldInspectResource(T inspectable) => true;
+        protected virtual bool ShouldInspectResource(T inspectable)
+        {
+            if (InspectionFilter != null)
+            {
+                foreach (Func<T, bool> filter in InspectionFilter.GetInvocationList().Cast<Func<T, bool>>())
+                    if (!filter(inspectable))
+                        return false;
+            }
+
+            return true;
+        }
 
         protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
         {

@@ -1,13 +1,25 @@
 using Autofac;
 using MadWizard.Desomnia.Configuration.Binding;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Xml;
 using Microsoft.Extensions.Hosting;
+using System.Xml.Linq;
 
 namespace MadWizard.Desomnia
 {
     public abstract class ConfigurableModule : Module
     {
+        protected internal virtual XDocument MigrateConfiguration(XDocument configuration, uint version) => configuration;
+
         protected internal virtual void ConfigureConfigurationSource(ExtendedXmlConfigurationSource source) { }
+
+        static protected T Bind<T>(IConfiguration configuration)
+        {
+            // the strict binder returns null only for a configuration with no keys at all
+            // (invalid values throw instead) - a legitimately empty persistent configuration
+            // then binds to the type's defaults
+            return StrictConfigurationBinder.Get<T>(configuration, opt => opt.BindNonPublicProperties = true) ?? Activator.CreateInstance<T>();
+        }
     }
 
     public abstract class ConfigurableModule<T> : ConfigurableModule
@@ -31,8 +43,7 @@ namespace MadWizard.Desomnia
 
             // Use the strict vendored binder: unknown keys stay tolerated (open format),
             // but invalid values abort startup instead of being silently swallowed.
-            Config = StrictConfigurationBinder.Get<T>(builder.Configuration, opt => opt.BindNonPublicProperties = true)
-                ?? throw new Exception($"Configuration binding for <{typeof(T).Name}> failed.");
+            Config = Bind<T>(builder.Configuration);
         }
 
         /// <summary>Sealed: configurable modules implement the two-argument overload,

@@ -39,7 +39,10 @@ try
 
     builder.RegisterPluginModules();
 
-    builder.Build().Run();
+    using (var host = builder.Build())
+    {
+        host.Run();
+    }
 
     return Environment.ExitCode;
 }
@@ -60,10 +63,6 @@ catch (Exception ex)
     }
 
     throw;
-}
-finally
-{
-    builder.Dispose();
 }
 
 class DesomniaWindowsBuilder(params string[] args) : MadWizard.Desomnia.ApplicationBuilder(args)

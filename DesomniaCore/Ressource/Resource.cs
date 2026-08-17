@@ -18,8 +18,8 @@ namespace MadWizard.Desomnia
 
         public bool IsIdle { get; private set; } = true;
 
-        [EventOpposite(nameof(Demand))]                       // symmetric: either side's trigger
-        public event EventInvocation? Idle;                   // aborts the other's pending action
+        [EventOpposite(nameof(Demand))] // symmetric: either side's trigger aborts the other's pending action
+        public event EventInvocation? Idle;
         public event EventInvocation? Demand;
 
         protected internal virtual void StartTrackingBy(ResourceMonitor monitor, bool adopt)
@@ -80,8 +80,5 @@ namespace MadWizard.Desomnia
         {
             DetachParent(monitor);
         }
-
-        // the hand-wired action/error bubbling that used to live here is gone —
-        // the engine walks the parent edges and falls back to the root (§6.3)
     }
 }

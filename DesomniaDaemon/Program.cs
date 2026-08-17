@@ -1,13 +1,24 @@
 using MadWizard.Desomnia;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Hosting.Systemd;
 
 if (!Environment.IsPrivilegedProcess)
     throw new NotSupportedException("The application must be run with root privileges.");
 
 using var mutex = new SystemMutex("MadWizard.Desomnia", true);
 
-using (var builder = new DesomniaDaemonBuilder(args))
+DesomniaDaemonBuilder builder;
 {
+    if (SystemdHelpers.IsSystemdService())
+    {
+        builder = new DesomniaSystemDaemonBuilder(args);
+    }
+    else
+    {
+        builder = new DesomniaDaemonBuilder(args);
+    }
+
     builder.RegisterModule<MadWizard.Desomnia.CoreModule>();
 
     builder.RegisterModule<MadWizard.Desomnia.Daemon.PlatformModule>();
@@ -24,7 +35,10 @@ using (var builder = new DesomniaDaemonBuilder(args))
     builder.RegisterPluginModules();
 #endif
 
-    builder.Build().Run();
+    using (var host = builder.Build())
+    {
+        host.Run();
+    }
 }
 
 return Environment.ExitCode;
@@ -53,4 +67,12 @@ class DesomniaDaemonBuilder(string[] args) : MadWizard.Desomnia.ApplicationBuild
 
     protected override string[] DefaultPluginsPaths => useFHS ? [FHS_CORE_PLUGINS_PATH, FHS_USER_PLUGINS_PATH] : base.DefaultPluginsPaths;
     protected override string   DefaultLogPath      => useFHS ? FHS_LOG_PATH : base.DefaultLogPath;
+}
+
+class DesomniaSystemDaemonBuilder(string[] args) : DesomniaDaemonBuilder(args)
+{
+    protected override void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSystemd();
+    }
 }

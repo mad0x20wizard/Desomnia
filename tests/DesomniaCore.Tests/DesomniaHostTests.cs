@@ -1,7 +1,6 @@
 using Autofac;
 using MadWizard.Desomnia.Configuration.Binding;
 using MadWizard.Desomnia.Environments;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Xunit;
@@ -10,7 +9,7 @@ namespace MadWizard.Desomnia.Tests
 {
     /// <summary>
     /// The custom host: the rebuild loop lives outside the container, and fatal
-    /// configuration errors escape <see cref="DesomniaHost.Run"/> back to the process entry
+    /// configuration errors escape <see cref="ApplicationHost.Run"/> back to the process entry
     /// point with a non-zero exit code — the self-heal contract with the service managers.
     /// </summary>
     public class DesomniaHostTests : IDisposable
@@ -41,7 +40,7 @@ namespace MadWizard.Desomnia.Tests
         {
             File.WriteAllText(_configPath, """<SystemMonitor version="6" timeout="banana" />""");
 
-            using var builder = new ApplicationBuilder(_configPath);
+            var builder = new ApplicationBuilder(_configPath);
             builder.RegisterModule(new StrictModule());
 
             var host = builder.Build();
@@ -79,7 +78,7 @@ namespace MadWizard.Desomnia.Tests
         {
             File.WriteAllText(_configPath, """<SystemMonitor version="6" />""");
 
-            using var builder = new ApplicationBuilder(_configPath);
+            var builder = new ApplicationBuilder(_configPath);
             builder.RegisterModule(new SelfStoppingModule());
 
             var host = builder.Build();
@@ -114,7 +113,7 @@ namespace MadWizard.Desomnia.Tests
 
             var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            using var builder = new ApplicationBuilder(_configPath);
+            var builder = new ApplicationBuilder(_configPath);
             builder.RegisterModule(new StartedSignalModule(started));
 
             var host = builder.Build();

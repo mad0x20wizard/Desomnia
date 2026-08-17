@@ -10,7 +10,7 @@ namespace MadWizard.Desomnia
     /// (the linked restart/stop token from the application loop). Mirrors the BCL's own
     /// internal NullLifetime, which is not public.
     /// </summary>
-    internal sealed class PassiveLifetime : IHostLifetime
+    internal sealed class NullLifetime : IHostLifetime
     {
         public Task WaitForStartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 

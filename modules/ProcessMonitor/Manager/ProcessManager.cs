@@ -237,9 +237,12 @@ namespace MadWizard.Desomnia.Processes.Manager
 
         public virtual void Dispose()
         {
-            foreach (var process in this)
+            if (_initialized)
             {
-                process.Dispose();
+                foreach (var process in this)
+                {
+                    process.Dispose();
+                }
             }
         }
     }

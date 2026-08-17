@@ -1,43 +1,28 @@
-using System.ComponentModel;
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using System.Text;
-using System.Xml.Linq;
+using MadWizard.Desomnia.Configuration;
+using MadWizard.Desomnia.Configuration.Model;
+using MadWizard.Desomnia.Configuration.Xml;
+using Microsoft.Extensions.FileProviders;
+using NLog;
 
 namespace Microsoft.Extensions.Configuration.Xml
 {
     /*
-     * Most quirks of the XML format were historically smoothed over here by rewriting the
-     * document before the stock provider parsed it (synthetic "__empty"/"text" attributes,
-     * enum and TimeSpan value rewriting). These live type-aware in
-     * MadWizard.Desomnia.Configuration.Binding.StrictConfigurationBinder now. Only three
-     * fixups remain that must happen on the XML level:
+     * The self-contained XML file source: reads the file through the XmlConfigurationReader
+     * into the abstract ConfigNode form and flattens it into provider data - the same key
+     * layout the stock provider produces, plus what the old pipeline achieved by rewriting
+     * the XML before the stock parse (presence values for bare elements, synthesized names
+     * for nameless collection items), plus document order all the way into GetChildren().
      *
-     *  1. Value-less attributes ("<traffic must ...>") are not well-formed XML and are
-     *     expanded by plain string replacement before parsing.
-     *  2. Self-closing empty elements ("<element/>") produce no configuration key at all,
-     *     so their presence would be invisible to the binder. Forcing them to serialize
-     *     as "<element></element>" makes the provider emit an empty value for them.
-     *  3. Nameless collection elements get a synthesized name attribute. This keeps the
-     *     provider's key layout deterministic: a single element without a name attribute
-     *     would otherwise flatten its attributes directly into the collection section,
-     *     making items indistinguishable from attributes. Which element names form
-     *     collections is no longer registered by hand, but derived from the modules'
-     *     configuration types (see AddCollectionElementsOf).
+     * It stands for itself: no injection points. In the augmenting mode the EnvironmentMonitor
+     * CONSUMES the same reader output and exposes its own configuration source to the host;
+     * this source reaches the host directly only in passthrough mode. File watching is the
+     * stock FileConfigurationSource machinery (ReloadOnChange via IFileProvider.Watch).
      */
-    public class ExtendedXmlConfigurationSource : XmlConfigurationSource
+    public class ExtendedXmlConfigurationSource : XmlConfigurationSource, IPersistentConfigurationSource
     {
-        internal readonly Dictionary<string, AttributeMapping> BooleanAttributes = [];
-        internal readonly HashSet<string> CollectionElements = new(StringComparer.OrdinalIgnoreCase);
-        internal readonly Dictionary<string, CollectionNameBuilder> CollectionNameBuilders = new(StringComparer.OrdinalIgnoreCase);
-
-        /// <summary>
-        /// When set (by the EnvironmentMonitor), the provider loads this stream instead
-        /// of the file contents. Path stays pointed at the file for error reporting.
-        /// </summary>
-        internal Func<Stream>? EffectiveConfiguration { get; set; }
-
-        public delegate string CollectionNameBuilder(XElement element, uint nr);
+        /// <summary>Which element names form collections of complex items - derived from the
+        /// modules' configuration types, shared with the environment merger.</summary>
+        public CollectionElementRegistry Collections { get; } = new();
 
         public ExtendedXmlConfigurationSource(string path, bool optional = false, bool reloadOnChange = false)
         {
@@ -51,12 +36,6 @@ namespace Microsoft.Extensions.Configuration.Xml
             ResolveFileProvider();
         }
 
-        public ExtendedXmlConfigurationSource AddBooleanAttribute(string name, AttributeMapping mapping)
-        {
-            BooleanAttributes.Add(name, mapping);
-            return this;
-        }
-
         /// <summary>
         /// Registers an explicit name builder for nameless elements of the given collection.
         /// Use this when code relies on the synthesized name format (which is otherwise an
@@ -64,8 +43,7 @@ namespace Microsoft.Extensions.Configuration.Xml
         /// </summary>
         public ExtendedXmlConfigurationSource AddCollectionNameBuilder(string elementName, CollectionNameBuilder builder)
         {
-            CollectionNameBuilders[elementName] = builder;
-            CollectionElements.Add(elementName); // an explicit builder also marks the element as a collection
+            Collections.AddCollectionNameBuilder(elementName, builder);
 
             return this;
         }
@@ -77,74 +55,40 @@ namespace Microsoft.Extensions.Configuration.Xml
         /// </summary>
         public ExtendedXmlConfigurationSource AddCollectionElementsOf(Type configType)
         {
-            CollectCollectionElements(configType, []);
+            Collections.AddCollectionElementsOf(configType);
+
             return this;
         }
 
-        private void CollectCollectionElements(Type type, HashSet<Type> visited)
+        /// <summary>
+        /// Reads the <c>&lt;?global key="value"?&gt;</c> processing instructions outside the
+        /// root element — the persistent (process-lifetime) configuration, read before any
+        /// container is built. A missing file yields no entries (the non-optional provider
+        /// reports the missing file when the application configuration is built).
+        /// </summary>
+        public IEnumerable<KeyValuePair<string, string>> LoadPersistentConfiguration()
         {
-            if (IsFrameworkType(type) || !visited.Add(type))
-                return;
+            using var stream = TryOpenFile();
 
-            // run the type initializer, so custom TypeConverters registered there
-            // (e.g. in a static constructor via TypeDescriptor.AddAttributes) take
-            // effect before IsComplexType queries them
-            RuntimeHelpers.RunClassConstructor(type.TypeHandle);
+            if (stream is null)
+                return [];
 
-            for (Type? t = type; t is not null && t != typeof(object); t = t.BaseType)
-            {
-                const BindingFlags declared = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
-
-                foreach (var property in t.GetProperties(declared))
-                {
-                    if (FindComplexItemType(property.PropertyType) is Type itemType)
-                    {
-                        CollectionElements.Add(property.Name);
-
-                        CollectCollectionElements(itemType, visited);
-                    }
-                    else if (IsComplexType(property.PropertyType))
-                    {
-                        CollectCollectionElements(property.PropertyType, visited);
-                    }
-                }
-            }
+            return XmlConfigurationReader.Read(stream).GlobalDirectives
+                .Select(directive => new KeyValuePair<string, string>(directive.Key, directive.Value))
+                .ToList();
         }
 
-        /// <returns>The item type, if the given type is a collection of complex items.</returns>
-        private static Type? FindComplexItemType(Type type)
+        private Stream? TryOpenFile()
         {
-            if (type == typeof(string) || type.IsArray)
-                return null;
+            if (FileProvider?.GetFileInfo(Path!) is { Exists: true, IsDirectory: false } file)
+                return file.CreateReadStream();
 
-            IEnumerable<Type> candidates = type.GetInterfaces();
-            if (type.IsInterface)
-                candidates = candidates.Prepend(type);
-
-            foreach (var candidate in candidates)
-            {
-                if (candidate.IsConstructedGenericType && candidate.GetGenericTypeDefinition() == typeof(IEnumerable<>))
-                {
-                    var itemType = candidate.GenericTypeArguments[0];
-
-                    return IsComplexType(itemType) ? itemType : null;
-                }
-            }
+            // no file provider resolved yet (a relative path before EnsureDefaults)
+            if (FileProvider is null && Path is string path && File.Exists(path))
+                return File.OpenRead(path);
 
             return null;
         }
-
-        /// <returns>true, if the type binds by its children (attributes/elements) rather than from a string value.</returns>
-        private static bool IsComplexType(Type type)
-        {
-            if (!(type.IsClass || type.IsInterface) || type == typeof(string) || IsFrameworkType(type))
-                return false;
-
-            return !TypeDescriptor.GetConverter(type).CanConvertFrom(typeof(string));
-        }
-
-        private static bool IsFrameworkType(Type type)
-            => type.Namespace is string ns && (ns == "System" || ns.StartsWith("System.") || ns.StartsWith("Microsoft."));
 
         public override IConfigurationProvider Build(IConfigurationBuilder builder)
         {
@@ -152,116 +96,73 @@ namespace Microsoft.Extensions.Configuration.Xml
 
             return new CustomXmlConfigurationProvider(this);
         }
-
-        public class AttributeMapping : IIEnumerable<KeyValuePair<string, string>>
-        {
-            readonly Dictionary<string, string> _mappings = [];
-
-            public string this[string key] { get => _mappings[key]; set { _mappings[key] = value; } }
-
-            IEnumerator<KeyValuePair<string, string>> IEnumerable<KeyValuePair<string, string>>.GetEnumerator()
-            {
-                return _mappings.GetEnumerator();
-            }
-        }
     }
 
     class CustomXmlConfigurationProvider(ExtendedXmlConfigurationSource source) : XmlConfigurationProvider(source)
     {
-        internal const string NAME_ATTRIBUTE_NAME = "name";
+        static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
-        public override void Load()
-        {
-            if (source.EffectiveConfiguration is { } effective)
-                Load(effective());
-            else
-                base.Load(); // stock file loading
-        }
+        OrderedConfigurationData _data = OrderedConfigurationData.Empty;
+
+        bool _loaded;
 
         public override void Load(Stream stream)
         {
-            if (source.BooleanAttributes.Count > 0)
-                stream = ReplaceBooleanAttributes(stream);
-
-            using MemoryStream memory = new();
-
-            XDocument xml = XDocument.Load(stream);
-            TraverseNodes(xml.Root!);
-            xml.Save(memory);
-
-            memory.Position = 0;
-
-            base.Load(memory);
-
-            stream.Dispose();
-        }
-
-        private Stream ReplaceBooleanAttributes(Stream input)
-        {
-            // 1. Read Stream into string
-            string content;
-            using (var reader = new StreamReader(input, Encoding.UTF8, true, 1024, leaveOpen: true))
+            try
             {
-                input.Position = 0; // Ensure we're at the start
-                content = reader.ReadToEnd();
+                var file = XmlConfigurationReader.Read(stream);
+
+                _data = new OrderedConfigurationData(
+                    ConfigNodeFlattener.Flatten(file.ToConfigNode(), source.Collections));
+            }
+            catch (Exception ex) when (_loaded)
+            {
+                // a bad edit on the reload path: keep serving the last good data - the
+                // configuration pipeline is the authority that reacts to the bad edit (it
+                // exits the application); the stock behavior of clearing the data would feed
+                // the options system an empty configuration in the meantime
+                Logger.Warn(ex, $"Failed to reload '{source.Path}'; keeping the current configuration data.");
+                return;
             }
 
-            // 2. Perform replacements
-            foreach (var replacement in source.BooleanAttributes)
-            {
-                var key = " " + replacement.Key;
-                var value = " " + string.Join(' ', replacement.Value.Select(attribute => $"{attribute.Key}=\"{attribute.Value}\""));
+            Data = _data.Data;
 
-                // IMPROVE this is a simple string replacement, which may not be safe for all XML content
-
-                content = content.Replace(key, value, StringComparison.InvariantCultureIgnoreCase);
-            }
-
-            // 3. Convert string back to Stream
-            return new MemoryStream(Encoding.UTF8.GetBytes(content));
+            _loaded = true;
         }
 
-        private void TraverseNodes(XElement element)
+        /// <summary>
+        /// Values always come from the last successfully loaded data — NOT from the base
+        /// class's <c>Data</c>: the stock reload path clears <c>Data</c> when the watched
+        /// file is momentarily missing (an editor's delete+rename save) without ever calling
+        /// <see cref="Load(Stream)"/>, which would serve an empty configuration while
+        /// <see cref="GetChildKeys"/> still enumerates the old sections. Reading through
+        /// _data keeps values and child keys consistent and last-good.
+        /// </summary>
+        public override bool TryGet(string key, out string? value)
+            => _data.Data.TryGetValue(key, out value);
+
+        /// <summary>Child keys in document order (the stock provider would sort them),
+        /// so collection binding sees items exactly as they were written.</summary>
+        public override IEnumerable<string> GetChildKeys(IEnumerable<string> earlierKeys, string? parentPath)
+            => _data.GetChildKeys(earlierKeys, parentPath);
+    }
+
+    public static class FileConfigurationSourceExt
+    {
+        extension (FileConfigurationSource source)
         {
-            SupportNamelessCollectionElements(element);
-
-            SupportEmptyNode(element);
-
-            foreach (XElement childElement in element.Elements())
-                TraverseNodes(childElement);
-        }
-
-        private void SupportNamelessCollectionElements(XElement element)
-        {
-            Dictionary<string, uint>? counters = null;
-
-            foreach (var child in element.Elements())
+            public string? FullPath
             {
-                var elementName = child.Name.LocalName;
-
-                if (source.CollectionElements.Contains(elementName))
+                get
                 {
-                    if (child.Attribute(NAME_ATTRIBUTE_NAME) is null)
+                    if (source.Path != null)
+                    if (source.FileProvider is PhysicalFileProvider provider)
                     {
-                        counters ??= new(StringComparer.OrdinalIgnoreCase);
-                        counters.TryGetValue(elementName, out uint nr);
-                        counters[elementName] = ++nr;
-
-                        var name = source.CollectionNameBuilders.TryGetValue(elementName, out var builder)
-                            ? builder(child, nr)
-                            : $"{elementName}#{nr}";
-
-                        child.Add(new XAttribute(NAME_ATTRIBUTE_NAME, name));
+                        return Path.Combine(provider.Root, source.Path);
                     }
-                }
-            }
-        }
 
-        private static void SupportEmptyNode(XElement element)
-        {
-            if (!(element.HasAttributes || element.Nodes().Any()))
-            {
-                element.Add(new XText(string.Empty)); // force "<x></x>", so the element emits an (empty) value
+                    return source.Path;
+                }
             }
         }
     }

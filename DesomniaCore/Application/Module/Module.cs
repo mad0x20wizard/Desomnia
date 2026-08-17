@@ -1,4 +1,5 @@
 using Autofac;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using NLog.Config;
 
@@ -24,17 +25,20 @@ namespace MadWizard.Desomnia
         /// bridged resolve surfaces one). Per-scope lifetimes are rejected, and
         /// open-generic registrations are not bridged — register closed types.
         /// Every registration is bridged into each application container by the
-        /// <see cref="PersistentServiceSource"/>, so the application resolves and uses
+        /// <see cref="FrameworkContainerBridge"/>, so the application resolves and uses
         /// the services but never disposes them.
         /// </summary>
         protected internal virtual void LoadOnce(ContainerBuilder builder) { }
 
         /// <summary>
-        /// The command-line-aware overload of <see cref="LoadOnce(ContainerBuilder)"/>, so a
-        /// module can parse its own process-bound options (each parses the ones it needs,
-        /// ignoring the rest) and register accordingly. The default forwards to the
-        /// argument-less overload; a module that needs the command line overrides this one.
+        /// The configuration-aware overload of <see cref="LoadOnce(ContainerBuilder)"/>: it
+        /// receives the persistent configuration — the <c>&lt;?global key="value"?&gt;</c>
+        /// directives of the configuration file, read before any container is built — so a
+        /// module can bind its own process-bound options (each binds the sections it needs,
+        /// ignoring the rest) and register accordingly. The configuration may be empty
+        /// (persistent configuration is optional); bind against defaults. The default
+        /// implementation forwards to the argument-less overload.
         /// </summary>
-        protected internal virtual void LoadOnce(ContainerBuilder builder, string[] args) => LoadOnce(builder);
+        protected internal virtual void LoadOnce(ContainerBuilder builder, IConfiguration config) => LoadOnce(builder);
     }
 }

@@ -59,7 +59,7 @@ namespace MadWizard.Desomnia.Tests
 
             var monitor = new EnvironmentMonitor { Logger = NullLogger.Instance };
 
-            var pipeline = new ConfigurationPipeline(source, _path,
+            var pipeline = new ConfigurationPipeline(source,
                 persistent ?? PersistentConfiguration.Empty, monitor, Conditions(toggle))
             {
                 Logger = NullLogger.Instance,
@@ -327,8 +327,7 @@ namespace MadWizard.Desomnia.Tests
 
             var (pipeline, monitor) = CreatePipeline();
 
-            using var exporter = new Environments.Export.EffectiveXmlExporter { Logger = NullLogger.Instance };
-            monitor.EffectiveChanged += exporter.Export;
+            using var exporter = new Environments.Export.EffectiveXMLExporter(monitor) { Logger = NullLogger.Instance };
 
             pipeline.Start();
 

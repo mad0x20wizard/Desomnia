@@ -1,6 +1,10 @@
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
+using MadWizard.Desomnia.Application;
+using MadWizard.Desomnia.Application.Module;
+using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Environments;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Xml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -18,44 +22,28 @@ namespace MadWizard.Desomnia
      * The builder is long-lived: modules are registered exactly once and survive application
      * restarts. Build() raises the persistent host — a Microsoft.Extensions host whose intrinsic
      * Autofac container is the machine-lifetime scope: it owns the process lifetime, the OS-facing
-     * singletons (LoadOnce), the configuration authority and the rebuild loop. Each configuration
-     * rebuild is a fresh inner host (BuildApplication) bridged to that same persistent scope.
+     * singletons (LoadOnce) and the configuration authorities (pipeline + monitor) — and wraps it
+     * in the DesomniaHost, whose loop builds, runs and rebuilds the inner application hosts
+     * (BuildApplication), each bridged to that same persistent scope.
      */
-    public class ApplicationBuilder : IDisposable
+    public class ApplicationBuilder
     {
         const string CONFIG_FILE_NAME = "monitor.xml";
         const string NLOG_CONFIG_FILE_NAME = "NLog.config";
 
-        // the process command line, captured at construction and reaching the hosts' Configuration
-        readonly string[] _args;
+        protected readonly ExtendedXmlConfigurationSource _source;
 
-        /// <summary>The configuration file the hosts build from. Constant for the process; the
-        /// application loop rebuilds from this same path.</summary>
-        internal protected string ConfigPath { get; private init; }
+        // the boot-time snapshot of the source's persistent configuration (the <?global?>
+        // directives); read in Build(), before any container exists, and immutable from then
+        // on - a reload that yields different entries is fatal (restart to apply)
+        private PersistentConfiguration _persistentConfiguration = PersistentConfiguration.Empty;
 
         readonly List<Module> _modules = [];
 
         // the persistent host and its Autofac container (the machine-lifetime scope). Built once by
         // Build(), disposed only when the whole application stops — NOT on a configuration rebuild,
         // so the services and the OS state they hold survive reconfiguration
-        private IHost? _host;
-        private ILifetimeScope? _persistent;
-
-        /// <summary>Whether the loop watches the configuration file and rebuilds on a change.
-        /// A process-bound convenience: defaulted from the command line, and a platform may set it
-        /// directly (the Windows service always reloads).</summary>
-        public bool AutoReload { get; set; }
-
-        /// <summary>The path watched for auto-reload, when it differs from the configuration file.</summary>
-        public string? AutoReloadPath { get; set; }
-
-        /// <summary>Whether to wait for a debugger before starting; defaulted from the command line.</summary>
-        public bool Debug { get; set; }
-
-        /// <summary>The outer host's total stop budget: it must exceed an inner host's own
-        /// shutdown plus the persistent container's disposal, or the SCM's managed wait gives
-        /// up and reports the service stopped while teardown is still running.</summary>
-        protected virtual TimeSpan OuterShutdownTimeout => TimeSpan.FromSeconds(60);
+        private ILifetimeScope? _root;
 
         #region Defaults
         protected virtual string DefaultLogLevelFormat => "${pad:padding=5:inner=${level:uppercase=true}}";
@@ -108,49 +96,23 @@ namespace MadWizard.Desomnia
         }
 
         /**
-        * Ideally the ContextRootPath should be left empty,
-        * because the runtime will install file system watches
-        * for every file below that path. On Linux this can
-        * extend to the whole file system, if run as a systemd unit.
-        */
+         * Ideally the ContextRootPath should be left empty,
+         * because the runtime will install file system watches
+         * for every file below that path. On Linux this can
+         * extend to the whole file system, if run as a systemd unit.
+         */
         protected virtual HostApplicationBuilderSettings DefaultSettings => new()
         {
             DisableDefaults = true // don't set ContextRootPath to working directory
         };
+
+        protected virtual HostApplicationBuilderSettings DefaultApplicationSettings => new()
+        {
+            DisableDefaults = true 
+        };
         #endregion
 
-        protected ApplicationBuilder(string[] args)
-        {
-            _args = args;
-
-            // global process-bound options, parsed off the command line as a convenience; a
-            // platform may still set them directly after construction (the Windows service always
-            // enables auto-reload)
-            AutoReload = HasFlag("--auto-reload") || HasFlag("-a");
-            AutoReloadPath = FlagValue("--auto-reload-path") ?? FlagValue("-p");
-            Debug = HasFlag("--debug");
-
-            if (Debug)
-                Test.Debugger.UntilAttached().Wait();
-
-            ConfigPath = LookupConfigPath();
-
-            bool HasFlag(string name) => Array.IndexOf(args, name) >= 0;
-            string? FlagValue(string name)
-            {
-                var index = Array.IndexOf(args, name);
-                return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
-            }
-        }
-
-        /// <summary>Test seam: a builder bound to a fixed configuration file, with no command line.</summary>
-        internal ApplicationBuilder(string configPath)
-        {
-            _args = [];
-
-            ConfigPath = configPath;
-        }
-
+        #region Config path lookup
         private static string? LookupPath(IEnumerable<string> paths)
         {
             foreach (var path in paths)
@@ -168,12 +130,89 @@ namespace MadWizard.Desomnia
         {
             return LookupPath(DefaultConfigPaths.Select(p => Path.Combine(p, CONFIG_FILE_NAME))) ?? CONFIG_FILE_NAME;
         }
+        #endregion
 
+        internal ApplicationBuilder(string? configPath = null)
+        {
+            configPath = Path.GetFullPath(configPath ?? LookupConfigPath());
+
+            _source = new ExtendedXmlConfigurationSource(configPath, optional: false);
+        }
+
+        protected ApplicationBuilder(string[] args) : this()
+        {
+            var result = new ApplicationCommandLine().Parse(args);
+
+            if (_source is FileConfigurationSource file)
+            {
+                file.ReloadOnChange = result.GetValue(ApplicationCommandLine.AutoReloadOption);
+            }
+
+            result.Invoke();
+        }
+
+        #region Platform registrations
+        public void RegisterModule(Module module)
+        {
+            _modules.Add(module);
+        }
+
+        public void RegisterPluginModules()
+        {
+            foreach (var path in DefaultPluginsPaths)
+            {
+                this.RegisterPluginModules(path);
+            }
+        }
+        #endregion
+
+        protected virtual void ConfigureConfigurationSource(IConfigurationSource source)
+        {
+            if (source is ExtendedXmlConfigurationSource xml)
+            {
+                // the collection-element knowledge must exist before the pipeline reads the file
+                // (the merger and the flattener need it); contributed by every configurable module
+                foreach (var module in _modules.OfType<ConfigurableModule>())
+                {
+                    module.ConfigureConfigurationSource(xml);
+                }
+
+                // the persistent configuration must exist before the container it configures;
+                // a malformed configuration file is fatal here - there is nothing to fall back to
+                _persistentConfiguration = PersistentConfiguration.LoadFrom(_source);
+            }
+        }
+
+        #region Build Application Host
         /// <summary>
-        /// One-time global NLog setup. Per-host logging providers are wired
-        /// per host in <see cref="Build"/> and <see cref="BuildApplication"/>.
+        /// Builds the persistent host — the process-lifetime Microsoft.Extensions host whose
+        /// intrinsic Autofac container is the machine-lifetime scope: the real
+        /// <see cref="IHostLifetime"/> (the Windows service in service mode, the console lifetime
+        /// otherwise), every module's <see cref="Module.LoadOnce(ContainerBuilder, Microsoft.Extensions.Configuration.IConfiguration)"/>
+        /// singletons and the configuration authorities — and returns it wrapped in the
+        /// <see cref="ApplicationHost"/>, whose loop builds, runs and rebuilds the inner application
+        /// hosts. Only a genuine process stop or a fatal configuration brings it down; a fatal
+        /// escapes <see cref="ApplicationHost.Run"/> to the entry point with a non-zero exit code.
         /// </summary>
-        protected virtual void ConfigureLogging()
+        public ApplicationHost Build()
+        {
+            ConfigureConfigurationSource(_source);
+
+            var builder = new HostApplicationBuilder(DefaultSettings);
+
+            ConfigureLogging(builder.Logging);
+            ConfigureServices(builder.Services);
+
+            builder.ConfigureContainer(new AutofacServiceProviderFactory(), ConfigureContainer);
+
+            var host = builder.Build();
+
+            _root = host.Services.GetAutofacRoot();
+
+            return new ApplicationHost(host, this);
+        }
+
+        protected virtual void ConfigureLogging(ILoggingBuilder builder)
         {
             foreach (var module in _modules)
             {
@@ -218,108 +257,56 @@ namespace MadWizard.Desomnia
             };
 
             LogManager.Configuration = config;
-        }
-
-        /// <summary>
-        /// Builds the persistent host: the process-lifetime Microsoft.Extensions host whose
-        /// intrinsic Autofac container is the machine-lifetime scope. It owns the real
-        /// <see cref="IHostLifetime"/> (the Windows service in service mode, the console lifetime
-        /// otherwise), every module's <see cref="Module.LoadOnce(ContainerBuilder, string[])"/>
-        /// singletons, the configuration authority and the rebuild loop. Running the returned host
-        /// drives the loop in-process; only a genuine process stop or a fatal configuration brings
-        /// it down.
-        /// </summary>
-        public IHost Build()
-        {
-            ConfigureLogging();
-
-            var builder = new HostApplicationBuilder(new HostApplicationBuilderSettings
-            {
-                Args = _args,           // reaches Configuration even under DisableDefaults
-                DisableDefaults = true, // don't set ContentRootPath to the working directory
-            });
 
             // the process's one logging stack: NLog's LogManager is global, so the provider that
             // fronts it belongs to the host that lives as long as the process. The inner hosts
             // share this factory instead of each bringing their own (see ConfigureApplication).
-            builder.Logging.ClearProviders();
-            builder.Logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
-            builder.Logging.AddNLog();
-
-            builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = OuterShutdownTimeout);
-
-            // the default process lifetime (DisableDefaults skips the framework's own): the console
-            // lifetime handles Ctrl+C and SIGTERM, so systemd/launchd stop the daemons gracefully.
-            // A platform (the Windows service) registers its own IHostLifetime in LoadOnce, later,
-            // so it wins the single resolve — this one is then never constructed.
-            builder.Services.AddSingleton<IHostLifetime, Microsoft.Extensions.Hosting.Internal.ConsoleLifetime>();
-
-            builder.ConfigureContainer(new AutofacServiceProviderFactory(), ConfigurePersistent);
-
-            _host = builder.Build();
-
-            _persistent = _host.Services.GetAutofacRoot();
-
-            PersistentServiceSource.ValidateLifetimes(_persistent);
-
-            // resolve and activate the configuration authority now (compute the effective config,
-            // start watching), so its watchers run before the loop builds the first inner host
-            var environment = _persistent.Resolve<EnvironmentMonitor>();
-            environment.EnableAutoReload(AutoReload, AutoReloadPath);
-            environment.Activate(CollectionElements(), _persistent);
-
-            return _host;
+            builder.ClearProviders();
+            builder.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
+            builder.AddNLog();
         }
 
-        private void ConfigurePersistent(ContainerBuilder container)
+        protected virtual void ConfigureServices(IServiceCollection services) { }
+
+        protected virtual void ConfigureContainer(ContainerBuilder container)
         {
-            // the builder itself, so the loop can rebuild inner hosts. As<ApplicationBuilder>, NOT
-            // AsSelf: `this` is a platform subclass (e.g. DesomniaWindowsServiceBuilder), and AsSelf
-            // would register only that runtime type, leaving the loop's ApplicationBuilder dependency
-            // unresolvable. Externally owned: the host owns this instance, not its own container.
-            container.RegisterInstance(this).As<ApplicationBuilder>().ExternallyOwned();
+            container.RegisterModule<LoggingModule>();
 
-            // the configuration authority: created with the constant config path, resolved as a
-            // managed component. Detect handles the <EnvironmentMonitor> (augmenting) mode, and
-            // Passthrough the classic <SystemMonitor> — so the application always has one
-            container.Register(_ => EnvironmentMonitor.Detect(ConfigPath) ?? EnvironmentMonitor.Passthrough(ConfigPath))
-                .AsSelf()
+            container.RegisterModule<FrameworkModule>();
+
+            // the stage between the physical file and the monitor: mode detection, parsing,
+            // condition binding, change watching - and the fatal-exit policy for changes the
+            // running process cannot apply
+            container.RegisterType<ConfigurationPipeline>()
+                .WithParameter(TypedParameter.From(_source))
+                .AsImplementedInterfaces().AsSelf()
                 .SingleInstance();
 
-            // the rebuild loop — the persistent host's one hosted service; the host starts it, and
-            // it builds, runs and rebuilds the inner application hosts
-            container.RegisterType<ApplicationLoopService>()
-                .As<IHostedService>()
-                .SingleInstance();
+            // the boot snapshot, so the configuration pipeline can detect a changed
+            // persistent configuration on reload (which is fatal: restart to apply)
+            container.RegisterInstance(_persistentConfiguration).AsSelf().ExternallyOwned();
 
             foreach (var module in _modules)
             {
-                module.LoadOnce(container, _args);
+                module.LoadOnce(container, _persistentConfiguration.Configuration);
             }
         }
+        #endregion
 
-        /// <summary>Builds a fresh inner application host for one effective configuration, bridged
-        /// to the persistent scope. Disposed (and rebuilt) by the loop on every reconfiguration.</summary>
+        #region Build Application
+        /// <summary>
+        /// Builds a fresh inner application host for one effective configuration, bridged
+        /// to the persistent scope. Disposed (and rebuilt) by the loop on every reconfiguration.
+        /// </summary>
         public IHost BuildApplication()
         {
-            var builder = new HostApplicationBuilder(DefaultSettings);
+            var builder = new HostApplicationBuilder(DefaultApplicationSettings);
 
-            // the inner host must NOT own the process lifetime — that belongs to the persistent
-            // host alone. A rebuild stops the inner host through the loop's linked token, never
-            // through a console/SCM signal, so it gets the no-op lifetime.
-            builder.Services.RemoveAll<IHostLifetime>();
-            builder.Services.AddSingleton<IHostLifetime, PassiveLifetime>();
+            ConfigureApplicationServices(builder.Services);
 
-            builder.ConfigureContainer(new AutofacServiceProviderFactory(), ConfigureApplication);
+            builder.ConfigureContainer(new AutofacServiceProviderFactory(), ConfigureApplicationContainer);
 
-            // deliberately no logging provider of its own: an NLog provider flushes the
-            // process-global LogManager when it is disposed (NLogLoggerProvider.Dispose ->
-            // LogFactory.Flush / FlushAsync), so every reload would flush the whole process's
-            // logging — wasted work whose timeout surfaces as an unobserved TaskCanceledException.
-            // The persistent factory is bridged in by ConfigureApplication instead.
-            builder.Logging.ClearProviders();
-
-            LoadConfiguration(builder, ConfigPath);
+            LoadConfiguration(builder);
 
             foreach (var module in _modules)
             {
@@ -329,28 +316,35 @@ namespace MadWizard.Desomnia
             return builder.Build();
         }
 
-        private void ConfigureApplication(ContainerBuilder container)
+        private void ConfigureApplicationServices(IServiceCollection services)
         {
-            // bridge the persistent services in first, so registrations that gate on them
-            // (e.g. the DisplayMonitor's OnlyIf IDisplayManager) see them at build time. The bridge's
-            // export policy keeps the persistent host's framework services (hosting, options, the
-            // loop) out of the inner container — it runs its own.
-            container.RegisterSource(new PersistentServiceSource(_persistent!));
+            services.RemoveAll<IHostLifetime>(); // start with a blank slate
 
-            // logging is the exception the policy cannot express, because it is process-global:
-            // NLog's LogManager is, so the factory fronting it must be too. Registered after the
-            // framework's own (populated from builder.Services) so this one answers, and
-            // externally owned so a rebuild disposing this container never touches it.
-            container.RegisterInstance(_persistent!.Resolve<ILoggerFactory>())
-                .As<ILoggerFactory>()
-                .ExternallyOwned();
+            // the inner host must NOT own the process lifetime — that belongs to the persistent
+            // host alone. A rebuild stops the inner host through the loop's linked token, never
+            // through a console/SCM signal, so it gets the no-op lifetime.
+            services.AddSingleton<IHostLifetime, NullLifetime>();
+        }
 
-            container.RegisterSource(new OrderedCollectionSource());
+        private void ConfigureApplicationContainer(ContainerBuilder container)
+        {
+            if (_root is not ILifetimeScope scope)
+                throw new Exception("Application must be created after root scope.");
+
+            container.RegisterModule<LoggingModule>();
 
             if (!RuntimeFeature.IsDynamicCodeSupported)
             {
-                container.RegisterSource(new AOTMetadataViewSource());
+                container.RegisterModule<AOTModule>();
             }
+
+            container.RegisterModule(new FrameworkBridgeModule(scope));
+
+            // takes over the collection relationship (IEnumerable<T>, T[], ...) so .WithPriority() on a
+            // registration is all it takes to order it. Must stay a plain RegisterSource call here: the
+            // container's default adapters are added before the configuration callbacks run, and the
+            // later-added source is the one consulted first.
+            container.RegisterSource(new PriorityEnumerationSource());
 
             foreach (var module in _modules)
             {
@@ -358,53 +352,21 @@ namespace MadWizard.Desomnia
             }
         }
 
-        /// <summary>Disposes the persistent host — and with it the Autofac container, restoring the
-        /// OS state the machine-lifetime services hold. The application is stopping for good
-        /// (a configuration rebuild keeps this builder, and the host, alive). Idempotent: the host
-        /// also disposes itself when its run returns.</summary>
-        public void Dispose() => _host?.Dispose();
-
-        public void RegisterModule(Module module)
+        private void LoadConfiguration(HostApplicationBuilder builder)
         {
-            _modules.Add(module);
+            if (_root is not ILifetimeScope scope)
+                throw new Exception("Configuration must be loaded after root scope.");
+
+            // start the configuration pipeline now (read the file, feed the monitor, watch
+            // for changes), so its change sources run before the loop builds the first inner
+            // host. A configuration problem here is fatal - there is nothing to fall back to.
+            var pipeline    = scope.Resolve<ConfigurationPipeline>();
+            var monitor     = scope.Resolve<EnvironmentMonitor>();
+
+            monitor.ResetReloadToken();
+
+            builder.Configuration.Sources.Add(pipeline.EffectiveSource);
         }
-
-        public void RegisterPluginModules()
-        {
-            foreach(var path in DefaultPluginsPaths)
-            {
-                this.RegisterPluginModules(path);
-            }
-        }
-
-        private void LoadConfiguration(HostApplicationBuilder builder, string path)
-        {
-            var source = new ExtendedXmlConfigurationSource(path, optional: false);
-
-            foreach (var module in _modules.OfType<ConfigurableModule>())
-            {
-                module.ConfigureConfigurationSource(source);
-            }
-
-            // the authority injects the current effective configuration (augmenting mode) or leaves
-            // the source to read the file (passthrough), and arms this build's reload token
-            _persistent!.Resolve<EnvironmentMonitor>().InjectInto(source);
-
-            builder.Configuration.Sources.Add(source);
-        }
-
-        /// <summary>The collection element names derived from every configurable module's config
-        /// type — needed by the environment merger and stable across builds.</summary>
-        private IReadOnlySet<string> CollectionElements()
-        {
-            var source = new ExtendedXmlConfigurationSource(ConfigPath, optional: true);
-
-            foreach (var module in _modules.OfType<ConfigurableModule>())
-            {
-                module.ConfigureConfigurationSource(source);
-            }
-
-            return new HashSet<string>(source.CollectionElements, StringComparer.OrdinalIgnoreCase);
-        }
+        #endregion
     }
 }

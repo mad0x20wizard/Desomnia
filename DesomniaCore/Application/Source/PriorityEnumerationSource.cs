@@ -15,7 +15,7 @@ namespace MadWizard.Desomnia
         /// <summary>
         /// Attaches ordering metadata to an arbitrary registration, defining its position whenever the
         /// component is resolved as part of a collection — <see cref="IEnumerable{T}"/>, <c>T[]</c>,
-        /// <see cref="IList{T}"/>, ... (see <see cref="PriorityCollectionSource"/>). Lower values come
+        /// <see cref="IList{T}"/>, ... (see <see cref="PriorityEnumerationSource"/>). Lower values come
         /// first; registrations without a priority default to 0 and keep their registration order.
         /// Nothing is required of the consuming side: it just resolves the collection.
         /// </summary>
@@ -65,7 +65,7 @@ namespace MadWizard.Desomnia
                         "built-in source), so both List<T> and the array type are shared native code.")]
     [UnconditionalSuppressMessage("Trimming", "IL2055",
         Justification = "List<T> is closed over reference types only, and lives in the BCL which the trimmer keeps.")]
-    internal sealed class PriorityCollectionSource : IRegistrationSource
+    internal sealed class PriorityEnumerationSource : IRegistrationSource
     {
         /// <summary>The interfaces Autofac answers with a <see cref="List{T}"/> rather than an array.</summary>
         private static readonly HashSet<Type> ListTypes =

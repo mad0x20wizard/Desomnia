@@ -41,7 +41,7 @@ namespace MadWizard.Desomnia.Tests
         {
             var builder = new ContainerBuilder();
 
-            builder.RegisterSource(new PriorityCollectionSource());
+            builder.RegisterSource(new PriorityEnumerationSource());
 
             builder.RegisterType<DetectorA>().As<IDetector>().WithPriority(2);
             builder.RegisterType<DetectorB>().As<IDetector>();          // no priority — counts as 0

@@ -15,11 +15,11 @@ namespace MadWizard.Desomnia.Network.Manager
     /// <see cref="INetworkInterface.ShouldBeDisabled"/> intent are additionally held strongly,
     /// so the intent survives a disconnection — on Windows the disable itself removes the
     /// adapter from the enumeration, and it is exactly that hidden adapter whose intent must
-    /// outlive it. Intents still applied when the manager is disposed (persistent container
-    /// teardown = process exit) are restored, so a stopped Desomnia never leaves the machine
-    /// without its interfaces.
+    /// outlive it. Intents still applied when the manager is stopped (the persistent host's
+    /// stop phase — see <see cref="IAsyncStoppable"/> — with disposal as the backstop) are
+    /// restored, so a stopped Desomnia never leaves the machine without its interfaces.
     /// </summary>
-    public abstract class NetworkInterfaceManager : INetworkInterfaceManager, IDisposable
+    public abstract class NetworkInterfaceManager : INetworkInterfaceManager, IAsyncStoppable, IDisposable
     {
         internal const string SSID_UNSUPPORTED = "This platform exposes no wireless information; "
             + "only a platform host's " + nameof(NetworkInterfaceManager) + " can answer an SSID.";
@@ -36,11 +36,11 @@ namespace MadWizard.Desomnia.Network.Manager
 
         private readonly InterfaceMemory _memory = new();
 
-        /// <summary>Set under the lock by <see cref="Dispose"/>. Unsubscribing the
-        /// NetworkChange statics does not stop an already-dispatched handler: a change in
-        /// flight parks on the lock while the self-heal runs and proceeds once it is
-        /// released — it must find a dead manager then, never re-apply an intent nobody
-        /// is left to heal.</summary>
+        /// <summary>Set under the lock by <see cref="Shutdown"/> (the stop phase, or the
+        /// <see cref="Dispose"/> backstop). Unsubscribing the NetworkChange statics does not
+        /// stop an already-dispatched handler: a change in flight parks on the lock while
+        /// the self-heal runs and proceeds once it is released — it must find a dead manager
+        /// then, never re-apply an intent nobody is left to heal.</summary>
         private bool _disposed;
 
         /// <summary>How many detached handles the weak memory currently tracks — a test
@@ -366,13 +366,36 @@ namespace MadWizard.Desomnia.Network.Manager
         }
         #endregion
 
-        public virtual void Dispose() // self-heal: never leave interfaces disabled behind
+        /// <summary>The stop phase (see <see cref="IAsyncStoppable"/>): the self-heal runs
+        /// here, while the process lifetime still waits — on Windows, before the SCM is told
+        /// the service stopped. The restore is synchronous OS work (CIM on Windows); the
+        /// token cannot interrupt it mid-call, the shutdown timeout bounds it from outside.</summary>
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            Shutdown();
+
+            return Task.CompletedTask;
+        }
+
+        /// <summary>Backstop for a teardown that never ran the stop phase (tests, a faulted
+        /// host); after <see cref="StopAsync"/> did its work, this is a no-op.</summary>
+        public virtual void Dispose()
+        {
+            Shutdown();
+
+            GC.SuppressFinalize(this);
+        }
+
+        private void Shutdown() // self-heal: never leave interfaces disabled behind
         {
             NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged;
             NetworkChange.NetworkAvailabilityChanged -= OnNetworkAvailabilityChanged;
 
             lock (_lock)
             {
+                if (_disposed)
+                    return; // the stop phase already healed; the disposal backstop finds nothing to do
+
                 _disposed = true;
 
                 foreach (var handle in _intents.Values)
@@ -418,8 +441,6 @@ namespace MadWizard.Desomnia.Network.Manager
 
                 _intents.Clear();
             }
-
-            GC.SuppressFinalize(this);
         }
     }
 

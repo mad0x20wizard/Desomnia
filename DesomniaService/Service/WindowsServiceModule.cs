@@ -17,9 +17,9 @@ namespace MadWizard.Desomnia.Service.Windows
             //
             // ExternallyOwned, because disposing this instance is NOT the container's business:
             // ServiceBase.Run disposes it in its own finally the moment the SCM dispatcher returns,
-            // outside Autofac and beyond any registration order. Ownership therefore stays where
-            // the disposal actually happens — see WindowsService.ShutdownApplication, which is what
-            // keeps the container's teardown ahead of that.
+            // outside Autofac and beyond any registration order. The container's teardown no longer
+            // needs to beat that race: the OS-state restore runs in the persistent host's stop
+            // phase (IAsyncStoppable via the ShutdownCoordinator), inside the SCM stop window.
             builder.RegisterType<WindowsService>().AsSelf()
                 .AsImplementedInterfaces()
                 .ExternallyOwned()

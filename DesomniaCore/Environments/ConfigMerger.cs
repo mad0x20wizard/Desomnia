@@ -1,20 +1,23 @@
+using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Configuration.Binding;
+using MadWizard.Desomnia.Configuration.Model;
 using NLog;
-using System.Xml.Linq;
 
 namespace MadWizard.Desomnia.Environments
 {
     /// <summary>
     /// Merges the &lt;SystemMonitor&gt; contents of all active environment blocks
-    /// (in document order) into one effective configuration. Elements are identified
+    /// (in document order) into one effective configuration tree. Nodes are identified
     /// by their name plus their "name" attribute; nameless collection items (as derived
     /// from the modules' config types) are distinct instances and are appended instead
-    /// of merged.
+    /// of merged. An attribute and a same-named element merge as one value — the physical
+    /// form is not part of a node's identity (the first block's form wins the written form,
+    /// the priority rules decide the value).
     ///
     /// Conflicting values are decided by the blocks' priority - higher supersedes,
     /// regardless of document order. Between EQUAL priorities the onConflict setting
     /// applies: the later block wins (default), the earlier keeps its value, or the
-    /// conflict aborts startup. Every merged value is annotated with its origin
+    /// conflict aborts startup. Every merged node is annotated with its origin
     /// (block priority + name), since annotations are what makes this decidable
     /// after the fold has mixed several blocks into one tree.
     /// </summary>
@@ -22,127 +25,101 @@ namespace MadWizard.Desomnia.Environments
     {
         static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
-        const string NAME_ATTRIBUTE = "name";
-
         /// <summary>Provenance of a merged value: which environment set it, at which priority.</summary>
         private sealed record MergeOrigin(int Priority, string Environment);
 
-        public static XElement Merge(IEnumerable<EnvironmentBlock> blocks, IReadOnlySet<string> collectionElements, ConflictResolution onConflict)
+        public static ConfigNode Merge(IEnumerable<EnvironmentBlock> blocks, CollectionElementRegistry collections, ConflictResolution onConflict)
         {
-            XElement? result = null;
+            ConfigNode? result = null;
 
             foreach (var block in blocks)
             {
                 var origin = new MergeOrigin(block.Priority, block.DisplayName);
 
                 if (result is null)
-                    result = Annotate(new XElement(block.Content), origin);
+                    result = Annotate(block.Content.Clone(), origin);
                 else
-                    MergeElement(result, block.Content, origin, collectionElements, onConflict);
+                    MergeNode(result, block.Content, origin, collections, onConflict);
             }
 
-            return result ?? new XElement(EnvironmentParser.SYSTEM_MONITOR_ELEMENT);
+            return result ?? new ConfigNode(EnvironmentParser.SYSTEM_MONITOR_ELEMENT, ConfigNodeKind.Element);
         }
 
-        private static void MergeElement(XElement target, XElement source, MergeOrigin origin, IReadOnlySet<string> collectionElements, ConflictResolution onConflict)
+        private static void MergeNode(ConfigNode target, ConfigNode source, MergeOrigin origin, CollectionElementRegistry collections, ConflictResolution onConflict)
         {
-            MergeAttributes(target, source, origin, onConflict);
+            MergeValue(target, source, origin, onConflict);
 
-            MergeText(target, source, origin, onConflict);
-
-            foreach (var child in source.Elements())
+            foreach (var child in source.Children)
             {
-                var childName = child.Name.LocalName;
-                var childItemName = ItemName(child);
+                // the "name" attribute is part of the node's identity, never merged as a value
+                // (a matched target carries the same name by definition)
+                if (child.Kind == ConfigNodeKind.Attribute && child.HasName(ConfigNode.ItemNameAttribute))
+                    continue;
+
+                var childItemName = child.ItemName;
 
                 // nameless collection items are distinct instances - never merged
-                if (childItemName is null && collectionElements.Contains(childName))
+                if (child.Kind == ConfigNodeKind.Element && childItemName is null && collections.IsCollectionElement(child.Name))
                 {
-                    target.Add(Annotate(new XElement(child), origin));
+                    target.Children.Add(Annotate(child.Clone(), origin));
                     continue;
                 }
 
-                var match = target.Elements().FirstOrDefault(element =>
-                    element.Name.LocalName.Equals(childName, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(ItemName(element), childItemName, StringComparison.OrdinalIgnoreCase));
+                var match = target.Children.FirstOrDefault(node =>
+                    node.HasName(child.Name) &&
+                    string.Equals(node.ItemName, childItemName, StringComparison.OrdinalIgnoreCase));
 
                 if (match is null)
-                    target.Add(Annotate(new XElement(child), origin));
+                    target.Children.Add(Annotate(child.Clone(), origin));
                 else
-                    MergeElement(match, child, origin, collectionElements, onConflict);
+                    MergeNode(match, child, origin, collections, onConflict);
             }
         }
 
-        private static void MergeAttributes(XElement target, XElement source, MergeOrigin origin, ConflictResolution onConflict)
+        /// <summary>Merges the node's own value - an attribute's value and an element's text
+        /// content alike (in the abstract representation both are just the value).</summary>
+        private static void MergeValue(ConfigNode target, ConfigNode source, MergeOrigin origin, ConflictResolution onConflict)
         {
-            foreach (var attribute in source.Attributes())
-            {
-                if (attribute.Name.LocalName.Equals(NAME_ATTRIBUTE, StringComparison.OrdinalIgnoreCase))
-                    continue; // part of the element's identity
-
-                var existing = target.Attributes().FirstOrDefault(a =>
-                    a.Name.LocalName.Equals(attribute.Name.LocalName, StringComparison.OrdinalIgnoreCase));
-
-                if (existing is null)
-                {
-                    var added = new XAttribute(attribute);
-                    added.AddAnnotation(origin);
-
-                    target.Add(added);
-                }
-                else if (existing.Value == attribute.Value)
-                {
-                    // no conflict - let the highest priority that asserted the value back it
-                    if (OriginOf(existing).Priority < origin.Priority)
-                        Reannotate(existing, origin);
-                }
-                else if (Resolve(existing, origin, onConflict,
-                    $"<{Describe(target)}>: attribute '{attribute.Name.LocalName}'", existing.Value, attribute.Value))
-                {
-                    existing.Value = attribute.Value;
-
-                    Reannotate(existing, origin);
-                }
-            }
-        }
-
-        private static void MergeText(XElement target, XElement source, MergeOrigin origin, ConflictResolution onConflict)
-        {
-            var sourceText = source.Nodes().OfType<XText>().Where(text => !string.IsNullOrWhiteSpace(text.Value)).ToList();
-
-            if (sourceText.Count == 0)
+            if (source.Value is not string value)
                 return;
 
-            var targetText = target.Nodes().OfType<XText>().Where(text => !string.IsNullOrWhiteSpace(text.Value)).ToList();
-
-            if (targetText.Count > 0)
+            if (target.Value is not string existing)
             {
-                string oldValue = string.Concat(targetText.Select(text => text.Value)).Trim();
-                string newValue = string.Concat(sourceText.Select(text => text.Value)).Trim();
+                target.Value = value;
 
-                if (oldValue == newValue)
-                {
-                    if (OriginOf(target).Priority < origin.Priority)
-                        Reannotate(target, origin);
+                // real content carries its contributor's provenance into later conflicts (the
+                // node's own annotation tracks its creator, which may be a different block);
+                // a presence-only fill ("") asserts nothing worth defending
+                if (value.Length > 0)
+                    Reannotate(target, origin);
 
-                    return; // no conflict - keep the existing nodes
-                }
-
-                // the element's own annotation tracks the origin of its text content
-                if (!Resolve(target, origin, onConflict, $"<{Describe(target)}>: text content", oldValue, newValue))
-                    return;
-
-                targetText.ForEach(text => text.Remove());
+                return;
             }
 
-            foreach (var text in sourceText)
-                target.Add(new XText(text));
+            if (existing == value)
+            {
+                // no conflict - let the highest priority that asserted the value back it
+                if (OriginOf(target).Priority < origin.Priority)
+                    Reannotate(target, origin);
 
-            Reannotate(target, origin);
+                return;
+            }
+
+            // presence-only values never win against real content: a bare <x/> reasserts the
+            // node, it does not empty it (and real content fills a bare node without a conflict)
+            if (value.Length == 0)
+                return;
+
+            if (existing.Length == 0 || Resolve(target, origin, onConflict, Describe(target), existing, value))
+            {
+                target.Value = value;
+
+                Reannotate(target, origin);
+            }
         }
 
         /// <summary>Decides a value conflict: higher priority always wins; equal priorities resolve per onConflict.</summary>
-        private static bool Resolve(XObject existing, MergeOrigin origin, ConflictResolution onConflict, string subject, string oldValue, string newValue)
+        private static bool Resolve(ConfigNode existing, MergeOrigin origin, ConflictResolution onConflict, string subject, string oldValue, string newValue)
         {
             var current = OriginOf(existing);
 
@@ -181,33 +158,27 @@ namespace MadWizard.Desomnia.Environments
             }
         }
 
-        /// <summary>Stamps the whole subtree with its origin (annotations are not copied when an XElement is cloned).</summary>
-        private static XElement Annotate(XElement root, MergeOrigin origin)
+        /// <summary>Stamps the whole subtree with its origin (a clone carries no annotations).</summary>
+        private static ConfigNode Annotate(ConfigNode root, MergeOrigin origin)
         {
-            foreach (var element in root.DescendantsAndSelf())
-            {
-                element.AddAnnotation(origin);
+            root.Origin = origin;
 
-                foreach (var attribute in element.Attributes())
-                    attribute.AddAnnotation(origin);
-            }
+            foreach (var child in root.Children)
+                Annotate(child, origin);
 
             return root;
         }
 
-        private static void Reannotate(XObject node, MergeOrigin origin)
+        private static void Reannotate(ConfigNode node, MergeOrigin origin) => node.Origin = origin;
+
+        private static MergeOrigin OriginOf(ConfigNode node)
+            => node.Origin as MergeOrigin ?? new MergeOrigin(0, "?");
+
+        private static string Describe(ConfigNode node)
         {
-            node.RemoveAnnotations<MergeOrigin>();
-            node.AddAnnotation(origin);
+            var name = node.Kind == ConfigNodeKind.Attribute ? $"attribute '{node.Name}'" : $"<{node.Name}>";
+
+            return node.ItemName is string itemName ? $"{name} (name={itemName})" : name;
         }
-
-        private static MergeOrigin OriginOf(XObject node)
-            => node.Annotation<MergeOrigin>() ?? new MergeOrigin(0, "?");
-
-        private static string? ItemName(XElement element)
-            => element.Attributes().FirstOrDefault(a => a.Name.LocalName.Equals(NAME_ATTRIBUTE, StringComparison.OrdinalIgnoreCase))?.Value;
-
-        private static string Describe(XElement element)
-            => ItemName(element) is string name ? $"{element.Name.LocalName} name={name}" : element.Name.LocalName;
     }
 }

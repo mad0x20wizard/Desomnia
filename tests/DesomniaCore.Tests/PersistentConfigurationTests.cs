@@ -52,7 +52,7 @@ namespace MadWizard.Desomnia.Tests
 
             var module = new CapturingModule();
 
-            using var builder = new ApplicationBuilder(_configPath);
+            var builder = new ApplicationBuilder(_configPath);
             builder.RegisterModule(module);
             builder.Build();
 
@@ -85,7 +85,7 @@ namespace MadWizard.Desomnia.Tests
 
             var module = new BindingModule();
 
-            using var builder = new ApplicationBuilder(_configPath);
+            var builder = new ApplicationBuilder(_configPath);
             builder.RegisterModule(module);
             builder.Build();
 

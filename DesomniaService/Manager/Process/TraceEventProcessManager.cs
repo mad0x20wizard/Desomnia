@@ -146,8 +146,6 @@ namespace MadWizard.Desomnia.Processes.Manager
 
         public override void Dispose()
         {
-            Logger.LogDebug("Shutting down...");
-
             lock (this) // the same lock every other session mutator holds
             {
                 UnsubscribeFromTraceEvents();
