@@ -31,13 +31,13 @@ namespace MadWizard.Desomnia
         private readonly ILifetimeScope _container;
         private readonly Func<Type, bool> _export;
 
-        internal RootContainerBridge(ILifetimeScope container) : this(container, ExportsModuleServices) { }
+        internal RootContainerBridge(ILifetimeScope root) : this(root, ExportsModuleServices) { }
 
-        internal RootContainerBridge(ILifetimeScope container, Func<Type, bool> export)
+        internal RootContainerBridge(ILifetimeScope root, Func<Type, bool> export)
         {
-            ValidateLifetimes(container, export);
+            ValidateLifetimes(root, export);
 
-            _container = container;
+            _container = root;
             _export = export;
         }
 
