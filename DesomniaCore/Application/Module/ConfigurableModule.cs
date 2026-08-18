@@ -11,6 +11,9 @@ namespace MadWizard.Desomnia
     {
         private IConfiguration? _rootConfig;
 
+        protected internal virtual uint MinVersion => 1;
+        protected internal virtual uint MaxVersion => 1;
+
         protected internal virtual XDocument MigrateConfiguration(XDocument configuration, uint version) => configuration;
 
         protected internal virtual void ConfigureConfigurationSource(ExtendedXmlConfigurationSource source) { }
