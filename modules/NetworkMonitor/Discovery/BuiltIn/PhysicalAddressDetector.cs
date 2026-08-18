@@ -41,7 +41,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
 
                             Logger.LogHostPhysicalAddressChanged(host, mapping.PhysicalAddress);
 
-                            semaphore.FinallyRelease();
+                            semaphore.ReleaseFinally();
                         }
                     }
                 }

@@ -185,7 +185,7 @@ namespace MadWizard.Desomnia.Network.Context
 
             using (logger.BeginHostScope(host))
             {
-                logger.LogDebug("Configuring host '{name}':", config.Name);
+                logger.LogDebug("Configuring {type} '{name}':", host.ToHostTypeString(), config.Name);
 
                 // Configure hostname
                 if (config.HostName != null)
@@ -269,7 +269,7 @@ namespace MadWizard.Desomnia.Network.Context
 
             base.Dispose();
 
-            Logger.LogDebug("Disposed host '{Name}'", Host.Name);
+            Logger.LogDebug("Disposed {type} '{Name}'", Host.ToHostTypeString(), Host.Name);
         }
     }
 }

@@ -107,7 +107,9 @@ namespace MadWizard.Desomnia.Network.Context
 
             Network.AddHost(context.Host);
 
-            Logger.LogDebug("Created host '{Name}'", context.Host.Name);
+            string type = context.Host.ToHostTypeString();
+
+            Logger.LogDebug("Created {type} '{Name}'", type, context.Host.Name);
 
             if (context.Watch is NetworkHostWatch watch)
             {
@@ -118,7 +120,7 @@ namespace MadWizard.Desomnia.Network.Context
             {
                 Network.RemoveHost(context.Host);
 
-                Logger.LogDebug("Removed host '{Name}'", context.Host.Name);
+                Logger.LogDebug("Removed {type} '{Name}'", type, context.Host.Name);
 
                 if (context.Watch is NetworkHostWatch watch)
                 {

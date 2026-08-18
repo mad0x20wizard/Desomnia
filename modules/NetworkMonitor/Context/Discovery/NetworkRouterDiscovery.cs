@@ -66,7 +66,6 @@ namespace MadWizard.Desomnia.Network.Context
         {
             Logger.LogDebug("Discovering routers...");
 
-            // register static routers from the configuration — always
             foreach (var configRouter in Config.Router)
             {
                 await CreateRouter<NetworkRouterContext>(configRouter);
@@ -74,10 +73,9 @@ namespace MadWizard.Desomnia.Network.Context
 
             var discoveries = Scope.Resolve<IEnumerable<IRouterDiscovery>>();
 
-            // let discoverers create their statically-configured routers — always
             foreach (var discovery in discoveries)
             {
-                await discovery.ConfigureRouters(Network);
+                await discovery.ConfigureRouters(this);
             }
 
             // active router lookup (default gateway, NDP advertisements, DNS-SD) — only on opt-in
@@ -85,7 +83,7 @@ namespace MadWizard.Desomnia.Network.Context
             {
                 foreach (var discovery in discoveries)
                 {
-                    await discovery.DiscoverRouters(Network);
+                    await discovery.DiscoverRouters(this);
                 }
             }
         }
