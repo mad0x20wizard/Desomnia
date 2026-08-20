@@ -114,6 +114,7 @@ namespace MadWizard.Desomnia.Application
             }
         }
 
+        #region Logging
         protected override void ConfigureLogging(ILoggingBuilder builder)
         {
             base.ConfigureLogging(builder);
@@ -160,10 +161,12 @@ namespace MadWizard.Desomnia.Application
             // the process's one logging stack: NLog's LogManager is global, so the provider that
             // fronts it belongs to the host that lives as long as the process. The inner hosts
             // share this factory instead of each bringing their own (see ConfigureApplication).
+            // FIXME: Can this be moved into base class?
             builder.ClearProviders();
             builder.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
             builder.AddNLog();
         }
+        #endregion
 
         #region Configuration / Migration
         protected override void LoadConfiguration(HostApplicationBuilder builder)
