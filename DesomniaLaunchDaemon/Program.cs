@@ -1,4 +1,5 @@
 using MadWizard.Desomnia;
+using MadWizard.Desomnia.Application;
 
 if (!Environment.IsPrivilegedProcess)
     throw new NotSupportedException("The application must be run with root privileges.");
@@ -35,7 +36,7 @@ var builder = new DesomniaLaunchDaemonBuilder(args);
 
 return Environment.ExitCode;
 
-class DesomniaLaunchDaemonBuilder(string[] args) : MadWizard.Desomnia.ApplicationBuilder(args)
+class DesomniaLaunchDaemonBuilder(string[] args) : ApplicationBuilder(args)
 {
     /// On macOS the StandardOut is written directly to file, so we have to include the timestamp explicitly.
     protected override string DefaultLogConsoleLayout => "${longdate} " + base.DefaultLogConsoleLayout;

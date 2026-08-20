@@ -2,12 +2,12 @@
 using Autofac.Core;
 using Autofac.Core.Registration;
 using Autofac.Core.Resolving.Pipeline;
-using MadWizard.Desomnia.Application.Lifetime;
+using MadWizard.Desomnia.Application.Shutdown;
 using MadWizard.Desomnia.Environments;
 using MadWizard.Desomnia.Environments.Export;
 using Microsoft.Extensions.Hosting;
 
-namespace MadWizard.Desomnia.Application.Module
+namespace MadWizard.Desomnia
 {
     /// <summary>
     /// Registers the <see cref="ShutdownCoordinator"/> and the resolve middleware that feeds
@@ -18,7 +18,7 @@ namespace MadWizard.Desomnia.Application.Module
     /// Persistent container only: the application containers tear down inside the loop's
     /// drain, which the stop phase already waits for.
     /// </summary>
-    internal class FrameworkModule : Autofac.Module
+    internal sealed class FrameworkModule : Autofac.Module
     {
         protected override void Load(ContainerBuilder builder)
         {
@@ -38,15 +38,18 @@ namespace MadWizard.Desomnia.Application.Module
                 .SingleInstance()
                 .AsSelf();
 
-            // the loosely coupled effective-configuration exports (outputEffectiveXML /
-            // outputEffectiveConfiguration); they react to the monitor's change event and
-            // remove their files when the application stops
+            // the loosely coupled effective-configuration exports (writeEffectiveXML /
+            // writeEffectiveConfiguration): startables (NOT auto-activated components - Autofac
+            // runs ALL startables, the configuration pipeline among them, before it activates
+            // those, so an auto-activated exporter would miss the first effective
+            // configuration); they subscribe to the monitor when started and remove their
+            // files when the application stops
             builder.RegisterType<EffectiveXMLExporter>()
-                .As<EffectiveConfigurationExporter>()
-                .SingleInstance().AutoActivate();
+                .As<EffectiveConfigurationExporter>().As<IStartable>()
+                .SingleInstance();
             builder.RegisterType<EffectiveKeyValueExporter>()
-                .As<EffectiveConfigurationExporter>()
-                .SingleInstance().AutoActivate();
+                .As<EffectiveConfigurationExporter>().As<IStartable>()
+                .SingleInstance();
 
         }
 

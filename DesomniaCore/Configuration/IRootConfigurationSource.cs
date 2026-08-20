@@ -10,7 +10,7 @@ namespace MadWizard.Desomnia.Configuration
     /// builder's configuration in <c>BuildOnce</c>/<c>LoadOnce</c>, and the persistent
     /// services bind it through the standard options interfaces (<c>IOptions&lt;T&gt;</c>,
     /// <c>IOptionsMonitor&lt;T&gt;</c>). In the XML representation these are the
-    /// <c>&lt;?global key="value"?&gt;</c> processing instructions outside the root element;
+    /// <c>&lt;?system key="value"?&gt;</c> processing instructions outside the root element;
     /// the interface itself makes no assumption about the physical representation.
     ///
     /// <para>Root configuration is a completely optional feature: a source that does not

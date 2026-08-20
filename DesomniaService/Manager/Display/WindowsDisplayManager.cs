@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Application.Shutdown;
 using Microsoft.Extensions.Logging;
 using Microsoft.Management.Infrastructure;
 

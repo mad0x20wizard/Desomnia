@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Application.Shutdown;
 using MadWizard.Desomnia.LaunchDaemon.Native;
 using Microsoft.Extensions.Logging;
 using System.Runtime.InteropServices;

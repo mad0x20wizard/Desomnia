@@ -14,7 +14,7 @@ namespace MadWizard.Desomnia
         /// the root (process-lifetime) host is being built at boot — before
         /// <see cref="LoadOnce(ContainerBuilder, IConfiguration)"/> fills its persistent container.
         /// The builder's <see cref="HostApplicationBuilder.Configuration"/> is the root
-        /// configuration: the <c>&lt;?global key="value"?&gt;</c> directives of the configuration
+        /// configuration: the <c>&lt;?system key="value"?&gt;</c> directives of the configuration
         /// file (empty when there are none — root configuration is optional; bind against
         /// defaults). Bind it here for a value the module needs now, or wire it into the options
         /// system so persistent services take <c>IOptions&lt;T&gt;</c> — or <c>IOptionsMonitor&lt;T&gt;</c>,

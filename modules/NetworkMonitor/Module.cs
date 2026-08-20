@@ -1,5 +1,6 @@
 ﻿using Autofac;
 using Autofac.Core;
+using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Environments;
 using MadWizard.Desomnia.Network.Address;
 using MadWizard.Desomnia.Network.Bridges;
@@ -21,7 +22,6 @@ using MadWizard.Desomnia.Network.Manager.Guard;
 using MadWizard.Desomnia.Network.Middleware;
 using MadWizard.Desomnia.Network.Reachability;
 using MadWizard.Desomnia.Power.Guard;
-using Microsoft.Extensions.Configuration.Xml;
 using NLog;
 using NLog.Config;
 using System.ComponentModel;

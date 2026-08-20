@@ -1,11 +1,12 @@
-using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Configuration.Binding;
+using MadWizard.Desomnia.Configuration.Migration;
 using MadWizard.Desomnia.Configuration.Model;
-using MadWizard.Desomnia.Configuration.Xml;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.Xml;
 using Microsoft.Extensions.FileProviders;
 using NLog;
 
-namespace Microsoft.Extensions.Configuration.Xml
+namespace MadWizard.Desomnia.Configuration.Xml
 {
     /*
      * The self-contained XML file source: reads the file through the XmlConfigurationReader
@@ -14,12 +15,15 @@ namespace Microsoft.Extensions.Configuration.Xml
      * the XML before the stock parse (presence values for bare elements, synthesized names
      * for nameless collection items), plus document order all the way into GetChildren().
      *
-     * It stands for itself: no injection points. In the augmenting mode the EnvironmentMonitor
-     * CONSUMES the same reader output and exposes its own configuration source to the host;
-     * this source reaches the host directly only in passthrough mode. File watching is the
-     * stock FileConfigurationSource machinery (ReloadOnChange via IFileProvider.Watch).
+     * It stands for itself: no injection points, no version or migration knowledge. The
+     * migration layer, when attached, sits UNDERNEATH as a decorator of FileProvider (see
+     * MigratingFileProvider): this source then reads the migrated form without knowing it.
+     * In the augmenting mode the EnvironmentMonitor CONSUMES the same reader output and
+     * exposes its own configuration source to the host; this source reaches the host directly
+     * only in passthrough mode. File watching is the stock FileConfigurationSource machinery
+     * (ReloadOnChange via IFileProvider.Watch).
      *
-     * The <?global?> processing instructions outside the root element are NOT part of this
+     * The <?system?> processing instructions outside the root element are NOT part of this
      * source's data: they are the root host's configuration, served by the nested RootSource
      * (see IRootConfigurationSource) - same file, same provider, same watch.
      */
@@ -44,7 +48,7 @@ namespace Microsoft.Extensions.Configuration.Xml
         }
 
         /// <summary>
-        /// The nested source carrying the <c>&lt;?global key="value"?&gt;</c> processing
+        /// The nested source carrying the <c>&lt;?system key="value"?&gt;</c> processing
         /// instructions outside the root element — the root host's configuration (see
         /// <see cref="IRootConfigurationSource"/>). It reads the same file through the same file
         /// provider and follows this source's <see cref="FileConfigurationSource.ReloadOnChange"/>
@@ -136,7 +140,7 @@ namespace Microsoft.Extensions.Configuration.Xml
     }
 
     /// <summary>
-    /// The nested source of an <see cref="ExtendedXmlConfigurationSource"/>: the <c>&lt;?global?&gt;</c>
+    /// The nested source of an <see cref="ExtendedXmlConfigurationSource"/>: the <c>&lt;?system?&gt;</c>
     /// directives, i.e. the ROOT HOST's configuration (not the root element's - the directives
     /// live outside of it). A file source of its own, so the stock provider machinery applies
     /// (missing-file handling, watching, reload delay); it mirrors the parent's file settings
@@ -175,14 +179,14 @@ namespace Microsoft.Extensions.Configuration.Xml
         {
             try
             {
-                _data = new OrderedConfigurationData(Entries(XmlConfigurationReader.Read(stream).GlobalDirectives));
+                _data = new OrderedConfigurationData(Entries(XmlConfigurationReader.Read(stream).SystemDirectives));
             }
             catch (Exception ex) when (_loaded)
             {
                 // a bad edit on the reload path: keep serving the last good data (the stock
                 // behavior of clearing the data would feed the options system an empty root
                 // configuration); the effective configuration's own reload reports the edit
-                Logger.Warn(ex, $"Failed to reload the <?global?> directives of '{source.Path}'; keeping the current root configuration.");
+                Logger.Warn(ex, $"Failed to reload the <?system?> directives of '{source.Path}'; keeping the current root configuration.");
                 return;
             }
 
@@ -191,14 +195,14 @@ namespace Microsoft.Extensions.Configuration.Xml
             _loaded = true;
         }
 
-        private static IEnumerable<KeyValuePair<string, string?>> Entries(IEnumerable<GlobalDirective> directives)
+        private static IEnumerable<KeyValuePair<string, string?>> Entries(IEnumerable<SystemDirective> directives)
         {
             HashSet<string> keys = new(StringComparer.OrdinalIgnoreCase);
 
             foreach (var directive in directives)
             {
                 if (!keys.Add(directive.Key))
-                    throw new ConfigurationValueException($"Duplicate <?global?> directive key '{directive.Key}'.");
+                    throw new ConfigurationValueException($"Duplicate <?system?> directive key '{directive.Key}'.");
 
                 yield return new(directive.Key, directive.Value);
             }
@@ -223,9 +227,18 @@ namespace Microsoft.Extensions.Configuration.Xml
                 get
                 {
                     if (source.Path != null)
-                    if (source.FileProvider is PhysicalFileProvider provider)
                     {
-                        return Path.Combine(provider.Root, source.Path);
+                        // the migration layer decorates the physical provider (see
+                        // MigratingFileProvider) - the file's real location is underneath
+                        var fileProvider = source.FileProvider;
+
+                        if (fileProvider is MigratingFileProvider migrating)
+                            fileProvider = migrating.InnerProvider;
+
+                        if (fileProvider is PhysicalFileProvider provider)
+                        {
+                            return Path.Combine(provider.Root, source.Path);
+                        }
                     }
 
                     return source.Path;

@@ -6,7 +6,7 @@ namespace MadWizard.Desomnia.Environments.Export
     /// <summary>
     /// Writes the effective configuration in the bare, flattened-out IConfiguration form —
     /// one <c>path:to:key=value</c> line per entry, in document order — to the
-    /// <c>outputEffectiveConfiguration</c> path. This is the unambiguous export: exactly the
+    /// <c>writeEffectiveConfiguration</c> path. This is the unambiguous export: exactly the
     /// keys and values the binder sees, with none of the XML form left. The file is removed
     /// again when the application stops.
     /// </summary>
@@ -14,7 +14,7 @@ namespace MadWizard.Desomnia.Environments.Export
     {
         protected override void Export(EffectiveConfiguration effective)
         {
-            lock (this) if (effective.Settings.OutputEffectiveConfiguration is string path)
+            lock (this) if (effective.Settings.WriteEffectiveConfiguration is string path)
             {
                 try
                 {

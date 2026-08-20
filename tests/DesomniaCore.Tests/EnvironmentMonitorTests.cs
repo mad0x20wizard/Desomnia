@@ -1,10 +1,11 @@
 using Autofac;
+using MadWizard.Desomnia.Application;
 using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Configuration.Binding;
+using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Environments;
 using MadWizard.Desomnia.Environments.Export;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.Xml;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Xml.Linq;
 using Xunit;
@@ -35,7 +36,7 @@ namespace MadWizard.Desomnia.Tests
 
             var monitor = new EnvironmentMonitor { Logger = NullLogger.Instance };
 
-            var pipeline = new ConfigurationPipeline(source, monitor, Conditions(toggle))
+            var pipeline = new ConfigurationPipeline(source, monitor, Conditions(toggle), new ModuleRegistry { Logger = NullLogger.Instance })
             {
                 Logger = NullLogger.Instance,
             };
@@ -49,7 +50,7 @@ namespace MadWizard.Desomnia.Tests
         [Fact]
         public void Start_LegacySystemMonitorRoot_IsPassthrough()
         {
-            var path = WriteConfig("""<SystemMonitor version="1" />""");
+            var path = WriteConfig("""<SystemMonitor />""");
 
             var (pipeline, _) = CreatePipeline(path);
 
@@ -63,7 +64,7 @@ namespace MadWizard.Desomnia.Tests
         {
             // value-less attributes make the file not well-formed; the legacy dialect is
             // gone, so this now fails at boot instead of falling back to a legacy provider
-            var path = WriteConfig("""<SystemMonitor version="1"><NetworkMonitor><traffic must /></NetworkMonitor></SystemMonitor>""");
+            var path = WriteConfig("""<SystemMonitor><NetworkMonitor><traffic must /></NetworkMonitor></SystemMonitor>""");
 
             var (pipeline, _) = CreatePipeline(path);
 
@@ -99,7 +100,7 @@ namespace MadWizard.Desomnia.Tests
         public void Start_BareAttributeBelowEnvironmentRoot_IsFatal()
         {
             var path = WriteConfig("""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <DefaultEnvironment><NetworkMonitor><traffic must /></NetworkMonitor></DefaultEnvironment>
                 </EnvironmentMonitor>
                 """);
@@ -112,10 +113,11 @@ namespace MadWizard.Desomnia.Tests
         }
 
         [Fact]
-        public void StartAndBind_StampsVersionAndMergesActiveBlocks()
+        public void StartAndBind_MergesActiveBlocks_AndServesNoVersion()
         {
-            var path = WriteConfig("""
-                <EnvironmentMonitor version="1">
+            var path = WriteConfig($"""
+                <?config version="{ConfigurableModule.LATEST_VERSION}"?>
+                <EnvironmentMonitor>
                   <Environment test="true"><SystemMonitor timeout="5min" keepDisplayAwake="true" /></Environment>
                   <Environment test="false"><SystemMonitor timeout="1min" marker="off" /></Environment>
                   <DefaultEnvironment><SystemMonitor marker="fallback" /></DefaultEnvironment>
@@ -131,12 +133,11 @@ namespace MadWizard.Desomnia.Tests
             var configuration = BuildConfiguration(pipeline);
 
             Assert.Equal("fallback", configuration["marker"]); // inactive block skipped, default merged
-            Assert.Equal("1", configuration["version"]);       // stamped from the <EnvironmentMonitor> root
+            Assert.Null(configuration["version"]); // the format version is the file's header, not configuration data
 
             var config = StrictConfigurationBinder.Get<SystemMonitorConfig>(configuration, o => o.BindNonPublicProperties = true);
 
             Assert.NotNull(config);
-            Assert.Equal(1u, config.Version);
             Assert.Equal(TimeSpan.FromMinutes(5), config.Timeout);
             Assert.True(config.KeepDisplayAwake);
         }
@@ -145,7 +146,7 @@ namespace MadWizard.Desomnia.Tests
         public void Start_UnknownConditionAttribute_Throws()
         {
             var path = WriteConfig("""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment powr="ac"><SystemMonitor /></Environment>
                 </EnvironmentMonitor>
                 """);
@@ -163,7 +164,7 @@ namespace MadWizard.Desomnia.Tests
         public void DefaultEnvironment_OnlyIfElse_MergesOnlyWhenNothingMatches(string condition, string? expectedMarker)
         {
             var path = WriteConfig($"""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment test="{condition}"><SystemMonitor timeout="5min" /></Environment>
                   <DefaultEnvironment onlyIf="else"><SystemMonitor marker="fallback" /></DefaultEnvironment>
                 </EnvironmentMonitor>
@@ -182,7 +183,7 @@ namespace MadWizard.Desomnia.Tests
             // the disabled blocks carry a condition attribute nothing registers ("vpn"),
             // proving that conditions of never-blocks are not resolved
             var path = WriteConfig("""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment onlyIf="never" vpn="on"><SystemMonitor marker="disabled" /></Environment>
                   <DefaultEnvironment onlyIf="never"><SystemMonitor fallback="disabled" /></DefaultEnvironment>
                   <Environment test="true"><SystemMonitor timeout="5min" /></Environment>
@@ -206,7 +207,7 @@ namespace MadWizard.Desomnia.Tests
         public void OnlyIfNot_SuppressesWhileTheTargetIsApplied(string condition, string? expectedMarker)
         {
             var path = WriteConfig($"""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment name="home" test="{condition}"><SystemMonitor timeout="5min" /></Environment>
                   <Environment name="guest" test="true" onlyIfNot="home"><SystemMonitor marker="guest" /></Environment>
                 </EnvironmentMonitor>
@@ -227,7 +228,7 @@ namespace MadWizard.Desomnia.Tests
             // a block without condition attributes always matches, so onlyIfNot alone
             // makes it the exact complement of the referenced environment
             var path = WriteConfig($"""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment name="home" test="{condition}"><SystemMonitor timeout="5min" /></Environment>
                   <Environment name="away" onlyIfNot="home"><SystemMonitor marker="away" /></Environment>
                 </EnvironmentMonitor>
@@ -245,7 +246,7 @@ namespace MadWizard.Desomnia.Tests
         {
             // "a" applies -> suppresses "b" -> which revives "c"
             var path = WriteConfig("""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment name="a" test="true"><SystemMonitor first="a" /></Environment>
                   <Environment name="b" test="true" onlyIfNot="a"><SystemMonitor second="b" /></Environment>
                   <Environment name="c" test="true" onlyIfNot="b"><SystemMonitor third="c" /></Environment>
@@ -269,7 +270,7 @@ namespace MadWizard.Desomnia.Tests
         public void OnlyIfNot_OnDefaultEnvironment_SuppressesTheDefault(string condition, string? expectedMarker)
         {
             var path = WriteConfig($"""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment name="home" test="{condition}"><SystemMonitor timeout="5min" /></Environment>
                   <Environment name="other" test="true"><SystemMonitor keep="other" /></Environment>
                   <DefaultEnvironment onlyIfNot="home"><SystemMonitor marker="fallback" /></DefaultEnvironment>
@@ -290,7 +291,7 @@ namespace MadWizard.Desomnia.Tests
         public void OnlyIfNot_ReactsToConditionChangesOfTheTarget()
         {
             var path = WriteConfig("""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment name="home" test="toggle"><SystemMonitor timeout="5min" /></Environment>
                   <Environment name="away" test="true" onlyIfNot="home"><SystemMonitor timeout="1min" /></Environment>
                 </EnvironmentMonitor>
@@ -318,7 +319,7 @@ namespace MadWizard.Desomnia.Tests
         public void OnlyIf_AppliesOnlyWhileTheTargetIsApplied(string condition, string? expectedMarker)
         {
             var path = WriteConfig($"""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment name="vpn" test="{condition}"><SystemMonitor timeout="5min" /></Environment>
                   <Environment name="work" test="true" onlyIf="vpn"><SystemMonitor marker="work" /></Environment>
                 </EnvironmentMonitor>
@@ -339,7 +340,7 @@ namespace MadWizard.Desomnia.Tests
             // a block without condition attributes always matches, so onlyIf alone
             // makes it apply exactly when the referenced environment is applied
             var path = WriteConfig($"""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment name="vpn" test="{condition}"><SystemMonitor timeout="5min" /></Environment>
                   <Environment name="work" onlyIf="vpn"><SystemMonitor marker="work" /></Environment>
                 </EnvironmentMonitor>
@@ -360,7 +361,7 @@ namespace MadWizard.Desomnia.Tests
         {
             // onlyIf is ANDed with the block's regular condition attributes: both must hold
             var path = WriteConfig($"""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment name="home" test="{home}"><SystemMonitor timeout="5min" /></Environment>
                   <Environment name="work" test="{work}" onlyIf="home"><SystemMonitor marker="work" /></Environment>
                 </EnvironmentMonitor>
@@ -379,7 +380,7 @@ namespace MadWizard.Desomnia.Tests
         public void OnlyIf_ChainsAcrossEnvironments(string condition, string? first, string? second, string? third)
         {
             var path = WriteConfig($"""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment name="a" test="{condition}"><SystemMonitor first="a" /></Environment>
                   <Environment name="b" onlyIf="a"><SystemMonitor second="b" /></Environment>
                   <Environment name="c" onlyIf="b"><SystemMonitor third="c" /></Environment>
@@ -403,7 +404,7 @@ namespace MadWizard.Desomnia.Tests
         public void OnlyIf_OnDefaultEnvironment_GatesTheDefault(string condition, string? expectedMarker)
         {
             var path = WriteConfig($"""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment name="home" test="{condition}"><SystemMonitor timeout="5min" /></Environment>
                   <DefaultEnvironment onlyIf="home"><SystemMonitor marker="fallback" /></DefaultEnvironment>
                 </EnvironmentMonitor>
@@ -420,7 +421,7 @@ namespace MadWizard.Desomnia.Tests
         public void OnlyIf_ReactsToConditionChangesOfTheTarget()
         {
             var path = WriteConfig("""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment name="vpn" test="toggle"><SystemMonitor timeout="5min" /></Environment>
                   <Environment name="work" test="true" onlyIf="vpn"><SystemMonitor marker="work" /></Environment>
                 </EnvironmentMonitor>
@@ -449,7 +450,7 @@ namespace MadWizard.Desomnia.Tests
         public void OnlyIf_AndOnlyIfNot_Compose(string vpn, string guest, string? expectedMarker)
         {
             var path = WriteConfig($"""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment name="vpn" test="{vpn}"><SystemMonitor a="1" /></Environment>
                   <Environment name="guest" test="{guest}"><SystemMonitor b="2" /></Environment>
                   <Environment name="work" onlyIf="vpn" onlyIfNot="guest"><SystemMonitor marker="work" /></Environment>
@@ -467,7 +468,7 @@ namespace MadWizard.Desomnia.Tests
         public void HigherPriority_WinsAcrossEnvironments()
         {
             var path = WriteConfig("""
-                <EnvironmentMonitor version="1" onConflict="error">
+                <EnvironmentMonitor onConflict="error">
                   <Environment test="true" priority="1"><SystemMonitor timeout="5min" /></Environment>
                   <DefaultEnvironment><SystemMonitor timeout="1min" /></DefaultEnvironment>
                 </EnvironmentMonitor>
@@ -482,10 +483,11 @@ namespace MadWizard.Desomnia.Tests
         }
 
         [Fact]
-        public void OutputEffectiveXML_WritesRelativeToConfig_AndRemovesOnDispose()
+        public void WriteEffectiveXML_WritesRelativeToConfig_AndRemovesOnDispose()
         {
-            var path = WriteConfig("""
-                <EnvironmentMonitor version="1" outputEffectiveXML="effective.xml">
+            var path = WriteConfig($"""
+                <?config version="{ConfigurableModule.LATEST_VERSION}"?>
+                <EnvironmentMonitor writeEffectiveXML="effective.xml">
                   <DefaultEnvironment><SystemMonitor timeout="5min" /></DefaultEnvironment>
                 </EnvironmentMonitor>
                 """);
@@ -496,16 +498,24 @@ namespace MadWizard.Desomnia.Tests
 
             using (var exporter = new EffectiveXMLExporter(monitor) { Logger = NullLogger.Instance })
             {
+                exporter.Start();
+
                 Assert.False(File.Exists(outputPath)); // written on Start, not before
 
                 pipeline.Start();
 
                 Assert.True(File.Exists(outputPath));
 
-                var effective = XDocument.Load(outputPath).Root!;
+                var document = XDocument.Load(outputPath);
+                var effective = document.Root!;
+
+                // the version declared in the authoritative style - the root element's attribute;
+                // no <?config?> header (the file is the result of a migration, never migrated itself)
+                Assert.DoesNotContain(document.Nodes().OfType<XProcessingInstruction>(),
+                    pi => pi.Target.Equals("config", StringComparison.OrdinalIgnoreCase));
 
                 Assert.Equal("SystemMonitor", effective.Name.LocalName);
-                Assert.Equal("1", effective.Attribute("version")?.Value);
+                Assert.Equal(ConfigurableModule.LATEST_VERSION.ToString(), effective.Attribute("version")?.Value);
                 Assert.Equal("5min", effective.Attribute("timeout")?.Value);
             }
 
@@ -513,14 +523,14 @@ namespace MadWizard.Desomnia.Tests
         }
 
         [Fact]
-        public void OutputEffectiveXML_AcceptsAbsolutePath()
+        public void WriteEffectiveXML_AcceptsAbsolutePath()
         {
             var outputPath = Path.Combine(_directory, "sub", "effective.xml");
 
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
 
             var path = WriteConfig($"""
-                <EnvironmentMonitor version="1" outputEffectiveXML="{outputPath}">
+                <EnvironmentMonitor writeEffectiveXML="{outputPath}">
                   <DefaultEnvironment><SystemMonitor /></DefaultEnvironment>
                 </EnvironmentMonitor>
                 """);
@@ -528,6 +538,7 @@ namespace MadWizard.Desomnia.Tests
             var (pipeline, monitor) = CreatePipeline(path);
 
             using var exporter = new EffectiveXMLExporter(monitor) { Logger = NullLogger.Instance };
+            exporter.Start();
 
             pipeline.Start();
 
@@ -535,10 +546,65 @@ namespace MadWizard.Desomnia.Tests
         }
 
         [Fact]
-        public void OutputEffectiveXML_MustNotTargetTheConfigFile()
+        public void WriteEffectiveXML_IsWrittenForTheInitialConfiguration_WhenTheExporterStartsAfterThePipeline()
+        {
+            // the production order: Autofac starts the pipeline (a startable) before the
+            // exporters come to life - the first effective configuration must not be missed
+            var outputPath = Path.Combine(_directory, "effective.xml");
+
+            var path = WriteConfig($"""
+                <?config version="{ConfigurableModule.LATEST_VERSION}"?>
+                <EnvironmentMonitor writeEffectiveXML="effective.xml">
+                  <DefaultEnvironment><SystemMonitor timeout="5min" /></DefaultEnvironment>
+                </EnvironmentMonitor>
+                """);
+
+            var (pipeline, monitor) = CreatePipeline(path);
+
+            pipeline.Start();
+
+            Assert.False(File.Exists(outputPath)); // nobody listening yet
+
+            using var exporter = new EffectiveXMLExporter(monitor) { Logger = NullLogger.Instance };
+            exporter.Start();
+
+            Assert.True(File.Exists(outputPath));
+            Assert.Equal("5min", XDocument.Load(outputPath).Root!.Attribute("timeout")?.Value);
+        }
+
+        [Fact]
+        public void Subscribe_ReplaysTheCurrentEffectiveConfiguration_AndThenFollowsTheChanges()
         {
             var path = WriteConfig("""
-                <EnvironmentMonitor version="1" outputEffectiveXML="monitor.xml">
+                <EnvironmentMonitor>
+                  <DefaultEnvironment><SystemMonitor marker="off" /></DefaultEnvironment>
+                  <Environment test="toggle"><SystemMonitor marker="on" /></Environment>
+                </EnvironmentMonitor>
+                """); // document order: the toggled block wins the merge when active
+
+            var toggle = new FakeCondition(satisfied: false);
+
+            var (pipeline, monitor) = CreatePipeline(path, toggle);
+
+            pipeline.Start();
+
+            List<string?> seen = [];
+
+            monitor.Subscribe(effective => seen.Add(effective.Data.Data["marker"]));
+
+            Assert.Equal(["off"], seen); // the configuration published before the subscription
+
+            toggle.Satisfied = true;
+            monitor.Reevaluate();
+
+            Assert.Equal(["off", "on"], seen);
+        }
+
+        [Fact]
+        public void WriteEffectiveXML_MustNotTargetTheConfigFile()
+        {
+            var path = WriteConfig("""
+                <EnvironmentMonitor writeEffectiveXML="monitor.xml">
                   <DefaultEnvironment><SystemMonitor /></DefaultEnvironment>
                 </EnvironmentMonitor>
                 """);
@@ -552,7 +618,7 @@ namespace MadWizard.Desomnia.Tests
         public void Reevaluate_CancelsTheReloadToken_OnlyWhenTheEffectiveConfigChanged()
         {
             var path = WriteConfig("""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment test="toggle"><SystemMonitor marker="on" /></Environment>
                 </EnvironmentMonitor>
                 """);
@@ -577,7 +643,7 @@ namespace MadWizard.Desomnia.Tests
         public void Start_ServesTheEffectiveConfigurationToEveryBuild()
         {
             var path = WriteConfig("""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment test="true"><SystemMonitor timeout="5min" marker="on" /></Environment>
                   <DefaultEnvironment onlyIf="else"><SystemMonitor marker="off" /></DefaultEnvironment>
                 </EnvironmentMonitor>
@@ -601,7 +667,7 @@ namespace MadWizard.Desomnia.Tests
         public void Reevaluate_UpdatesTheEffectiveConfig_AndSignalsReload_OnAConditionChange()
         {
             var path = WriteConfig("""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment test="toggle"><SystemMonitor marker="on" /></Environment>
                   <DefaultEnvironment onlyIf="else"><SystemMonitor marker="off" /></DefaultEnvironment>
                 </EnvironmentMonitor>
@@ -627,7 +693,7 @@ namespace MadWizard.Desomnia.Tests
         public void Reevaluate_WithoutAChange_DoesNotSignalReload()
         {
             var path = WriteConfig("""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment test="true"><SystemMonitor marker="on" /></Environment>
                 </EnvironmentMonitor>
                 """);
@@ -647,7 +713,7 @@ namespace MadWizard.Desomnia.Tests
         public void CheckForChanges_PicksUpEditedEnvironmentBlocks()
         {
             var path = WriteConfig("""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <DefaultEnvironment><SystemMonitor marker="before" /></DefaultEnvironment>
                 </EnvironmentMonitor>
                 """);
@@ -660,7 +726,7 @@ namespace MadWizard.Desomnia.Tests
 
             // the configuration file is edited between rebuilds
             File.WriteAllText(path, """
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <DefaultEnvironment><SystemMonitor marker="after" /></DefaultEnvironment>
                 </EnvironmentMonitor>
                 """);
@@ -674,7 +740,7 @@ namespace MadWizard.Desomnia.Tests
         public void CheckForChanges_WithAnInvalidEdit_IsFatal_ButKeepsServingTheLastGoodConfiguration()
         {
             var path = WriteConfig("""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment test="true"><SystemMonitor marker="good" /></Environment>
                 </EnvironmentMonitor>
                 """);
@@ -688,7 +754,7 @@ namespace MadWizard.Desomnia.Tests
 
             // a well-formed but invalid edit: a condition attribute nothing registers
             File.WriteAllText(path, """
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment nonexistentcondition="x"><SystemMonitor marker="bad" /></Environment>
                 </EnvironmentMonitor>
                 """);
@@ -711,7 +777,7 @@ namespace MadWizard.Desomnia.Tests
             // the boot window: a token armed for one build is independent of the next, so a change
             // that lands during a build cancels that build's token and is never lost
             var path = WriteConfig("""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment test="toggle"><SystemMonitor marker="on" /></Environment>
                   <DefaultEnvironment onlyIf="else"><SystemMonitor marker="off" /></DefaultEnvironment>
                 </EnvironmentMonitor>

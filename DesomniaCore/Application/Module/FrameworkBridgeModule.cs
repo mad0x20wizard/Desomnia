@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia
 {
-    internal class FrameworkBridgeModule(ILifetimeScope root) : Autofac.Module
+    internal sealed class FrameworkBridgeModule(ILifetimeScope root) : Autofac.Module
     {
         protected override void Load(ContainerBuilder builder)
         {

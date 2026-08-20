@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia
 {
-    class LoggingModule : Autofac.Module
+    sealed class LoggingModule : Autofac.Module
     {
         protected override void AttachToComponentRegistration(IComponentRegistryBuilder registry, IComponentRegistration registration)
         {

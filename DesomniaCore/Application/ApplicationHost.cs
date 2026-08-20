@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Runtime.ExceptionServices;
 
-namespace MadWizard.Desomnia
+namespace MadWizard.Desomnia.Application.Shutdown
 {
     /// <summary>
     /// The host <see cref="ApplicationBuilder.Build"/> returns: it wraps the persistent

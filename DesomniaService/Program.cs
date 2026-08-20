@@ -1,5 +1,6 @@
 using Autofac;
 using MadWizard.Desomnia;
+using MadWizard.Desomnia.Application;
 using MadWizard.Desomnia.Service.Windows;
 using System.Diagnostics;
 using System.Reflection;
@@ -65,7 +66,7 @@ catch (Exception ex)
     throw;
 }
 
-class DesomniaWindowsBuilder(params string[] args) : MadWizard.Desomnia.ApplicationBuilder(args)
+class DesomniaWindowsBuilder(params string[] args) : ApplicationBuilder(args)
 {
 
 }

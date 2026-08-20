@@ -5,8 +5,7 @@ SystemMonitor
 -------------
 
 .. code:: xml
-
-  <SystemMonitor version="1"  timeout="5min"
+  <SystemMonitor version="2" timeout="5min"
 
     onIdle="sleep"
     onDemand="sleepless"

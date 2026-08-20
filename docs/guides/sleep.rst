@@ -22,7 +22,7 @@ Timing is everything
 .. code:: xml
 
     <?xml version="1.0" encoding="utf-8"?>
-    <SystemMonitor version="1" timeout="2min">
+    <SystemMonitor version="2" timeout="2min">
 
         <!-- ... monitor configuration goes here ... -->
 
@@ -56,7 +56,7 @@ To put the system to sleep when idle, configure the ``sleep`` action on the ``<S
 .. code:: xml
 
     <?xml version="1.0" encoding="utf-8"?>
-    <SystemMonitor version="1" timeout="2min" onIdle="sleep+10min">
+    <SystemMonitor version="2" timeout="2min" onIdle="sleep+10min">
 
         <!-- ... -->
 
@@ -78,7 +78,7 @@ The most common use on the ``<SystemMonitor>`` is the ``sleepless`` action, whic
 .. code:: xml
 
     <?xml version="1.0" encoding="utf-8"?>
-    <SystemMonitor version="1" timeout="2min" onIdle="sleep" onDemand="sleepless">
+    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onDemand="sleepless">
 
         <!-- ... -->
 
@@ -96,7 +96,7 @@ A good starting point is to configure Desomnia to replicate the behaviour of the
 .. code:: xml
 
     <?xml version="1.0" encoding="utf-8"?>
-    <SystemMonitor version="1" timeout="2min" onIdle="sleep" onDemand="sleepless">
+    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onDemand="sleepless">
 
         <SessionMonitor />
         <NetworkSessionMonitor />

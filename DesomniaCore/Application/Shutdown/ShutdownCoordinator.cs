@@ -5,7 +5,7 @@ using Autofac.Core.Resolving.Pipeline;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace MadWizard.Desomnia.Application.Lifetime
+namespace MadWizard.Desomnia.Application.Shutdown
 {
     /// <summary>
     /// Runs the <see cref="IAsyncStoppable"/> teardowns inside the persistent host's stop

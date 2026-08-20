@@ -1,4 +1,6 @@
 using Autofac;
+using MadWizard.Desomnia.Application;
+using MadWizard.Desomnia.Application.Shutdown;
 using MadWizard.Desomnia.Configuration.Binding;
 using MadWizard.Desomnia.Environments;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,7 +40,7 @@ namespace MadWizard.Desomnia.Tests
         [Fact]
         public async Task InvalidFirstBuild_EscapesRun_WithExitCode()
         {
-            File.WriteAllText(_configPath, """<SystemMonitor version="6" timeout="banana" />""");
+            File.WriteAllText(_configPath, """<SystemMonitor timeout="banana" />""");
 
             var builder = new ApplicationBuilder(_configPath);
             builder.RegisterModule(new StrictModule());
@@ -76,7 +78,7 @@ namespace MadWizard.Desomnia.Tests
         [Fact]
         public async Task DeliberateInnerStop_EndsTheRunCleanly()
         {
-            File.WriteAllText(_configPath, """<SystemMonitor version="6" />""");
+            File.WriteAllText(_configPath, """<SystemMonitor />""");
 
             var builder = new ApplicationBuilder(_configPath);
             builder.RegisterModule(new SelfStoppingModule());
@@ -109,7 +111,7 @@ namespace MadWizard.Desomnia.Tests
         [Fact]
         public async Task FatalEditAtRuntime_EscapesRun_WithExitCode()
         {
-            File.WriteAllText(_configPath, """<SystemMonitor version="6" />""");
+            File.WriteAllText(_configPath, """<SystemMonitor />""");
 
             var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -124,7 +126,7 @@ namespace MadWizard.Desomnia.Tests
 
             // an edit the process cannot apply: the root element switches modes
             File.WriteAllText(_configPath, """
-                <EnvironmentMonitor version="6">
+                <EnvironmentMonitor>
                   <Environment test="x"><SystemMonitor /></Environment>
                 </EnvironmentMonitor>
                 """);

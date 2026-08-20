@@ -30,8 +30,7 @@ Enabling the proxy
 The Sleep Proxy service is offered automatically when a ``<NetworkMonitor>`` runs in :doc:`promiscuous mode <promiscuous>` and is allowed to learn hosts and/or services dynamically. In practice this means combining ``watchMode="promiscuous"`` with an ``autoDetect`` value that includes ``Host`` and/or ``Service``:
 
 .. code:: xml
-
-   <SystemMonitor version="1">
+   <SystemMonitor version="2">
 
      <NetworkMonitor watchMode="promiscuous" autoDetect="Host|Service">
        <!-- statically declared hosts may still appear here -->

@@ -1,16 +1,16 @@
 Configuration
 =============
 
-To enable the plugin, add a ``<DuoStreamMonitor>`` to your configuration. The plugin reads the available instances from the Duo Manager, so no individual instance configuration is required to get started.
+To enable the plugin, add a ``<DuoSessionMonitor>`` to your configuration. The plugin reads the available instances from the Duo Manager, so no individual instance configuration is required to get started.
 
-DuoStreamMonitor
-----------------
+DuoSessionMonitor
+-----------------
 
 .. code:: xml
 
   <SystemMonitor>
 
-    <DuoStreamMonitor serviceName="DuoService" refresh="5s"
+    <DuoSessionMonitor serviceName="DuoService" refresh="5s"
       onDemand="sleepless"
       onIdle=""
 
@@ -18,14 +18,14 @@ DuoStreamMonitor
       onInstanceIdle="stop"
 
       onInstanceLogin=""
-      onInstanceStart=""
-      onInstanceStop=""
+      onInstanceStarted=""
+      onInstanceStopped=""
       onInstanceLogout="">
 
       <Instance name="Neo" ... />
       <Instance name="Thomas Anderson" ... />
 
-    </DuoStreamMonitor>
+    </DuoSessionMonitor>
 
   </SystemMonitor>
 
@@ -86,16 +86,16 @@ onInstanceLogin
 
 .. include:: attributes/login.rst
 
-onInstanceStart
-+++++++++++++++
+onInstanceStarted
++++++++++++++++++
 
 :⚡️ event:
 :inherited:
 
 .. include:: attributes/start.rst
 
-onInstanceStop
-++++++++++++++
+onInstanceStopped
++++++++++++++++++
 
 :⚡️ event:
 :inherited:

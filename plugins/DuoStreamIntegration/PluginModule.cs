@@ -1,7 +1,9 @@
 ﻿using Autofac;
 using Autofac.Core;
+using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Service.Duo.Configuration;
+using MadWizard.Desomnia.Service.Duo.Configuration.Migration;
 using MadWizard.Desomnia.Service.Duo.Manager;
 using MadWizard.Desomnia.Service.Duo.Sunshine.Listener;
 using MadWizard.Desomnia.Service.Duo.Sunshine.Watch;
@@ -10,12 +12,25 @@ using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
 using System.ComponentModel;
 using System.ServiceProcess;
+using System.Xml.Linq;
 using WindowsFirewallHelper;
 
 namespace MadWizard.Desomnia.Service.Duo
 {
-    public class PluginModule : Desomnia.ConfigurableModule<DuoConfig>
+    public class PluginModule : Desomnia.ConfigurableModule<DuoConfig>, IXConfigurationMigration
     {
+        #region Versioning
+        protected override uint MinVersion => 2;
+
+        void IXConfigurationMigration.Run(XDocument configuration, uint version)
+        {
+            switch (version)
+            {
+                case 2: V2.Run(configuration); break;
+            }
+        }
+        #endregion
+
         protected override void Load(ContainerBuilder builder, DuoConfig config)
         {
             if (config.DuoSessionMonitor is DuoSessionMonitorConfig duo)

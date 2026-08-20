@@ -1,11 +1,11 @@
 using Microsoft.Extensions.Hosting;
 
-namespace MadWizard.Desomnia
+namespace MadWizard.Desomnia.Application.Shutdown
 {
     /// <summary>
     /// Graceful teardown for a persistent service that is created lazily, on first demand.
     /// Implementing this interface is all it takes: when the persistent container activates
-    /// an instance, resolve middleware hands it to the <see cref="Application.Lifetime.ShutdownCoordinator"/>,
+    /// an instance, resolve middleware hands it to the <see cref="Shutdown.ShutdownCoordinator"/>,
     /// whose <see cref="IHostedService.StopAsync"/> runs the teardowns with hosted-service
     /// stop timing — after the application host has drained, before <c>ApplicationStopped</c>
     /// releases the process lifetime (on Windows: before the SCM is told the service stopped) —

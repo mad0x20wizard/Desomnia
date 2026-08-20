@@ -7,7 +7,7 @@ using Xunit;
 namespace MadWizard.Desomnia.Tests
 {
     /// <summary>
-    /// The XML reader: the one place that understands the lexical form — global directives,
+    /// The XML reader: the one place that understands the lexical form — system directives,
     /// namespace handling, and the conversion into the abstract <see cref="ConfigNode"/> tree.
     /// </summary>
     public class XmlConfigurationReaderTests
@@ -16,19 +16,19 @@ namespace MadWizard.Desomnia.Tests
             => XmlConfigurationReader.Read(new MemoryStream(Encoding.UTF8.GetBytes(xml)));
 
         [Fact]
-        internal void Read_ExposesRootName_AndGlobalDirectives_InDocumentOrder()
+        internal void Read_ExposesRootName_AndSystemDirectives_InDocumentOrder()
         {
             var file = Read("""
                 <?xml version="1.0" encoding="utf-8" ?>
-                <?global useDBus="false" ?>
-                <?global ProcessManager:pollInterval="2s" ?>
-                <SystemMonitor version="1" />
-                <?global PowerManager:watchOperation='sleep' ?>
+                <?system useDBus="false" ?>
+                <?system ProcessManager:pollInterval="2s" ?>
+                <SystemMonitor />
+                <?system PowerManager:watchOperation='sleep' ?>
                 """);
 
             Assert.Equal("SystemMonitor", file.RootName);
 
-            Assert.Collection(file.GlobalDirectives,
+            Assert.Collection(file.SystemDirectives,
                 directive => { Assert.Equal("useDBus", directive.Key); Assert.Equal("false", directive.Value); },
                 directive => { Assert.Equal("ProcessManager:pollInterval", directive.Key); Assert.Equal("2s", directive.Value); },
                 directive => { Assert.Equal("PowerManager:watchOperation", directive.Key); Assert.Equal("sleep", directive.Value); });
@@ -37,16 +37,16 @@ namespace MadWizard.Desomnia.Tests
         [Fact]
         internal void Read_WithoutDirectives_YieldsEmptyList()
         {
-            Assert.Empty(Read("""<SystemMonitor version="1" />""").GlobalDirectives);
+            Assert.Empty(Read("""<SystemMonitor />""").SystemDirectives);
         }
 
         [Fact]
-        internal void Read_GlobalDirectiveInsideTheRoot_Throws()
+        internal void Read_SystemDirectiveInsideTheRoot_Throws()
         {
             var ex = Assert.Throws<ConfigurationValueException>(() => Read("""
-                <SystemMonitor version="1">
+                <SystemMonitor>
                   <NetworkMonitor>
-                    <?global useDBus="false" ?>
+                    <?system useDBus="false" ?>
                   </NetworkMonitor>
                 </SystemMonitor>
                 """));
@@ -60,11 +60,11 @@ namespace MadWizard.Desomnia.Tests
         [InlineData("""a="1" b="2" """)]           // two pairs
         [InlineData("""="value" """)]              // empty key
         [InlineData("")]                           // empty data
-        internal void Read_InvalidGlobalDirective_Throws(string data)
+        internal void Read_InvalidSystemDirective_Throws(string data)
         {
             Assert.Throws<ConfigurationValueException>(() => Read($"""
-                <?global {data}?>
-                <SystemMonitor version="1" />
+                <?system {data}?>
+                <SystemMonitor />
                 """));
         }
 
@@ -73,12 +73,12 @@ namespace MadWizard.Desomnia.Tests
         {
             var file = Read("""
                 <?something else="entirely" ?>
-                <SystemMonitor version="1">
+                <SystemMonitor>
                   <?another one ?>
                 </SystemMonitor>
                 """);
 
-            Assert.Empty(file.GlobalDirectives);
+            Assert.Empty(file.SystemDirectives);
         }
 
         [Fact]
@@ -91,7 +91,7 @@ namespace MadWizard.Desomnia.Tests
         internal void ToConfigNode_MapsAttributesAndElements_InDocumentOrder()
         {
             var node = Read("""
-                <SystemMonitor version="1" timeout="5min">
+                <SystemMonitor timeout="5min">
                   <NetworkMonitor interface="en0" />
                 </SystemMonitor>
                 """).ToConfigNode();
@@ -100,7 +100,6 @@ namespace MadWizard.Desomnia.Tests
             Assert.Null(node.Value);
 
             Assert.Collection(node.Children,
-                child => { Assert.Equal(ConfigNodeKind.Attribute, child.Kind); Assert.Equal("version", child.Name); Assert.Equal("1", child.Value); },
                 child => { Assert.Equal(ConfigNodeKind.Attribute, child.Kind); Assert.Equal("timeout", child.Name); Assert.Equal("5min", child.Value); },
                 child =>
                 {
@@ -117,13 +116,13 @@ namespace MadWizard.Desomnia.Tests
         internal void ToConfigNode_SkipsNamespaceDeclarations_AndUsesLocalNames()
         {
             var node = Read("""
-                <SystemMonitor version="1" xmlns:env="environment:process">
+                <SystemMonitor xmlns:env="environment:process" timeout="5min">
                   <env:Custom env:flag="on" />
                 </SystemMonitor>
                 """).ToConfigNode();
 
             Assert.Collection(node.Children,
-                child => Assert.Equal("version", child.Name), // no xmlns:env node
+                child => Assert.Equal("timeout", child.Name), // no xmlns:env node
                 child =>
                 {
                     Assert.Equal("Custom", child.Name); // local name
@@ -181,7 +180,7 @@ namespace MadWizard.Desomnia.Tests
         internal void ConfigNode_RoundTripsThroughTheXmlWriter()
         {
             var node = Read("""
-                <SystemMonitor version="1">
+                <SystemMonitor timeout="5min">
                   <Process name="Moonlight">/Applications/Moonlight.app</Process>
                   <Ethernet />
                 </SystemMonitor>
@@ -189,7 +188,7 @@ namespace MadWizard.Desomnia.Tests
 
             var xml = ConfigNodeXmlWriter.ToXElement(node);
 
-            Assert.Equal("1", xml.Attribute("version")!.Value);
+            Assert.Equal("5min", xml.Attribute("timeout")!.Value);
             Assert.Equal("/Applications/Moonlight.app", xml.Element("Process")!.Value);
             Assert.Equal("Moonlight", xml.Element("Process")!.Attribute("name")!.Value);
             Assert.True(xml.Element("Ethernet")!.IsEmpty);

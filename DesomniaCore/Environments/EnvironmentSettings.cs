@@ -6,12 +6,15 @@ namespace MadWizard.Desomnia.Environments
     /// The root settings of one parsed &lt;EnvironmentMonitor&gt; configuration generation,
     /// with the output paths already resolved to absolute paths (see the pipeline).
     /// </summary>
+    /// <param name="Version">The configuration format version the generation is in - what the
+    /// (possibly migrated) document declares, validated by the version check (see the pipeline);
+    /// the effective XML declares it on its root element.</param>
     internal sealed record EnvironmentSettings(
-        string Version,
+        uint Version,
         TimeSpan Debounce,
         ConflictResolution OnConflict,
-        string? OutputEffectiveXML,
-        string? OutputEffectiveConfiguration);
+        string? WriteEffectiveXML,
+        string? WriteEffectiveConfiguration);
 
     /// <summary>
     /// One computed effective configuration — the payload of

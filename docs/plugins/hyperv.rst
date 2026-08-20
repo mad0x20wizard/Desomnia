@@ -26,8 +26,7 @@ Example configuration
 The following configuration keeps a self-hosted GitLab VM running only when it is actually in use. The VM starts automatically when a client connects to one of its services and suspends once it has been idle for ten minutes:
 
 .. code:: xml
-
-  <SystemMonitor version="1" timeout="2min" onIdle="sleep+1h" onDemand="sleepless">
+  <SystemMonitor version="2" timeout="2min" onIdle="sleep+1h" onDemand="sleepless">
 
     <NetworkMonitor network="192.168.178.0/24" autoDetect="MAC|IPv4|IPv6" handoff="UnMagicPacket">
 

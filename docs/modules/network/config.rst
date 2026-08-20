@@ -13,8 +13,7 @@ Desomnia provides support for monitoring any number of installed network interfa
 .. TODO: should sweep made be publicly configurable?
 
 .. code:: xml
-
-  <SystemMonitor version="1">
+  <SystemMonitor version="2">
 
     <NetworkMonitor interface="eth0" network="192.168.178.0/24"
 

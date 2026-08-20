@@ -1,4 +1,5 @@
 using Autofac;
+using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Options;
@@ -7,7 +8,6 @@ using MadWizard.Desomnia.Network.FRITZ.Configuration;
 using MadWizard.Desomnia.Network.FRITZ.Context;
 using MadWizard.Desomnia.Network.FRITZ.Discovery;
 using MadWizard.Desomnia.Network.FRITZ.Neighborhood;
-using Microsoft.Extensions.Configuration.Xml;
 using NetworkMonitorConfig = MadWizard.Desomnia.Network.FRITZ.Configuration.NetworkMonitorConfig;
 
 namespace MadWizard.Desomnia.Network.FRITZ

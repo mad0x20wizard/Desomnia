@@ -68,7 +68,7 @@ namespace MadWizard.Desomnia.Tests
         public void AttributesAndNestedElements_MatchTheStockLayout()
         {
             const string xml = """
-                <SystemMonitor version="1" timeout="00:05:00">
+                <SystemMonitor timeout="00:05:00">
                   <NetworkMonitor interface="en0">
                     <Discovery scan="true" />
                   </NetworkMonitor>

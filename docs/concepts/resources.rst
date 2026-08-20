@@ -43,7 +43,7 @@ A corresponding configuration, that makes use of all these types, could look lik
 .. code:: xml
 
     <?xml version="1.0" encoding="utf-8"?>
-    <SystemMonitor version="1" timeout="2min" onIdle="sleep" onDemand="sleepless">
+    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onDemand="sleepless">
 
         <SessionMonitor>
             <User name="John">
@@ -86,8 +86,7 @@ onIdle
 Fires when a resource has been idle for a complete timeout cycle.
 
 .. code:: xml
-
-    <SystemMonitor version="1" timeout="2min" onIdle="sleep">
+    <SystemMonitor version="2" timeout="2min" onIdle="sleep">
 
 onDemand
 ++++++++
@@ -97,8 +96,7 @@ onDemand
 Fires when a resource transitions from idle to active. For resources that can detect activity without polling — such as network connections or incoming service requests — Desomnia fires this event immediately when the activity is observed. For other resources, the transition is detected at the next timeout cycle.
 
 .. code:: xml
-
-    <SystemMonitor version="1" timeout="2min" onIdle="sleep" onDemand="sleepless">
+    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onDemand="sleepless">
 
 With both events configured, Desomnia holds a *sleepless* power request while any monitor is active, and releases it — then puts the system to sleep — once everything goes quiet.
 
@@ -141,8 +139,7 @@ The system is idle only when every monitor is idle, but individual monitors and 
 For example, a user session may go idle while an open SMB connection is still keeping the system busy:
 
 .. code:: xml
-
-    <SystemMonitor version="1" timeout="2min" onIdle="sleep" onDemand="sleepless">
+    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onDemand="sleepless">
 
         <SessionMonitor>
             <User name="John" onIdle="logout" />
@@ -162,8 +159,7 @@ Actions are resolved up the tree: a resource or monitor can reference actions de
 A practical use of this is the ``exec`` action, which runs an arbitrary command. Any monitor or resource can trigger it:
 
 .. code:: xml
-
-    <SystemMonitor version="1" timeout="2min" onIdle="sleep">
+    <SystemMonitor version="2" timeout="2min" onIdle="sleep">
 
         <SessionMonitor>
             <User name="John" onIdle="exec('C:\scripts\notify.ps1')" />

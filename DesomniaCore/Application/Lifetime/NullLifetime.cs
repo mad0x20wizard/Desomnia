@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Hosting;
 
-namespace MadWizard.Desomnia
+namespace MadWizard.Desomnia.Application.Lifetime
 {
     /// <summary>
     /// A no-op <see cref="IHostLifetime"/> for the inner application host. The process

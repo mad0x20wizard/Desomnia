@@ -1,4 +1,5 @@
 using MadWizard.Desomnia;
+using MadWizard.Desomnia.Application;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Systemd;
@@ -43,7 +44,7 @@ DesomniaDaemonBuilder builder;
 
 return Environment.ExitCode;
 
-class DesomniaDaemonBuilder(string[] args) : MadWizard.Desomnia.ApplicationBuilder(args)
+class DesomniaDaemonBuilder(string[] args) : ApplicationBuilder(args)
 {
     // Filesystem Hierarchy Standard
     const string FHS_CONFIG_PATH        = "/etc/desomnia";

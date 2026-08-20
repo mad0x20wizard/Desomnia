@@ -1,11 +1,13 @@
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
-using MadWizard.Desomnia.Application;
-using MadWizard.Desomnia.Application.Module;
+using MadWizard.Desomnia;
+using MadWizard.Desomnia.Application.Lifetime;
+using MadWizard.Desomnia.Application.Shutdown;
 using MadWizard.Desomnia.Configuration;
+using MadWizard.Desomnia.Configuration.Migration;
+using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Environments;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.Xml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -16,7 +18,7 @@ using NLog.Extensions.Logging;
 using NLog.Targets;
 using System.Runtime.CompilerServices;
 
-namespace MadWizard.Desomnia
+namespace MadWizard.Desomnia.Application
 {
     /*
      * The builder is long-lived: modules are registered exactly once and survive application
@@ -33,7 +35,10 @@ namespace MadWizard.Desomnia
 
         protected readonly ExtendedXmlConfigurationSource _source;
 
-        readonly List<Module> _modules = [];
+        // the central authority over the module system: the registered modules and everything
+        // derived from the set - the format algebra and the version check that refuses a
+        // mismatched file (the pipeline runs it), with or without the migration layer attached
+        readonly ModuleRegistry _registry = new();
 
         // the persistent host and its Autofac container (the machine-lifetime scope). Built once by
         // Build(), disposed only when the whole application stops — NOT on a configuration rebuild,
@@ -146,17 +151,17 @@ namespace MadWizard.Desomnia
             result.Invoke();
         }
 
-        #region Platform registrations
+        #region Module registrations
         public void RegisterModule(Module module)
         {
-            _modules.Add(module);
+            _registry.Register(module);
         }
 
         public void RegisterPluginModules()
         {
             foreach (var path in DefaultPluginsPaths)
             {
-                this.RegisterPluginModules(path);
+                _registry.RegisterPluginModules(path);
             }
         }
         #endregion
@@ -171,6 +176,8 @@ namespace MadWizard.Desomnia
         /// <see cref="ApplicationHost"/>, whose loop builds, runs and rebuilds the inner application
         /// hosts. Its configuration is the root configuration (see <see cref="LoadConfiguration"/>),
         /// which every module sees in <see cref="Module.BuildOnce"/> before the container is built.
+        /// Logging is configured before the configuration is loaded, because loading the root source
+        /// reads (and possibly migrates) the file immediately.
         /// Only a genuine process stop or a fatal configuration brings it down; a fatal
         /// escapes <see cref="ApplicationHost.Run"/> to the entry point with a non-zero exit code.
         /// </summary>
@@ -178,14 +185,17 @@ namespace MadWizard.Desomnia
         {
             var builder = new HostApplicationBuilder(DefaultSettings);
 
+            // logging first: adding the root source below reads the file at once, and an
+            // outdated file is migrated right there - which must be able to log
+            ConfigureLogging(builder.Logging);
+
             LoadConfiguration(builder);
 
-            ConfigureLogging(builder.Logging);
             ConfigureServices(builder.Services);
 
             builder.ConfigureContainer(new AutofacServiceProviderFactory(), ConfigureContainer);
 
-            foreach (var module in _modules)
+            foreach (var module in _registry.Modules)
             {
                 module.BuildOnce(builder);
             }
@@ -200,7 +210,7 @@ namespace MadWizard.Desomnia
         /// <summary>
         /// Makes the root host's <see cref="HostApplicationBuilder.Configuration"/> the authority
         /// over the root configuration: the physical source's nested root source (the
-        /// <c>&lt;?global?&gt;</c> directives; see <see cref="IRootConfigurationSource"/>) is added
+        /// <c>&lt;?system?&gt;</c> directives; see <see cref="IRootConfigurationSource"/>) is added
         /// like any other source, so the modules read it through the builder in
         /// <see cref="Module.BuildOnce"/> and the persistent services bind it through the standard
         /// options interfaces — an <c>IOptionsMonitor&lt;T&gt;</c> follows the file when auto-reload
@@ -212,21 +222,46 @@ namespace MadWizard.Desomnia
             {
                 // the collection-element knowledge must exist before the pipeline reads the file
                 // (the merger and the flattener need it); contributed by every configurable module
-                foreach (var module in _modules.OfType<ConfigurableModule>())
+                foreach (var module in _registry.ConfigurableModules)
                 {
                     module.ConfigureConfigurationSource(xml);
                 }
+
+                AttachMigration(xml);
             }
 
             if (_source is IRootConfigurationSource root)
             {
                 builder.Configuration.Sources.Add(root.RootSource);
             }
+
+            // fix the format algebra now (all modules are registered) - an unsatisfiable module
+            // set fails the boot deterministically, even when the configuration file is missing
+            _ = _registry.RequiredVersion;
+        }
+
+        /// <summary>
+        /// Composes the migration layer UNDERNEATH the source, as one isolated operation: the
+        /// source's file provider is decorated (see <see cref="MigratingFileProvider"/>), so every
+        /// consumer of the file transparently reads the migrated form while the source itself
+        /// stays pristine. Skip this call and the source serves the file as-is — the version
+        /// check (<see cref="ModuleRegistry.Validate"/>, run by the pipeline) still
+        /// terminates the application on a mismatch.
+        /// </summary>
+        private void AttachMigration(ExtendedXmlConfigurationSource xml)
+        {
+            if (xml.FileProvider is not { } provider || xml.Path is not string path)
+                throw new InvalidOperationException("The configuration source has no file provider to decorate " +
+                    "(the migration layer needs the resolved provider of an absolute path).");
+
+            var migrator = new XConfigurationMigrator(_registry, () => xml.FullPath);
+
+            xml.FileProvider = new MigratingFileProvider(provider, migrator, path);
         }
 
         protected virtual void ConfigureLogging(ILoggingBuilder builder)
         {
-            foreach (var module in _modules)
+            foreach (var module in _registry.Modules)
             {
                 LogManager.Setup().SetupExtensions(module.ConfigureLogging);
             }
@@ -293,14 +328,17 @@ namespace MadWizard.Desomnia
             container.RegisterModule<FrameworkModule>();
 
             // the stage between the physical file and the monitor: mode detection, parsing,
-            // condition binding, change watching - and the fatal-exit policy for changes the
-            // running process cannot apply
+            // condition binding, change watching, the version check - and the fatal-exit
+            // policy for changes the running process cannot apply. It reads the file through
+            // the source's provider, like every other consumer - the migration layer (when
+            // composed underneath, see AttachMigration) is invisible to it
             container.RegisterType<ConfigurationPipeline>()
                 .WithParameter(TypedParameter.From(_source))
+                .WithParameter(TypedParameter.From(_registry))
                 .AsImplementedInterfaces().AsSelf()
                 .SingleInstance();
 
-            foreach (var module in _modules)
+            foreach (var module in _registry.Modules)
             {
                 module.LoadOnce(container);
             }
@@ -322,7 +360,7 @@ namespace MadWizard.Desomnia
 
             builder.ConfigureContainer(new AutofacServiceProviderFactory(), ConfigureApplicationContainer);
 
-            foreach (var module in _modules)
+            foreach (var module in _registry.Modules)
             {
                 module.Build(builder);
             }
@@ -376,7 +414,7 @@ namespace MadWizard.Desomnia
             // later-added source is the one consulted first.
             container.RegisterSource(new PriorityEnumerationSource());
 
-            foreach (var module in _modules)
+            foreach (var module in _registry.Modules)
             {
                 container.RegisterModule(module);
             }

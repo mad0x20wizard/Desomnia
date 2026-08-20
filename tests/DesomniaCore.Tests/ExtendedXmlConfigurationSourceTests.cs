@@ -1,5 +1,5 @@
+using MadWizard.Desomnia.Configuration.Xml;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.Xml;
 using Microsoft.Extensions.Primitives;
 using Xunit;
 
@@ -20,7 +20,7 @@ namespace MadWizard.Desomnia.Tests
         [Fact]
         public async Task MissingFileDuringReload_KeepsServingTheLastGoodData()
         {
-            File.WriteAllText(_path, """<SystemMonitor version="1" timeout="00:00:30" />""");
+            File.WriteAllText(_path, """<SystemMonitor timeout="00:00:30" />""");
 
             var source = new ExtendedXmlConfigurationSource(_path, optional: false, reloadOnChange: true);
 
@@ -52,7 +52,7 @@ namespace MadWizard.Desomnia.Tests
         [Fact]
         public async Task BadEditDuringReload_KeepsServingTheLastGoodData()
         {
-            File.WriteAllText(_path, """<SystemMonitor version="1" timeout="00:00:30" />""");
+            File.WriteAllText(_path, """<SystemMonitor timeout="00:00:30" />""");
 
             var source = new ExtendedXmlConfigurationSource(_path, optional: false, reloadOnChange: true);
 

@@ -1,12 +1,13 @@
 using Autofac;
 using MadWizard.Desomnia.Configuration.Model;
 using MadWizard.Desomnia.Configuration.Binding;
+using MadWizard.Desomnia.Configuration.Migration;
 using MadWizard.Desomnia.Configuration.Xml;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.Xml;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
 using System.Runtime.ExceptionServices;
+using MadWizard.Desomnia.Application;
 
 namespace MadWizard.Desomnia.Environments
 {
@@ -24,7 +25,7 @@ namespace MadWizard.Desomnia.Environments
     /// monitor. Changes the running process cannot apply are FATAL by design — the
     /// application exits with an error code and relies on the service manager to restart
     /// it: a change of the root element (mode switch), and any invalid edit (malformed
-    /// XML, unknown conditions, bad values). The <c>&lt;?global?&gt;</c> directives are
+    /// XML, unknown conditions, bad values). The <c>&lt;?system?&gt;</c> directives are
     /// not the pipeline's business: they are the root host's configuration, served (and
     /// reloaded) by the source's own nested root source.</para>
     /// </summary>
@@ -41,12 +42,17 @@ namespace MadWizard.Desomnia.Environments
         readonly EnvironmentMonitor _monitor;
         readonly ILifetimeScope _scope;
 
+        // the module registry: its version check is the authority that refuses a mismatched
+        // file, AFTER the migration (if any) had its chance and independent of it
+        readonly ModuleRegistry _registry;
+
         readonly Lock _lock = new();
 
         bool _augmenting;
 
-        // the raw file text of the current generation - a spurious watcher event that
-        // reports the same content skips the re-parse
+        // the file text of the current generation, as the source's provider SERVES it (see
+        // TryReadText) - a watcher event that yields the same served content skips the
+        // re-parse (a spurious event, or a migration's own file write)
         string? _readText;
 
         // passthrough only: the flattened data of the current generation - the rebuild
@@ -62,12 +68,14 @@ namespace MadWizard.Desomnia.Environments
 
         bool _disposed;
 
-        public ConfigurationPipeline(ExtendedXmlConfigurationSource source, EnvironmentMonitor monitor, ILifetimeScope scope)
+        public ConfigurationPipeline(ExtendedXmlConfigurationSource source, EnvironmentMonitor monitor, ILifetimeScope scope,
+            ModuleRegistry registry)
         {
             _source = source;
             _configPath = source.FullPath!;
             _monitor = monitor;
             _scope = scope;
+            _registry = registry;
 
             EffectiveSource = source;
         }
@@ -99,6 +107,10 @@ namespace MadWizard.Desomnia.Environments
                     _readText = text;
 
                     var file = XmlConfigurationReader.Read(text);
+
+                    // the version check, AFTER the migration (if composed) had its chance: a
+                    // file this build cannot use fails the boot right here
+                    _registry.Validate(file.Version);
 
                     _augmenting = DetectAugmenting(file.RootName);
 
@@ -170,18 +182,26 @@ namespace MadWizard.Desomnia.Environments
                 if (_disposed || _failure is not null)
                     return;
 
-                string text;
+                string? text;
                 try
                 {
-                    text = File.ReadAllText(_configPath);
+                    // the SERVED text (see TryReadText): a migration's own file write serves
+                    // the identical text again and falls out of the comparison below - while a
+                    // migration that ran on the providers' earlier read of a user edit serves
+                    // that edit's data, which the comparison duly catches. Only the data decides.
+                    text = TryReadText();
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FileNotFoundException or DirectoryNotFoundException)
+                catch (Exception ex)
                 {
-                    // an environment hiccup (a locked or vanished file), not an edit - the
-                    // next watcher event retries
-                    Logger.LogWarning(ex, $"Failed to read the configuration file '{_configPath}'; keeping the current configuration.");
+                    // the composition refused to serve the file (a malformed edit, a failing
+                    // migration): fatal by design - exit with an error code and let the
+                    // service manager restart the application (self-heal)
+                    Fail(ex);
                     return;
                 }
+
+                if (text is null)
+                    return; // an environment hiccup (see TryReadText) - the next watcher event retries
 
                 if (text == _readText)
                     return; // no material change (a touch, or a spurious watcher event)
@@ -204,6 +224,9 @@ namespace MadWizard.Desomnia.Environments
         {
             var file = XmlConfigurationReader.Read(text);
 
+            // an edit to a version this build cannot use is a fatal change like any other
+            _registry.Validate(file.Version);
+
             bool augmenting = DetectAugmenting(file.RootName);
 
             if (augmenting != _augmenting)
@@ -216,8 +239,9 @@ namespace MadWizard.Desomnia.Environments
             {
                 // no environments to re-merge: if the data the host reads changed, the loop
                 // rebuilds and the host's provider re-reads the file. An edit that leaves the
-                // data alone - formatting, comments, the <?global?> directives (which the root
-                // host's own source follows) - is no reason to restart the application.
+                // data alone - formatting, comments, the <?config?> header, the <?system?>
+                // directives (which the root host's own source follows) - is no reason to
+                // restart the application.
                 var pairs = Flatten(file);
 
                 if (_pairs is not null && _pairs.SequenceEqual(pairs))
@@ -249,13 +273,32 @@ namespace MadWizard.Desomnia.Environments
 
         #region Reading
 
+        /// <summary>
+        /// The file's text as the source's file provider serves it — the same content every
+        /// other consumer of the source reads: with the migration layer composed underneath
+        /// (a provider decorator, see the application builder), the migrated form; without it,
+        /// the file as-is. The pipeline knows no difference. Returns null for a missing file or
+        /// an environment hiccup (a locked or vanishing file — the next event retries); any
+        /// other failure of the composition (a malformed file, a failing migration) propagates:
+        /// a configuration that cannot be served stops the application.
+        /// </summary>
         private string? TryReadText()
         {
+            if (_source.FileProvider is not { } provider || _source.Path is not string path)
+                return null; // no file to read; the host's own provider reports it
+
             try
             {
-                return File.Exists(_configPath) ? File.ReadAllText(_configPath) : null;
+                var file = provider.GetFileInfo(path);
+
+                if (!file.Exists)
+                    return null;
+
+                using var stream = file.CreateReadStream();
+
+                return ConfigurationText.Decode(stream);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FileNotFoundException or DirectoryNotFoundException)
             {
                 Logger.LogWarning(ex, $"Failed to read the configuration file '{_configPath}'.");
                 return null;
@@ -282,9 +325,10 @@ namespace MadWizard.Desomnia.Environments
         {
             var result = EnvironmentParser.Parse(file.Root.Document!);
 
-            var settings = new EnvironmentSettings(result.Version, result.Debounce, result.OnConflict,
-                ResolveOutputPath(result.OutputEffectiveXML),
-                ResolveOutputPath(result.OutputEffectiveConfiguration));
+            // the version the (possibly migrated) document actually declares - already validated
+            var settings = new EnvironmentSettings(file.Version, result.Debounce, result.OnConflict,
+                ResolveOutputPath(result.WriteEffectiveXML),
+                ResolveOutputPath(result.WriteEffectiveConfiguration));
 
             var conditions = _scope.BeginLifetimeScope();
             try

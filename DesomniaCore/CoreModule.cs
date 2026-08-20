@@ -36,9 +36,6 @@ namespace MadWizard.Desomnia
 
         protected override void Load(ContainerBuilder builder, SystemMonitorConfig config)
         {
-            if ((config.Version) < SystemMonitorConfig.MIN_VERSION || (config.Version) > SystemMonitorConfig.MAX_VERSION)
-                throw new NotSupportedException($"Unsupported configuration version = {config.Version}");
-
             builder.RegisterServiceMiddlewareSource(new EventSystemMiddlewareSource());
 
             builder.RegisterType<ActionManager>()

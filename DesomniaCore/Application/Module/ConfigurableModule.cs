@@ -1,9 +1,9 @@
 using Autofac;
+using MadWizard.Desomnia.Application;
 using MadWizard.Desomnia.Configuration.Binding;
+using MadWizard.Desomnia.Configuration.Xml;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.Xml;
 using Microsoft.Extensions.Hosting;
-using System.Xml.Linq;
 
 namespace MadWizard.Desomnia
 {
@@ -11,12 +11,38 @@ namespace MadWizard.Desomnia
     {
         private IConfiguration? _rootConfig;
 
-        protected internal virtual uint MinVersion => 1;
-        protected internal virtual uint MaxVersion => 1;
-
-        protected internal virtual XDocument MigrateConfiguration(XDocument configuration, uint version) => configuration;
-
         protected internal virtual void ConfigureConfigurationSource(ExtendedXmlConfigurationSource source) { }
+
+        #region Versioning
+        /// <summary>
+        /// The product-wide configuration format version: bumped whenever ANY module introduces
+        /// an incompatible change to the file format (a file declares ONE version, as the root
+        /// element's <c>version</c> attribute — optionally mirrored in the &lt;?config?&gt;
+        /// header — so the format is versioned as a whole, not per module). A file may stay at
+        /// an OLDER version for as long as no loaded module demands a newer one (see
+        /// <see cref="MinVersion"/> and <see cref="ModuleRegistry"/>).
+        /// The history lives in docs/concepts/version.rst — version 2: the
+        /// DuoStreamIntegration plugin's element.
+        /// </summary>
+        public const uint LATEST_VERSION = 2;
+
+        /// <summary>
+        /// The format version in which this module last introduced an incompatible change, i.e.
+        /// the oldest file version it accepts WITHOUT migration. A module raises it to N when it
+        /// ships a change in version N together with the migration step for N (see
+        /// <c>Configuration.Xml.IXConfigurationMigration</c>).
+        /// </summary>
+        protected internal virtual uint MinVersion => 1;
+
+        /// <summary>
+        /// The newest format version this module accepts. Normally NOT overridden: modules and
+        /// plugins then accept every future version (as a virtual property of the core assembly,
+        /// an old plugin binary sees the new core's <see cref="LATEST_VERSION"/>). Only a plugin
+        /// that must be strict overrides it with a literal — the whole product is then limited
+        /// to that version.
+        /// </summary>
+        protected internal virtual uint MaxVersion => LATEST_VERSION;
+        #endregion
 
         #region Root configuration
         protected internal override void BuildOnce(HostApplicationBuilder builder)
@@ -31,7 +57,7 @@ namespace MadWizard.Desomnia
         /// <summary>
         /// The configuration-aware convenience overload of <see cref="LoadOnce(ContainerBuilder)"/>:
         /// it receives the root host's configuration — the same <see cref="IConfiguration"/> as
-        /// <see cref="BuildOnce"/>'s <c>builder.Configuration</c>, i.e. the <c>&lt;?global key="value"?&gt;</c>
+        /// <see cref="BuildOnce"/>'s <c>builder.Configuration</c>, i.e. the <c>&lt;?system key="value"?&gt;</c>
         /// directives of the configuration file — so a module can bind its own process-bound
         /// options (each binds the sections it needs, ignoring the rest) and register accordingly.
         /// The configuration may be empty (root configuration is optional); bind against defaults.

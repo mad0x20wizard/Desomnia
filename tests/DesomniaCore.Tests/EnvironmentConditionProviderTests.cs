@@ -1,10 +1,10 @@
 using Autofac;
-using MadWizard.Desomnia.Configuration;
+using MadWizard.Desomnia.Application;
 using MadWizard.Desomnia.Configuration.Binding;
+using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Environments;
 using MadWizard.Desomnia.Environments.Conditions;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.Xml;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Xml.Linq;
 using Xunit;
@@ -46,7 +46,7 @@ namespace MadWizard.Desomnia.Tests
         internal void Parser_TreatsNamespacedAttributes_AsConditions_AndSkipsTheDeclaration()
         {
             var result = Parse("""
-                <EnvironmentMonitor version="1" xmlns:env="environment:process">
+                <EnvironmentMonitor xmlns:env="environment:process">
                   <Environment env:USER="Kevin" power="ac"><SystemMonitor /></Environment>
                 </EnvironmentMonitor>
                 """);
@@ -74,7 +74,7 @@ namespace MadWizard.Desomnia.Tests
         internal void Parser_AllowsTheDeclaration_OnTheEnvironmentElementItself()
         {
             var result = Parse("""
-                <EnvironmentMonitor version="1">
+                <EnvironmentMonitor>
                   <Environment xmlns:env="environment:process" env:USER="Kevin"><SystemMonitor /></Environment>
                 </EnvironmentMonitor>
                 """);
@@ -89,7 +89,7 @@ namespace MadWizard.Desomnia.Tests
         {
             // env:name must not collide with the structural name attribute
             var result = Parse("""
-                <EnvironmentMonitor version="1" xmlns:env="environment:process">
+                <EnvironmentMonitor xmlns:env="environment:process">
                   <Environment name="real" env:name="value"><SystemMonitor /></Environment>
                 </EnvironmentMonitor>
                 """);
@@ -107,7 +107,7 @@ namespace MadWizard.Desomnia.Tests
         internal void Parser_RejectsNamespacedConditions_OnTheDefaultEnvironment()
         {
             var ex = Assert.Throws<ConfigurationValueException>(() => Parse("""
-                <EnvironmentMonitor version="1" xmlns:env="environment:process">
+                <EnvironmentMonitor xmlns:env="environment:process">
                   <Environment test="on"><SystemMonitor /></Environment>
                   <DefaultEnvironment env:USER="Kevin"><SystemMonitor /></DefaultEnvironment>
                 </EnvironmentMonitor>
@@ -159,7 +159,7 @@ namespace MadWizard.Desomnia.Tests
 
             var monitor = new EnvironmentMonitor { Logger = NullLogger.Instance };
 
-            return new ConfigurationPipeline(source, monitor, ConditionScope())
+            return new ConfigurationPipeline(source, monitor, ConditionScope(), new ModuleRegistry { Logger = NullLogger.Instance })
             {
                 Logger = NullLogger.Instance,
             };
@@ -171,7 +171,7 @@ namespace MadWizard.Desomnia.Tests
             Environment.SetEnvironmentVariable(_variable, "Kevin");
 
             var path = WriteConfig($"""
-                <EnvironmentMonitor version="1" xmlns:env="environment:process">
+                <EnvironmentMonitor xmlns:env="environment:process">
                   <Environment env:{_variable}="Kevin"><SystemMonitor marker="matched" /></Environment>
                   <DefaultEnvironment onlyIf="else"><SystemMonitor marker="fallback" /></DefaultEnvironment>
                 </EnvironmentMonitor>
@@ -190,7 +190,7 @@ namespace MadWizard.Desomnia.Tests
         internal void UnregisteredNamespace_IsAConfigurationError()
         {
             var path = WriteConfig("""
-                <EnvironmentMonitor version="1" xmlns:custom="something:unknown">
+                <EnvironmentMonitor xmlns:custom="something:unknown">
                   <Environment custom:key="value"><SystemMonitor /></Environment>
                 </EnvironmentMonitor>
                 """);

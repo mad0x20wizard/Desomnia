@@ -1,5 +1,5 @@
 using Autofac;
-using MadWizard.Desomnia.Application.Lifetime;
+using MadWizard.Desomnia.Application.Shutdown;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;

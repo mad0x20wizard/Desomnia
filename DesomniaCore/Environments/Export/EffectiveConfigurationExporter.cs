@@ -1,18 +1,23 @@
+using Autofac;
 using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia.Environments.Export
 {
     /// <summary>
     /// Writes a representation of the effective configuration somewhere a human can inspect
-    /// it. Exporters are loosely coupled: they live in the persistent container, react to
-    /// <see cref="EnvironmentMonitor.EffectiveChanged"/> (the ApplicationBuilder wires the
-    /// subscription), and clean their artifacts up when the application stops (disposal).
+    /// it. Exporters are loosely coupled: they live in the persistent container as startables,
+    /// subscribe to the <see cref="EnvironmentMonitor"/> when started (<see cref="Start"/> -
+    /// after the required properties are injected, which a constructor-time subscription
+    /// would run ahead of) and receive the effective configuration current at that moment,
+    /// then every change; they clean their artifacts up when the application stops (disposal).
     /// An exporter must never throw out of <see cref="Export"/> — a failed export is a
     /// logged inconvenience, not a configuration failure.
     /// </summary>
-    internal abstract class EffectiveConfigurationExporter : IDisposable
+    internal abstract class EffectiveConfigurationExporter : IStartable, IDisposable
     {
         public required ILogger Logger { protected get; init; }
+
+        readonly EnvironmentMonitor _monitor;
 
         protected string? WrittenPath
         {
@@ -37,8 +42,14 @@ namespace MadWizard.Desomnia.Environments.Export
 
         protected EffectiveConfigurationExporter(EnvironmentMonitor monitor)
         {
-            monitor.EffectiveChanged += Export;
+            ArgumentNullException.ThrowIfNull(monitor);
+
+            _monitor = monitor;
         }
+
+        /// <summary>Subscribes to the monitor - and exports the effective configuration it has
+        /// already published, if any: the pipeline (a startable, too) may well have run first.</summary>
+        public void Start() => _monitor.Subscribe(Export);
 
         protected abstract void Export(EffectiveConfiguration effective);
 
@@ -63,6 +74,8 @@ namespace MadWizard.Desomnia.Environments.Export
 
         void IDisposable.Dispose()
         {
+            _monitor.EffectiveChanged -= Export;
+
             lock (this)
             {
                 Remove();

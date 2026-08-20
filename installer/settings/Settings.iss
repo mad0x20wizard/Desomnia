@@ -402,7 +402,7 @@ begin
   end;
 end;
 
-function ShouldConfigureDuoStreamMonitor(): Boolean;
+function ShouldConfigureDuoSessionMonitor(): Boolean;
 begin
   if ShouldConfigureDesomnia then
     Result := IsComponentSelected('plugins\DuoStreamIntegration')
@@ -410,7 +410,7 @@ begin
     Result := False;
 end;
 
-function DuoStreamMonitorPrefs(Param: String): String;
+function DuoSessionMonitorPrefs(Param: String): String;
 begin
   Result := '';
     

@@ -44,6 +44,9 @@ namespace MadWizard.Desomnia.Environments
         OrderedConfigurationData _data = OrderedConfigurationData.Empty;
         IReadOnlyList<KeyValuePair<string, string?>> _pairs = [];
 
+        // the last published effective configuration - what a late subscriber gets to see (see Subscribe)
+        EffectiveConfiguration? _effective;
+
         // the reload signal: the application loop links its run against ReloadToken, and a
         // change — a condition, a file edit — cancels it. ArmReload() arms a fresh token per
         // inner build, so a change that lands during a build's startup is never lost.
@@ -69,8 +72,31 @@ namespace MadWizard.Desomnia.Environments
 
         /// <summary>Raised whenever a new effective configuration has been computed — the
         /// providers reload from it, the exporters write their files from it. Raised outside
-        /// hot paths but under the monitor's state transitions; handlers must not throw.</summary>
+        /// hot paths but under the monitor's state transitions; handlers must not throw.
+        /// A subscriber that must not miss the configuration published before it arrived
+        /// subscribes through <see cref="Subscribe"/>.</summary>
         internal event Action<EffectiveConfiguration>? EffectiveChanged;
+
+        /// <summary>
+        /// Subscribes to <see cref="EffectiveChanged"/> and hands the handler the effective
+        /// configuration published so far (if any) right away - under the lock, so no
+        /// publication slips between the two. For subscribers that come to life after the
+        /// pipeline has started: Autofac starts the startables (the pipeline among them, which
+        /// publishes the first effective configuration) before it activates anything else, so
+        /// the exporters only ever hear of that first configuration this way.
+        /// </summary>
+        internal void Subscribe(Action<EffectiveConfiguration> handler)
+        {
+            ArgumentNullException.ThrowIfNull(handler);
+
+            lock (_lock)
+            {
+                EffectiveChanged += handler;
+
+                if (_effective is EffectiveConfiguration current)
+                    Invoke(handler, current);
+            }
+        }
 
         /// <summary>Whether environments drive the configuration (augmenting mode). Test seam.</summary>
         internal bool Augmenting
@@ -226,9 +252,18 @@ namespace MadWizard.Desomnia.Environments
         // this runs on watcher threads outside any host try/catch
         private void Publish(EffectiveConfiguration effective)
         {
+            _effective = effective;
+
+            if (EffectiveChanged is Action<EffectiveConfiguration> handlers)
+                Invoke(handlers, effective);
+        }
+
+        // under _lock
+        private void Invoke(Action<EffectiveConfiguration> handler, EffectiveConfiguration effective)
+        {
             try
             {
-                EffectiveChanged?.Invoke(effective);
+                handler(effective);
             }
             catch (Exception ex)
             {
@@ -244,29 +279,9 @@ namespace MadWizard.Desomnia.Environments
 
             var root = ConfigMerger.Merge(active, _collections, settings.OnConflict);
 
-            StampVersion(root, settings.Version);
-
             var data = new OrderedConfigurationData(ConfigNodeFlattener.Flatten(root, _collections));
 
             return (new EffectiveConfiguration(settings, root, data, DescribeActive(active)), active);
-        }
-
-        /// <summary>Regardless of the block shapes, the version attribute always lives on the
-        /// configuration root, stamped from the &lt;EnvironmentMonitor&gt; root.</summary>
-        private static void StampVersion(ConfigNode root, string version)
-        {
-            if (root.Children.FirstOrDefault(child => child.Kind == ConfigNodeKind.Attribute
-                && child.HasName(EnvironmentParser.VERSION_ATTRIBUTE)) is ConfigNode existing)
-            {
-                existing.Value = version;
-            }
-            else
-            {
-                root.Children.Insert(0, new ConfigNode(EnvironmentParser.VERSION_ATTRIBUTE, ConfigNodeKind.Attribute)
-                {
-                    Value = version,
-                });
-            }
         }
 
         private void LogActive(string description, IReadOnlyList<EnvironmentBlock> active)

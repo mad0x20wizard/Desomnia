@@ -1,8 +1,9 @@
 using Autofac;
+using MadWizard.Desomnia.Application;
 using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Configuration.Binding;
+using MadWizard.Desomnia.Configuration.Xml;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.Xml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -11,7 +12,7 @@ using Xunit;
 namespace MadWizard.Desomnia.Tests
 {
     /// <summary>
-    /// The root (process-lifetime) configuration: the <c>&lt;?global?&gt;</c> directives are
+    /// The root (process-lifetime) configuration: the <c>&lt;?system?&gt;</c> directives are
     /// served by the physical source's nested root source (<see cref="IRootConfigurationSource"/>),
     /// which the root host's builder consumes like any other source - so the modules see them
     /// through the builder in BuildOnce (and as LoadOnce's convenience argument), the persistent
@@ -41,6 +42,8 @@ namespace MadWizard.Desomnia.Tests
 
             protected internal override void BuildOnce(HostApplicationBuilder builder)
             {
+                base.BuildOnce(builder); // the base remembers the configuration for LoadOnce
+
                 Calls.Add(nameof(BuildOnce));
 
                 BuiltWith = builder.Configuration;
@@ -101,12 +104,12 @@ namespace MadWizard.Desomnia.Tests
         #region Reaching the modules
 
         [Fact]
-        public void GlobalDirectives_ReachBuildOnce_ThroughTheHostBuildersConfiguration_AndLoadOnce()
+        public void SystemDirectives_ReachBuildOnce_ThroughTheHostBuildersConfiguration_AndLoadOnce()
         {
             WriteConfig("""
-                <?global useDBus="false" ?>
-                <?global pollInterval="90s" ?>
-                <SystemMonitor version="6" />
+                <?system useDBus="false" ?>
+                <?system pollInterval="90s" ?>
+                <SystemMonitor />
                 """);
 
             var module = new CapturingModule();
@@ -132,7 +135,7 @@ namespace MadWizard.Desomnia.Tests
         [Fact]
         public void WithoutDirectives_LoadOnce_ReceivesAnEmptyConfiguration_AndBindingYieldsDefaults()
         {
-            WriteConfig("""<SystemMonitor version="6" />""");
+            WriteConfig("""<SystemMonitor />""");
 
             var module = new BindingModule();
 
@@ -149,8 +152,8 @@ namespace MadWizard.Desomnia.Tests
         public void Options_BindFromTheRootConfiguration_InThePersistentContainer()
         {
             WriteConfig("""
-                <?global Platform:useDBus="false" ?>
-                <SystemMonitor version="6" />
+                <?system Platform:useDBus="false" ?>
+                <SystemMonitor />
                 """);
 
             var builder = new ApplicationBuilder(_configPath);
@@ -165,9 +168,9 @@ namespace MadWizard.Desomnia.Tests
         public void StrictOptions_BindTheRootConfiguration_TheModulesWay_AndFollowAReload()
         {
             WriteConfig("""
-                <?global Platform:useDBus="false" ?>
-                <?global Platform:pollInterval="2s" ?>
-                <SystemMonitor version="6" />
+                <?system Platform:useDBus="false" ?>
+                <?system Platform:pollInterval="2s" ?>
+                <SystemMonitor />
                 """);
 
             var builder = new ApplicationBuilder(_configPath);
@@ -180,8 +183,8 @@ namespace MadWizard.Desomnia.Tests
             Assert.Equal(TimeSpan.FromSeconds(2), monitor.CurrentValue.PollInterval); // "2s" - the value variations
 
             WriteConfig("""
-                <?global Platform:pollInterval="5min" ?>
-                <SystemMonitor version="6" />
+                <?system Platform:pollInterval="5min" ?>
+                <SystemMonitor />
                 """);
             ((IConfigurationRoot)host.Services.GetRequiredService<IConfiguration>()).Reload();
 
@@ -194,11 +197,11 @@ namespace MadWizard.Desomnia.Tests
         #region The nested source
 
         [Fact]
-        public void GlobalDirectives_WorkBelowAnEnvironmentMonitorRoot_Too()
+        public void SystemDirectives_WorkBelowAnEnvironmentMonitorRoot_Too()
         {
             WriteConfig("""
-                <?global marker="here" ?>
-                <EnvironmentMonitor version="6">
+                <?system marker="here" ?>
+                <EnvironmentMonitor>
                   <Environment test="on"><SystemMonitor /></Environment>
                 </EnvironmentMonitor>
                 """);
@@ -214,9 +217,9 @@ namespace MadWizard.Desomnia.Tests
         public void Directives_BindThroughTheStrictBinder_WithPathsAndValueVariations()
         {
             WriteConfig("""
-                <?global Platform:useDBus="false" ?>
-                <?global Platform:pollInterval="2s" ?>
-                <SystemMonitor version="6" />
+                <?system Platform:useDBus="false" ?>
+                <?system Platform:pollInterval="2s" ?>
+                <SystemMonitor />
                 """);
 
             var configuration = RootConfiguration(_configPath);
@@ -233,8 +236,8 @@ namespace MadWizard.Desomnia.Tests
         public void TheRootElement_IsNotPartOfTheRootConfiguration()
         {
             WriteConfig("""
-                <?global marker="here" ?>
-                <SystemMonitor version="6"><Section value="x" /></SystemMonitor>
+                <?system marker="here" ?>
+                <SystemMonitor><Section value="x" /></SystemMonitor>
                 """);
 
             var configuration = RootConfiguration(_configPath);
@@ -248,9 +251,9 @@ namespace MadWizard.Desomnia.Tests
         public void DuplicateDirectiveKeys_AreAConfigurationError()
         {
             WriteConfig("""
-                <?global useDBus="false" ?>
-                <?global USEDBUS="true" ?>
-                <SystemMonitor version="6" />
+                <?system useDBus="false" ?>
+                <?system USEDBUS="true" ?>
+                <SystemMonitor />
                 """);
 
             // the stock file provider wraps a load failure; the cause is ours
@@ -270,7 +273,7 @@ namespace MadWizard.Desomnia.Tests
         [Fact]
         public void RootSource_FollowsTheParentsReloadOnChange_AsOfBuildTime()
         {
-            WriteConfig("""<SystemMonitor version="6" />""");
+            WriteConfig("""<SystemMonitor />""");
 
             var source = new ExtendedXmlConfigurationSource(_configPath);
 
@@ -296,8 +299,8 @@ namespace MadWizard.Desomnia.Tests
         public void OptionsMonitor_FollowsAReloadOfTheRootConfiguration()
         {
             WriteConfig("""
-                <?global Platform:useDBus="false" ?>
-                <SystemMonitor version="6" />
+                <?system Platform:useDBus="false" ?>
+                <SystemMonitor />
                 """);
 
             var builder = new ApplicationBuilder(_configPath);
@@ -312,8 +315,8 @@ namespace MadWizard.Desomnia.Tests
             using var subscription = monitor.OnChange(options => changed = options);
 
             WriteConfig("""
-                <?global Platform:useDBus="true" ?>
-                <SystemMonitor version="6" />
+                <?system Platform:useDBus="true" ?>
+                <SystemMonitor />
                 """);
 
             // the root host's configuration is the authority - a reload of it is all it takes
@@ -328,15 +331,15 @@ namespace MadWizard.Desomnia.Tests
         public void BadEdit_KeepsTheLastGoodRootConfiguration()
         {
             WriteConfig("""
-                <?global Platform:useDBus="false" ?>
-                <SystemMonitor version="6" />
+                <?system Platform:useDBus="false" ?>
+                <SystemMonitor />
                 """);
 
             var configuration = RootConfiguration(_configPath);
 
             Assert.Equal("false", configuration["Platform:useDBus"]);
 
-            WriteConfig("""<?global Platform:useDBus="true" ?><SystemMonitor version="6" >""");
+            WriteConfig("""<?system Platform:useDBus="true" ?><SystemMonitor >""");
             configuration.Reload();
 
             // the effective configuration's reload is the one that reports the edit
@@ -347,8 +350,8 @@ namespace MadWizard.Desomnia.Tests
         public async Task WithAutoReload_AnEditOfTheFile_ReachesTheOptionsMonitor()
         {
             WriteConfig("""
-                <?global Platform:useDBus="false" ?>
-                <SystemMonitor version="6" />
+                <?system Platform:useDBus="false" ?>
+                <SystemMonitor />
                 """);
 
             var builder = new TestBuilder(_configPath);
@@ -367,8 +370,8 @@ namespace MadWizard.Desomnia.Tests
                 using var subscription = monitor.OnChange(options => changed.TrySetResult(options.UseDBus));
 
                 WriteConfig("""
-                    <?global Platform:useDBus="true" ?>
-                    <SystemMonitor version="6" />
+                    <?system Platform:useDBus="true" ?>
+                    <SystemMonitor />
                     """);
 
                 Assert.True(await changed.Task.WaitAsync(TimeSpan.FromSeconds(15)));

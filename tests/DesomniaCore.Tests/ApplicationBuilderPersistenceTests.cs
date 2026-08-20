@@ -1,4 +1,7 @@
 using Autofac;
+using MadWizard.Desomnia.Application;
+using MadWizard.Desomnia.Application.Shutdown;
+using MadWizard.Desomnia.Configuration.Migration;
 using Xunit;
 
 namespace MadWizard.Desomnia.Tests
@@ -14,7 +17,7 @@ namespace MadWizard.Desomnia.Tests
 
         public ApplicationBuilderPersistenceTests()
         {
-            File.WriteAllText(_configPath, """<SystemMonitor version="6" timeout="00:10:00" />""");
+            File.WriteAllText(_configPath, $"""<?config version="{ConfigurableModule.LATEST_VERSION}"?><SystemMonitor timeout="00:10:00" />""");
         }
 
         public void Dispose() => File.Delete(_configPath);
@@ -67,8 +70,6 @@ namespace MadWizard.Desomnia.Tests
 
         public sealed class TestConfig
         {
-            public int Version { get; set; }
-
             public TimeSpan? Timeout { get; set; }
 
             public string? Marker { get; set; }
@@ -188,7 +189,7 @@ namespace MadWizard.Desomnia.Tests
             var envPath = Path.Combine(Path.GetTempPath(), $"desomnia-env-{Guid.NewGuid():N}.xml");
 
             File.WriteAllText(envPath, """
-                <EnvironmentMonitor version="6">
+                <EnvironmentMonitor>
                   <Environment probed="on"><SystemMonitor marker="matched" /></Environment>
                   <DefaultEnvironment onlyIf="else"><SystemMonitor marker="fallback" /></DefaultEnvironment>
                 </EnvironmentMonitor>
@@ -232,12 +233,60 @@ namespace MadWizard.Desomnia.Tests
             using (var app2 = builder.BuildApplication()) { }
 
             Assert.Equal(2, module.Received.Count);
-            Assert.All(module.Received, config =>
-            {
-                Assert.Equal(6, config.Version);
-                Assert.Equal(TimeSpan.FromMinutes(10), config.Timeout);
-            });
+            Assert.All(module.Received, config => Assert.Equal(TimeSpan.FromMinutes(10), config.Timeout));
             Assert.NotSame(module.Received[0], module.Received[1]);
         }
+
+        #region Configuration format
+
+        // a module that last changed its format in a version this build does not know yet
+        private sealed class DemandingModule : ConfigurableModule
+        {
+            protected internal override uint MinVersion => ConfigurableModule.LATEST_VERSION + 1;
+        }
+
+        // a strict plugin that accepts no format at all - the extreme of "limits the format"
+        private sealed class StrictPluginModule : ConfigurableModule
+        {
+            protected internal override uint MaxVersion => 0;
+        }
+
+        // the root file provider wraps a load failure; the cause is the migrator's
+        private static ConfigurationMigrationException MigrationFailure(Action build)
+        {
+            var ex = Assert.ThrowsAny<Exception>(build);
+
+            return ex as ConfigurationMigrationException
+                ?? Assert.IsType<ConfigurationMigrationException>(Assert.IsType<InvalidDataException>(ex).InnerException);
+        }
+
+        [Fact]
+        public void Build_RegistersTheModulesWithTheMigrator_ADemandingModuleIsRefused()
+        {
+            var builder = new ApplicationBuilder(_configPath);
+
+            builder.RegisterModule(new DemandingModule());
+
+            var ex = MigrationFailure(() => builder.Build());
+
+            Assert.Contains(nameof(DemandingModule), ex.Message);
+            Assert.Contains($"requires version {ConfigurableModule.LATEST_VERSION + 1}", ex.Message);
+        }
+
+        [Fact]
+        public void Build_RegistersTheModulesWithTheMigrator_AStrictPluginLimitsTheFormat()
+        {
+            var builder = new ApplicationBuilder(_configPath);
+
+            builder.RegisterModule(new StrictPluginModule());
+            builder.RegisterModule(new ConfigurableTestModule()); // requires 1 > supported 0
+
+            var ex = MigrationFailure(() => builder.Build());
+
+            Assert.Contains(nameof(StrictPluginModule), ex.Message);
+            Assert.Contains("supports at most version 0", ex.Message);
+        }
+
+        #endregion
     }
 }

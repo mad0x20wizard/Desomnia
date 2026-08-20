@@ -8,8 +8,8 @@ namespace MadWizard.Desomnia.Configuration.Xml
 {
     /// <summary>
     /// The one place that understands the XML representation of a configuration file. It
-    /// reads the physical document into its abstract parts — the global directives (the
-    /// <c>&lt;?global ...?&gt;</c> processing instructions outside the root element) and the
+    /// reads the physical document into its abstract parts — the system directives (the
+    /// <c>&lt;?system ...?&gt;</c> processing instructions outside the root element) and the
     /// content as a <see cref="ConfigNode"/> tree — so everything downstream (the environment
     /// pipeline, the providers, the merger) is independent of the lexical form.
     ///
@@ -20,66 +20,85 @@ namespace MadWizard.Desomnia.Configuration.Xml
     /// </summary>
     internal static partial class XmlConfigurationReader
     {
+        /// <summary>Parses and wraps a stream — the content AS SERVED: for the real file the
+        /// providers and the pipeline read through the source's file provider, where the
+        /// migration layer (when composed underneath) already did its work.</summary>
         public static XmlConfigurationFile Read(Stream stream)
-            => Read(() => XDocument.Load(stream));
+            => Read(Parse(() => XDocument.Load(stream, LoadOptions.PreserveWhitespace)));
 
+        /// <summary>Parses and wraps a text (see <see cref="Read(Stream)"/>).</summary>
         public static XmlConfigurationFile Read(string text)
-            => Read(() => XDocument.Parse(text));
+            => Read(Parse(text));
 
-        private static XmlConfigurationFile Read(Func<XDocument> load)
+        /// <summary>
+        /// The parse half: text to document, well-formedness errors reported as configuration
+        /// errors. Whitespace is preserved on purpose - the migrator hands this very document to
+        /// the modules and writes it back to the file, so it must keep the file's shape (the
+        /// ConfigNode conversion ignores whitespace-only text anyway).
+        /// </summary>
+        public static XDocument Parse(string text)
+            => Parse(() => XDocument.Parse(text, LoadOptions.PreserveWhitespace));
+
+        private static XDocument Parse(Func<XDocument> load)
         {
-            XDocument document;
             try
             {
-                document = load();
+                return load();
             }
             catch (XmlException ex)
             {
                 throw new ConfigurationValueException($"The configuration is not well-formed XML: {ex.Message}", ex);
             }
+        }
 
+        /// <summary>The wrap half: root check and the system directives of an already parsed (and migrated) document.</summary>
+        public static XmlConfigurationFile Read(XDocument document)
+        {
             if (document.Root is not XElement root)
                 throw new ConfigurationValueException("The configuration has no root element.");
 
-            return new XmlConfigurationFile(root, ReadGlobalDirectives(document));
+            // the version declaration is validated on EVERY read (a contradictory or malformed
+            // declaration fails fast, wherever the document enters), the check against the
+            // loaded modules is the version check's (ModuleRegistry.Validate)
+            return new XmlConfigurationFile(root, ReadSystemDirectives(document), XConfigVersion.Read(document));
         }
 
-        #region Global directives
+        #region System directives
 
-        internal const string GLOBAL_DIRECTIVE_TARGET = "global";
+        internal const string SYSTEM_DIRECTIVE_TARGET = "system";
 
         // exactly one key="value" pair (single or double quotes); the key may contain the
         // configuration path separator (e.g. "ProcessManager:pollInterval")
         [GeneratedRegex("""^\s*(?<key>[^\s='"]+)\s*=\s*("(?<value>[^"]*)"|'(?<value>[^']*)')\s*$""")]
         private static partial Regex DirectivePattern();
 
-        private static List<GlobalDirective> ReadGlobalDirectives(XDocument document)
+        private static List<SystemDirective> ReadSystemDirectives(XDocument document)
         {
-            // a <?global?> below the root would suggest scoped semantics that do not exist -
+            // a <?system?> below the root would suggest scoped semantics that do not exist -
             // the root configuration is process-wide, so it must stay outside the root
             if (document.Root!.DescendantNodes().OfType<XProcessingInstruction>()
-                .FirstOrDefault(IsGlobalDirective) is XProcessingInstruction misplaced)
+                .FirstOrDefault(IsSystemDirective) is XProcessingInstruction misplaced)
             {
-                throw new ConfigurationValueException($"<?{GLOBAL_DIRECTIVE_TARGET} {misplaced.Data}?> must be " +
+                throw new ConfigurationValueException($"<?{SYSTEM_DIRECTIVE_TARGET} {misplaced.Data}?> must be " +
                     $"placed outside of the <{document.Root.Name.LocalName}> root element.");
             }
 
-            List<GlobalDirective> directives = [];
+            List<SystemDirective> directives = [];
 
-            foreach (var instruction in document.Nodes().OfType<XProcessingInstruction>().Where(IsGlobalDirective))
+            foreach (var instruction in document.Nodes().OfType<XProcessingInstruction>().Where(IsSystemDirective))
             {
                 if (DirectivePattern().Match(instruction.Data) is not { Success: true } match)
-                    throw new ConfigurationValueException($"Invalid processing instruction <?{GLOBAL_DIRECTIVE_TARGET} " +
+                    throw new ConfigurationValueException($"Invalid processing instruction <?{SYSTEM_DIRECTIVE_TARGET} " +
                         $"{instruction.Data}?>; expected exactly one key=\"value\" pair.");
 
-                directives.Add(new GlobalDirective(match.Groups["key"].Value, match.Groups["value"].Value));
+                directives.Add(new SystemDirective(match.Groups["key"].Value, match.Groups["value"].Value));
             }
 
             return directives;
         }
 
-        private static bool IsGlobalDirective(XProcessingInstruction instruction)
-            => instruction.Target.Equals(GLOBAL_DIRECTIVE_TARGET, StringComparison.OrdinalIgnoreCase);
+        private static bool IsSystemDirective(XProcessingInstruction instruction)
+            => instruction.Target.Equals(SYSTEM_DIRECTIVE_TARGET, StringComparison.OrdinalIgnoreCase);
 
         #endregion
 
@@ -123,13 +142,13 @@ namespace MadWizard.Desomnia.Configuration.Xml
         #endregion
     }
 
-    /// <summary>One <c>&lt;?global key="value"?&gt;</c> processing instruction: a single entry
+    /// <summary>One <c>&lt;?system key="value"?&gt;</c> processing instruction: a single entry
     /// of the root (process-lifetime) configuration, where <see cref="Key"/> is the full configuration path
     /// (e.g. "ProcessManager:pollInterval").</summary>
-    internal sealed record GlobalDirective(string Key, string Value);
+    internal sealed record SystemDirective(string Key, string Value);
 
     /// <summary>The abstract parts of one physical configuration file.</summary>
-    internal sealed class XmlConfigurationFile(XElement root, IReadOnlyList<GlobalDirective> globalDirectives)
+    internal sealed class XmlConfigurationFile(XElement root, IReadOnlyList<SystemDirective> systemDirectives, uint version)
     {
         /// <summary>The root element's local name (which decides passthrough vs. augmenting mode).</summary>
         public string RootName => root.Name.LocalName;
@@ -138,10 +157,24 @@ namespace MadWizard.Desomnia.Configuration.Xml
         /// (namespaced condition attributes) before block contents become ConfigNodes.</summary>
         public XElement Root => root;
 
-        /// <summary>The <c>&lt;?global?&gt;</c> directives, in document order.</summary>
-        public IReadOnlyList<GlobalDirective> GlobalDirectives => globalDirectives;
+        /// <summary>The configuration format version the file declares (see <see cref="XConfigVersion"/>) -
+        /// checked against the loaded modules by <c>ModuleRegistry.Validate</c>.</summary>
+        public uint Version => version;
+
+        /// <summary>The <c>&lt;?system?&gt;</c> directives, in document order.</summary>
+        public IReadOnlyList<SystemDirective> SystemDirectives => systemDirectives;
 
         /// <summary>The whole content as abstract configuration.</summary>
-        public ConfigNode ToConfigNode() => XmlConfigurationReader.ToConfigNode(root);
+        public ConfigNode ToConfigNode()
+        {
+            var node = XmlConfigurationReader.ToConfigNode(root);
+
+            // the root's version attribute declares the file format (see XConfigVersion);
+            // it is not configuration data
+            node.Children.RemoveAll(child => child.Kind == ConfigNodeKind.Attribute
+                && child.Name.Equals(XConfigVersion.VERSION_ATTRIBUTE, StringComparison.OrdinalIgnoreCase));
+
+            return node;
+        }
     }
 }
