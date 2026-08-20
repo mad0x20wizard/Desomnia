@@ -15,7 +15,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
         public RouterOptions MakeRouterOptions(NetworkMonitorConfig network) => new()
         {
             AllowWake           = AllowWake             ?? network.RouterAllowWake,
-            AllowWakeByProxy    = AllowWakeByProxy      ?? network.RouterAllowWakeByProxy ?? false,
+            AllowWakeByProxy    = AllowWakeByProxy      ?? network.RouterAllowWakeByProxy ?? network.HasCatchAllHostFilterRule,
             AllowWakeOnLAN      = AllowWakeOnLAN        ?? network.RouterAllowWakeOnLAN,
 
             VPNTimeout          = VPNTimeout            ?? network.RouterVPNTimeout,

@@ -170,6 +170,7 @@ namespace MadWizard.Desomnia.Network.Configuration
          * explicitly; see NetworkRouterInfo.MakeRouterOptions.
          */
         internal bool               RouterAllowWake             { get; set; } = false;
+        internal bool?              RouterAllowWakeByProxy      { get; set; }
         internal bool               RouterAllowWakeOnLAN        { get; set; } = true;
 
         internal TimeSpan           RouterVPNTimeout            { get; set; } = TimeSpan.FromMilliseconds(DEFAULT_TIMEOUT_MS);
@@ -179,10 +180,6 @@ namespace MadWizard.Desomnia.Network.Configuration
         /// <see cref="EveryHostFilterRule"/> is that opt-in. Their presence makes proxy-waking the
         /// sensible default for an otherwise-unconfigured router (zero-config remote access).</summary>
 
-        internal bool?              RouterAllowWakeByProxy
-        {
-            get => field ?? ForeignHostFilterRule != null || EveryHostFilterRule != null; set;
-        }
         #endregion
 
         /// <summary>
@@ -221,6 +218,8 @@ namespace MadWizard.Desomnia.Network.Configuration
         }
 
         #region Host(-Range) enumeration
+        public bool HasCatchAllHostFilterRule => ForeignHostFilterRule != null || EveryHostFilterRule != null;
+
         public IEnumerable<NetworkHostRangeInfo> Ranges => HostRange.Concat(DynamicHostRange)
             .Concat(EveryHostFilterRule?.HostRange ?? []).Concat(EveryHostFilterRule?.DynamicHostRange ?? [])
             .Concat(ForeignHostFilterRule?.HostRange ?? []).Concat(ForeignHostFilterRule?.DynamicHostRange ?? []);
