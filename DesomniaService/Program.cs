@@ -66,7 +66,7 @@ catch (Exception ex)
     throw;
 }
 
-class DesomniaWindowsBuilder(params string[] args) : ApplicationBuilder(args)
+class DesomniaWindowsBuilder(params string[] args) : SystemApplicationBuilder(args)
 {
 
 }
@@ -87,7 +87,7 @@ class DesomniaWindowsServiceBuilder : DesomniaWindowsBuilder
     {
         Directory.SetCurrentDirectory(ProgramDataDir);
 
-        _source.ReloadOnChange = true;
+        Source.ReloadOnChange = true;
 
         CreateEventLog();
     }

@@ -83,7 +83,7 @@ namespace MadWizard.Desomnia.Tests
         }
 
         // the real builders are platform subclasses (DesomniaWindowsServiceBuilder, ...)
-        private sealed class SubclassBuilder(string configPath) : ApplicationBuilder(configPath);
+        private sealed class SubclassBuilder(string configPath) : SystemApplicationBuilder(configPath);
 
         [Fact]
         public void PersistentHost_DoesNotExposeTheBuilderAsAService()
@@ -106,7 +106,7 @@ namespace MadWizard.Desomnia.Tests
 
             IPersistentService first, second;
 
-            var builder = new ApplicationBuilder(_configPath);
+            var builder = new SystemApplicationBuilder(_configPath);
             {
                 builder.RegisterModule(module);
 
@@ -133,7 +133,7 @@ namespace MadWizard.Desomnia.Tests
         [Fact]
         public void RelationshipTypesUsedInsideThePersistentContainer_DoNotShadowAppRegistrationsOnRebuild()
         {
-            var builder = new ApplicationBuilder(_configPath);
+            var builder = new SystemApplicationBuilder(_configPath);
 
             builder.RegisterModule(new CollectionPersistentModule());
             builder.RegisterModule(new AppServiceModule());
@@ -199,7 +199,7 @@ namespace MadWizard.Desomnia.Tests
             {
                 var module = new ConfigurableTestModule();
 
-                var builder = new ApplicationBuilder(envPath);
+                var builder = new SystemApplicationBuilder(envPath);
 
                 builder.RegisterModule(new ConditionModule());
                 builder.RegisterModule(module);
@@ -223,7 +223,7 @@ namespace MadWizard.Desomnia.Tests
         {
             var module = new ConfigurableTestModule();
 
-            var builder = new ApplicationBuilder(_configPath);
+            var builder = new SystemApplicationBuilder(_configPath);
 
             builder.RegisterModule(module);
 
@@ -263,7 +263,7 @@ namespace MadWizard.Desomnia.Tests
         [Fact]
         public void Build_RegistersTheModulesWithTheMigrator_ADemandingModuleIsRefused()
         {
-            var builder = new ApplicationBuilder(_configPath);
+            var builder = new SystemApplicationBuilder(_configPath);
 
             builder.RegisterModule(new DemandingModule());
 
@@ -276,7 +276,7 @@ namespace MadWizard.Desomnia.Tests
         [Fact]
         public void Build_RegistersTheModulesWithTheMigrator_AStrictPluginLimitsTheFormat()
         {
-            var builder = new ApplicationBuilder(_configPath);
+            var builder = new SystemApplicationBuilder(_configPath);
 
             builder.RegisterModule(new StrictPluginModule());
             builder.RegisterModule(new ConfigurableTestModule()); // requires 1 > supported 0

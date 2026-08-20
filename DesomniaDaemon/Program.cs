@@ -44,7 +44,7 @@ DesomniaDaemonBuilder builder;
 
 return Environment.ExitCode;
 
-class DesomniaDaemonBuilder(string[] args) : ApplicationBuilder(args)
+class DesomniaDaemonBuilder(string[] args) : SystemApplicationBuilder(args)
 {
     // Filesystem Hierarchy Standard
     const string FHS_CONFIG_PATH        = "/etc/desomnia";

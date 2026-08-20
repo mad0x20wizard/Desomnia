@@ -42,7 +42,7 @@ namespace MadWizard.Desomnia.Tests
         {
             File.WriteAllText(_configPath, """<SystemMonitor timeout="banana" />""");
 
-            var builder = new ApplicationBuilder(_configPath);
+            var builder = new SystemApplicationBuilder(_configPath);
             builder.RegisterModule(new StrictModule());
 
             var host = builder.Build();
@@ -80,7 +80,7 @@ namespace MadWizard.Desomnia.Tests
         {
             File.WriteAllText(_configPath, """<SystemMonitor />""");
 
-            var builder = new ApplicationBuilder(_configPath);
+            var builder = new SystemApplicationBuilder(_configPath);
             builder.RegisterModule(new SelfStoppingModule());
 
             var host = builder.Build();
@@ -115,7 +115,7 @@ namespace MadWizard.Desomnia.Tests
 
             var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            var builder = new ApplicationBuilder(_configPath);
+            var builder = new SystemApplicationBuilder(_configPath);
             builder.RegisterModule(new StartedSignalModule(started));
 
             var host = builder.Build();

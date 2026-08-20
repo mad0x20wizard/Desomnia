@@ -87,13 +87,13 @@ namespace MadWizard.Desomnia.Tests
                 => builder.Services.ConfigureStrict<FakePlatformConfig>(builder.Configuration.GetSection("Platform"));
         }
 
-        private sealed class TestBuilder(string configPath) : ApplicationBuilder(configPath)
+        private sealed class TestBuilder(string configPath) : SystemApplicationBuilder(configPath)
         {
-            public void EnableAutoReload() => _source.ReloadOnChange = true;
+            public void EnableAutoReload() => Source.ReloadOnChange = true;
 
             /// <summary>Releases the (shared) physical file provider's watcher, so the test
             /// directory can be deleted.</summary>
-            public void ReleaseFileWatcher() => (_source.FileProvider as IDisposable)?.Dispose();
+            public void ReleaseFileWatcher() => (Source.FileProvider as IDisposable)?.Dispose();
         }
 
         private static IConfigurationRoot RootConfiguration(string path)
@@ -114,7 +114,7 @@ namespace MadWizard.Desomnia.Tests
 
             var module = new CapturingModule();
 
-            var builder = new ApplicationBuilder(_configPath);
+            var builder = new SystemApplicationBuilder(_configPath);
             builder.RegisterModule(module);
             using var host = builder.Build();
 
@@ -139,7 +139,7 @@ namespace MadWizard.Desomnia.Tests
 
             var module = new BindingModule();
 
-            var builder = new ApplicationBuilder(_configPath);
+            var builder = new SystemApplicationBuilder(_configPath);
             builder.RegisterModule(module);
             using var host = builder.Build();
 
@@ -156,7 +156,7 @@ namespace MadWizard.Desomnia.Tests
                 <SystemMonitor />
                 """);
 
-            var builder = new ApplicationBuilder(_configPath);
+            var builder = new SystemApplicationBuilder(_configPath);
             builder.RegisterModule(new OptionsModule());
             using var host = builder.Build();
 
@@ -173,7 +173,7 @@ namespace MadWizard.Desomnia.Tests
                 <SystemMonitor />
                 """);
 
-            var builder = new ApplicationBuilder(_configPath);
+            var builder = new SystemApplicationBuilder(_configPath);
             builder.RegisterModule(new StrictOptionsModule());
             using var host = builder.Build();
 
@@ -303,7 +303,7 @@ namespace MadWizard.Desomnia.Tests
                 <SystemMonitor />
                 """);
 
-            var builder = new ApplicationBuilder(_configPath);
+            var builder = new SystemApplicationBuilder(_configPath);
             builder.RegisterModule(new OptionsModule());
             using var host = builder.Build();
 

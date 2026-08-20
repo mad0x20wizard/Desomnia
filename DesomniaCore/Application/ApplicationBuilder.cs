@@ -4,7 +4,6 @@ using MadWizard.Desomnia;
 using MadWizard.Desomnia.Application.Lifetime;
 using MadWizard.Desomnia.Application.Shutdown;
 using MadWizard.Desomnia.Configuration;
-using MadWizard.Desomnia.Configuration.Migration;
 using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Environments;
 using Microsoft.Extensions.Configuration;
@@ -13,9 +12,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NLog;
-using NLog.Config;
-using NLog.Extensions.Logging;
-using NLog.Targets;
 using System.Runtime.CompilerServices;
 
 namespace MadWizard.Desomnia.Application
@@ -28,145 +24,31 @@ namespace MadWizard.Desomnia.Application
      * in the DesomniaHost, whose loop builds, runs and rebuilds the inner application hosts
      * (BuildApplication), each bridged to that same persistent scope.
      */
-    public class ApplicationBuilder
+    public abstract class ApplicationBuilder
     {
-        const string CONFIG_FILE_NAME = "monitor.xml";
-        const string NLOG_CONFIG_FILE_NAME = "NLog.config";
-
-        protected readonly ExtendedXmlConfigurationSource _source;
+        protected abstract IConfigurationSource Source { get; }
 
         // the central authority over the module system: the registered modules and everything
         // derived from the set - the format algebra and the version check that refuses a
         // mismatched file (the pipeline runs it), with or without the migration layer attached
-        readonly ModuleRegistry _registry = new();
+        internal readonly ModuleRegistry _registry = new();
 
         // the persistent host and its Autofac container (the machine-lifetime scope). Built once by
         // Build(), disposed only when the whole application stops — NOT on a configuration rebuild,
         // so the services and the OS state they hold survive reconfiguration
         private ILifetimeScope? _root;
 
-        #region Defaults
-        protected virtual string DefaultLogLevelFormat => "${pad:padding=5:inner=${level:uppercase=true}}";
-        protected virtual string DefaultLogFileLayout => "${longdate} " + DefaultLogLevelFormat + " ${logger:shortName=true} :: ${message} ${exception}";
-        protected virtual string DefaultLogConsoleLayout => DefaultLogLevelFormat + " :: ${message} ${exception}";
-
-        protected virtual string[] DefaultConfigPaths
-        {
-            get
-            {
-                List<string> paths = [];
-
-                paths.Add(Directory.GetCurrentDirectory());
-
-                paths.Add(Path.Combine(Directory.GetCurrentDirectory(), "config"));
-
-                if (Environment.GetEnvironmentVariable("DESOMNIA_CONFIG_DIR") is string config)
-                    paths.Add(config);
-
-                return [.. paths];
-            }
-        }
-
-        protected virtual string[] DefaultPluginsPaths
-        {
-            get
-            {
-                List<string> paths = [];
-
-                if (Environment.GetEnvironmentVariable("DESOMNIA_PLUGINS_DIR") is string plugins)
-                    paths.Add(plugins);
-                if (Environment.GetEnvironmentVariable("DESOMNIA_CORE_PLUGINS_DIR") is string core)
-                    paths.Add(core);
-                if (Environment.GetEnvironmentVariable("DESOMNIA_USER_PLUGINS_DIR") is string user)
-                    paths.Add(user);
-
-                return paths.Count > 0 ? [.. paths] : ["plugins"];
-            }
-        }
-
-        protected virtual string DefaultLogPath
-        {
-            get
-            {
-                if (Environment.GetEnvironmentVariable("DESOMNIA_LOG_DIR") is string logs)
-                    return logs;
-
-                return "${currentdir:dir=logs}";
-            }
-        }
-
-        /**
-         * Ideally the ContextRootPath should be left empty,
-         * because the runtime will install file system watches
-         * for every file below that path. On Linux this can
-         * extend to the whole file system, if run as a systemd unit.
-         */
-        protected virtual HostApplicationBuilderSettings DefaultSettings => new()
-        {
-            DisableDefaults = true // don't set ContextRootPath to working directory
-        };
-
-        protected virtual HostApplicationBuilderSettings DefaultApplicationSettings => new()
-        {
-            DisableDefaults = true 
-        };
-        #endregion
-
-        #region Config path lookup
-        private static string? LookupPath(IEnumerable<string> paths)
-        {
-            foreach (var path in paths)
-            {
-                if (Path.Exists(path))
-                {
-                    return Path.GetFullPath(path);
-                }
-            }
-
-            return null;
-        }
-
-        protected virtual string LookupConfigPath()
-        {
-            return LookupPath(DefaultConfigPaths.Select(p => Path.Combine(p, CONFIG_FILE_NAME))) ?? CONFIG_FILE_NAME;
-        }
-        #endregion
-
-        internal ApplicationBuilder(string? configPath = null)
-        {
-            configPath = Path.GetFullPath(configPath ?? LookupConfigPath());
-
-            _source = new ExtendedXmlConfigurationSource(configPath, optional: false);
-        }
-
-        protected ApplicationBuilder(string[] args) : this()
-        {
-            var result = new ApplicationCommandLine().Parse(args);
-
-            if (_source is FileConfigurationSource file)
-            {
-                file.ReloadOnChange = result.GetValue(ApplicationCommandLine.AutoReloadOption);
-            }
-
-            result.Invoke();
-        }
-
-        #region Module registrations
         public void RegisterModule(Module module)
         {
             _registry.Register(module);
         }
 
-        public void RegisterPluginModules()
-        {
-            foreach (var path in DefaultPluginsPaths)
-            {
-                _registry.RegisterPluginModules(path);
-            }
-        }
-        #endregion
-
         #region Build Application Host
+        protected virtual HostApplicationBuilderSettings DefaultSettings => new()
+        {
+            DisableDefaults = true // don't set ContextRootPath to working directory
+        };
+
         /// <summary>
         /// Builds the persistent host — the process-lifetime Microsoft.Extensions host whose
         /// intrinsic Autofac container is the machine-lifetime scope: the real
@@ -216,21 +98,9 @@ namespace MadWizard.Desomnia.Application
         /// options interfaces — an <c>IOptionsMonitor&lt;T&gt;</c> follows the file when auto-reload
         /// is on. A source without root support leaves the configuration empty.
         /// </summary>
-        private void LoadConfiguration(HostApplicationBuilder builder)
+        protected virtual void LoadConfiguration(HostApplicationBuilder builder)
         {
-            if (_source is ExtendedXmlConfigurationSource xml)
-            {
-                // the collection-element knowledge must exist before the pipeline reads the file
-                // (the merger and the flattener need it); contributed by every configurable module
-                foreach (var module in _registry.ConfigurableModules)
-                {
-                    module.ConfigureConfigurationSource(xml);
-                }
-
-                AttachMigration(xml);
-            }
-
-            if (_source is IRootConfigurationSource root)
+            if (Source is IRootConfigurationSource root)
             {
                 builder.Configuration.Sources.Add(root.RootSource);
             }
@@ -240,77 +110,12 @@ namespace MadWizard.Desomnia.Application
             _ = _registry.RequiredVersion;
         }
 
-        /// <summary>
-        /// Composes the migration layer UNDERNEATH the source, as one isolated operation: the
-        /// source's file provider is decorated (see <see cref="MigratingFileProvider"/>), so every
-        /// consumer of the file transparently reads the migrated form while the source itself
-        /// stays pristine. Skip this call and the source serves the file as-is — the version
-        /// check (<see cref="ModuleRegistry.Validate"/>, run by the pipeline) still
-        /// terminates the application on a mismatch.
-        /// </summary>
-        private void AttachMigration(ExtendedXmlConfigurationSource xml)
-        {
-            if (xml.FileProvider is not { } provider || xml.Path is not string path)
-                throw new InvalidOperationException("The configuration source has no file provider to decorate " +
-                    "(the migration layer needs the resolved provider of an absolute path).");
-
-            var migrator = new XConfigurationMigrator(_registry, () => xml.FullPath);
-
-            xml.FileProvider = new MigratingFileProvider(provider, migrator, path);
-        }
-
         protected virtual void ConfigureLogging(ILoggingBuilder builder)
         {
             foreach (var module in _registry.Modules)
             {
                 LogManager.Setup().SetupExtensions(module.ConfigureLogging);
             }
-
-            if (LookupPath(DefaultConfigPaths.Select(p => Path.Combine(p, NLOG_CONFIG_FILE_NAME))) is string configNLogPath)
-            {
-                LogManager.Configuration = new XmlLoggingConfiguration(configNLogPath);
-            }
-
-            if (LogManager.Configuration is LoggingConfiguration config)
-            {
-                if (!config.Variables.ContainsKey("logDir"))
-                {
-                    config.Variables["logDir"] = DefaultLogPath;
-                }
-
-                if (!config.Variables.ContainsKey("sharedLayout"))
-                {
-                    config.Variables["sharedLayout"] = DefaultLogFileLayout;
-                }
-            }
-            else // Fallback if no config file has been found
-            {
-                config = new LoggingConfiguration();
-            }
-
-            LogManager.ConfigurationChanged += (sender, args) =>
-            {
-                if (args.ActivatedConfiguration is LoggingConfiguration configNew && !configNew.HasConsoleTarget())
-                {
-                    var target = new ConsoleTarget("console")
-                    {
-                        Layout = DefaultLogConsoleLayout
-                    };
-
-                    configNew.AddRule(NLog.LogLevel.Info, NLog.LogLevel.Fatal, target, "MadWizard.Desomnia.*");
-
-                    LogManager.Configuration = configNew;
-                }
-            };
-
-            LogManager.Configuration = config;
-
-            // the process's one logging stack: NLog's LogManager is global, so the provider that
-            // fronts it belongs to the host that lives as long as the process. The inner hosts
-            // share this factory instead of each bringing their own (see ConfigureApplication).
-            builder.ClearProviders();
-            builder.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
-            builder.AddNLog();
         }
 
         protected virtual void ConfigureServices(IServiceCollection services) { }
@@ -333,7 +138,7 @@ namespace MadWizard.Desomnia.Application
             // the source's provider, like every other consumer - the migration layer (when
             // composed underneath, see AttachMigration) is invisible to it
             container.RegisterType<ConfigurationPipeline>()
-                .WithParameter(TypedParameter.From(_source))
+                .WithParameter(TypedParameter.From((ExtendedXmlConfigurationSource)Source)) // FIXME
                 .WithParameter(TypedParameter.From(_registry))
                 .AsImplementedInterfaces().AsSelf()
                 .SingleInstance();
@@ -346,6 +151,11 @@ namespace MadWizard.Desomnia.Application
         #endregion
 
         #region Build Application
+        protected virtual HostApplicationBuilderSettings DefaultApplicationSettings => new()
+        {
+            DisableDefaults = true
+        };
+
         /// <summary>
         /// Builds a fresh inner application host for one effective configuration, bridged
         /// to the persistent scope. Disposed (and rebuilt) by the loop on every reconfiguration.
