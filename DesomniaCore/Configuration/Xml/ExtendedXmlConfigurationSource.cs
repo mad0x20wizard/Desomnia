@@ -1,9 +1,7 @@
 using MadWizard.Desomnia.Configuration.Binding;
-using MadWizard.Desomnia.Configuration.Migration;
 using MadWizard.Desomnia.Configuration.Model;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Xml;
-using Microsoft.Extensions.FileProviders;
 using NLog;
 
 namespace MadWizard.Desomnia.Configuration.Xml
@@ -216,34 +214,5 @@ namespace MadWizard.Desomnia.Configuration.Xml
 
         public override IEnumerable<string> GetChildKeys(IEnumerable<string> earlierKeys, string? parentPath)
             => _data.GetChildKeys(earlierKeys, parentPath);
-    }
-
-    public static class FileConfigurationSourceExt
-    {
-        extension (FileConfigurationSource source)
-        {
-            public string? FullPath
-            {
-                get
-                {
-                    if (source.Path != null)
-                    {
-                        // the migration layer decorates the physical provider (see
-                        // MigratingFileProvider) - the file's real location is underneath
-                        var fileProvider = source.FileProvider;
-
-                        if (fileProvider is MigratingFileProvider migrating)
-                            fileProvider = migrating.InnerProvider;
-
-                        if (fileProvider is PhysicalFileProvider provider)
-                        {
-                            return Path.Combine(provider.Root, source.Path);
-                        }
-                    }
-
-                    return source.Path;
-                }
-            }
-        }
     }
 }

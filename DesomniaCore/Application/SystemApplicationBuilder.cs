@@ -15,7 +15,7 @@ namespace MadWizard.Desomnia.Application
         const string CONFIG_FILE_NAME = "monitor.xml";
         const string NLOG_CONFIG_FILE_NAME = "NLog.config";
 
-        protected override ExtendedXmlConfigurationSource Source { get; }
+        protected override FileConfigurationSource Source { get; }
 
         #region Default paths and lookup
         protected virtual string[] DefaultConfigPaths
