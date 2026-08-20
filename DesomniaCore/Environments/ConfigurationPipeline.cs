@@ -7,7 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
 using System.Runtime.ExceptionServices;
-using MadWizard.Desomnia.Application;
+using MadWizard.Desomnia.Application.Registry;
 
 namespace MadWizard.Desomnia.Environments
 {

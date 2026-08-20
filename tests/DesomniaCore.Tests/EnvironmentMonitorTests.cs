@@ -1,5 +1,5 @@
 using Autofac;
-using MadWizard.Desomnia.Application;
+using MadWizard.Desomnia.Application.Registry;
 using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Configuration.Binding;
 using MadWizard.Desomnia.Configuration.Xml;

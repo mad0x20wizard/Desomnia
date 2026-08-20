@@ -3,7 +3,6 @@ using MadWizard.Desomnia.Configuration.Binding;
 using MadWizard.Desomnia.Configuration.Migration;
 using MadWizard.Desomnia.Configuration.Xml;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.Xml;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Text;
@@ -1261,7 +1260,7 @@ namespace MadWizard.Desomnia.Tests
             source.FileProvider = new MigratingFileProvider(source.FileProvider!, migrator, source.Path!);
 
             var content = new ConfigurationBuilder().Add(source).Build();
-            var root = new ConfigurationBuilder().Add(source.RootSource).Build();
+            var root = new ConfigurationBuilder().Add(((IRootConfigurationSource)source).RootSource).Build();
 
             Assert.Equal("9", content["NetworkMonitor:Ethernet:watchPort"]);
             Assert.Null(content["NetworkMonitor:Ethernet:watchUDPPort"]);

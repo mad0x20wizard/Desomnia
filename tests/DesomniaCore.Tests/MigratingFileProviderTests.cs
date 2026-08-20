@@ -1,4 +1,4 @@
-using MadWizard.Desomnia.Application;
+using MadWizard.Desomnia.Application.Registry;
 using MadWizard.Desomnia.Configuration.Migration;
 using MadWizard.Desomnia.Configuration.Xml;
 using Microsoft.Extensions.Configuration;

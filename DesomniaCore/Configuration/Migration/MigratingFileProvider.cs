@@ -1,4 +1,4 @@
-using MadWizard.Desomnia.Application;
+using MadWizard.Desomnia.Application.Registry;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Primitives;
 using NLog;

@@ -1,5 +1,5 @@
 using Autofac;
-using MadWizard.Desomnia.Configuration;
+using MadWizard.Desomnia.Application.Registry;
 using MadWizard.Desomnia.Configuration.Model;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;

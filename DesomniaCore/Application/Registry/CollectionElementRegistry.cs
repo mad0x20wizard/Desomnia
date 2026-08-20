@@ -2,7 +2,7 @@ using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
-namespace MadWizard.Desomnia.Configuration
+namespace MadWizard.Desomnia.Application.Registry
 {
     /// <summary>
     /// Builds the synthesized name for a nameless collection element. Use this when code

@@ -1,11 +1,10 @@
 using Autofac;
-using MadWizard.Desomnia.Application;
+using MadWizard.Desomnia.Application.Registry;
 using MadWizard.Desomnia.Configuration.Binding;
 using MadWizard.Desomnia.Configuration.Migration;
 using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Environments;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.Xml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;

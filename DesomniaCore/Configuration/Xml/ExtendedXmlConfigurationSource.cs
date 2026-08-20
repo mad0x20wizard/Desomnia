@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Application.Registry;
 using MadWizard.Desomnia.Configuration.Binding;
 using MadWizard.Desomnia.Configuration.Model;
 using Microsoft.Extensions.Configuration;
@@ -41,8 +42,6 @@ namespace MadWizard.Desomnia.Configuration.Xml
             ReloadOnChange = reloadOnChange;
 
             ResolveFileProvider();
-
-            RootSource = new XmlRootConfigurationSource(this);
         }
 
         /// <summary>
@@ -54,7 +53,7 @@ namespace MadWizard.Desomnia.Configuration.Xml
         /// missing file yields no entries: this source's own, non-optional provider reports the
         /// missing file when the application configuration is built.
         /// </summary>
-        public IConfigurationSource RootSource { get; }
+        IConfigurationSource IRootConfigurationSource.RootSource { get => field ?? new XmlRootConfigurationSource(this); }
 
         /// <summary>
         /// Registers an explicit name builder for nameless elements of the given collection.

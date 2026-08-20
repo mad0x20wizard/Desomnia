@@ -6,7 +6,7 @@ using System.IO.Compression;
 using System.Reflection;
 using System.Runtime.Loader;
 
-namespace MadWizard.Desomnia.Application
+namespace MadWizard.Desomnia.Application.Registry
 {
     /// <summary>
     /// The central authority over the module system: every <see cref="Module"/> of the product

@@ -1,4 +1,4 @@
-using MadWizard.Desomnia.Configuration;
+using MadWizard.Desomnia.Application.Registry;
 using MadWizard.Desomnia.Configuration.Binding;
 using MadWizard.Desomnia.Configuration.Model;
 using MadWizard.Desomnia.Configuration.Xml;

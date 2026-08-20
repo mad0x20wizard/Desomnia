@@ -2,6 +2,7 @@ using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using MadWizard.Desomnia;
 using MadWizard.Desomnia.Application.Lifetime;
+using MadWizard.Desomnia.Application.Registry;
 using MadWizard.Desomnia.Application.Shutdown;
 using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Configuration.Xml;

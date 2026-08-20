@@ -97,7 +97,7 @@ namespace MadWizard.Desomnia.Tests
         }
 
         private static IConfigurationRoot RootConfiguration(string path)
-            => new ConfigurationBuilder().Add(new ExtendedXmlConfigurationSource(path).RootSource).Build();
+            => new ConfigurationBuilder().Add(((IRootConfigurationSource)new ExtendedXmlConfigurationSource(path)).RootSource).Build();
 
         #endregion
 
@@ -288,7 +288,7 @@ namespace MadWizard.Desomnia.Tests
             Assert.True(provider.Source.Optional);
 
             static FileConfigurationProvider Provider(ExtendedXmlConfigurationSource source)
-                => Assert.IsAssignableFrom<FileConfigurationProvider>(source.RootSource.Build(new ConfigurationBuilder()));
+                => Assert.IsAssignableFrom<FileConfigurationProvider>(((IRootConfigurationSource)source).RootSource.Build(new ConfigurationBuilder()));
         }
 
         #endregion
