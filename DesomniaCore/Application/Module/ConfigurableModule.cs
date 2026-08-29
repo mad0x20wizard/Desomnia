@@ -1,7 +1,6 @@
 using Autofac;
 using MadWizard.Desomnia.Application.Registry;
 using MadWizard.Desomnia.Configuration.Binding;
-using MadWizard.Desomnia.Configuration.Xml;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 
@@ -11,7 +10,13 @@ namespace MadWizard.Desomnia
     {
         private IConfiguration? _rootConfig;
 
-        protected internal virtual void ConfigureConfigurationSource(ExtendedXmlConfigurationSource source) { }
+        /// <summary>
+        /// The configuration types this module binds — a plain module fact, collected by the
+        /// <see cref="ModuleRegistry"/>. Everything derived from the types (e.g. which XML
+        /// elements form collections) is computed OUTSIDE the module API, by the layer that
+        /// needs it: a module never sees a configuration file format.
+        /// </summary>
+        internal virtual IEnumerable<Type> ConfigTypes => [];
 
         #region Versioning
         /// <summary>
@@ -83,14 +88,7 @@ namespace MadWizard.Desomnia
         // config parameter of their Load overload instead of touching mutable state
         private T Config { get; set; } = default!;
 
-        protected internal override void ConfigureConfigurationSource(ExtendedXmlConfigurationSource source)
-        {
-            base.ConfigureConfigurationSource(source);
-
-            // Derive the names of nameless collection elements from the config type,
-            // so the provider can synthesize deterministic name attributes for them.
-            source.AddCollectionElementsOf(typeof(T));
-        }
+        internal override IEnumerable<Type> ConfigTypes => [typeof(T)];
 
         #region Application configuration
         protected internal override void Build(HostApplicationBuilder builder)

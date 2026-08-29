@@ -32,7 +32,7 @@ namespace MadWizard.Desomnia.Environments
         // Replaced wholesale by Update() when the pipeline pumps a re-parsed file in.
         EnvironmentSettings? _settings;
         IReadOnlyList<EnvironmentBlock> _blocks = [];
-        CollectionElementRegistry _collections = new();
+        CollectionElements _collections = CollectionElements.Empty;
 
         // the generation's condition instances live in this scope; the watcher observes them.
         // Both are retired together when a new generation is adopted.
@@ -112,7 +112,7 @@ namespace MadWizard.Desomnia.Environments
         /// before the first inner host is built.
         /// </summary>
         internal void Initialize(EnvironmentSettings settings, IReadOnlyList<EnvironmentBlock> blocks,
-            CollectionElementRegistry collections, ILifetimeScope conditionScope)
+            CollectionElements collections, ILifetimeScope conditionScope)
         {
             lock (_lock)
             {

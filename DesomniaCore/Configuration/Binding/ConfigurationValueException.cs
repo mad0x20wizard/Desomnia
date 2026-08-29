@@ -12,8 +12,8 @@ namespace MadWizard.Desomnia.Configuration.Binding
     /// Derives from <see cref="InvalidOperationException"/> to stay compatible with code
     /// that catches the stock binder's conversion errors.
     /// </summary>
-    public class ConfigurationValueException(string message, Exception? innerException = null)
-        : InvalidOperationException(message, innerException)
+    public class ConfigurationValueException(string message, Exception? innerException = null) : ConfigurationException(message, innerException)
     {
+
     }
 }

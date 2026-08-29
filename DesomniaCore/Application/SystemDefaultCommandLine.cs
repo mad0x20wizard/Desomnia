@@ -2,7 +2,7 @@
 
 namespace MadWizard.Desomnia.Application
 {
-    internal class ApplicationCommandLine : RootCommand
+    public class SystemDefaultCommandLine : RootCommand
     {
         static internal readonly Option<bool> AutoReloadOption = new("--auto-reload", "-a")
         {
@@ -13,7 +13,7 @@ namespace MadWizard.Desomnia.Application
             Description = "Wait for a debugger to attach before starting.",
         };
 
-        internal ApplicationCommandLine() : base("Desomnia Sleep Management")
+        internal SystemDefaultCommandLine() : base("Desomnia Sleep Management")
         {
             Add(AutoReloadOption);
             Add(DebugOption);

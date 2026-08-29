@@ -27,7 +27,7 @@ namespace MadWizard.Desomnia.Configuration.Migration
     {
         ILogger? _logger;
 
-        public ConfigurationMigrator(ModuleRegistry registry)
+        public ConfigurationMigrator(VersionedModuleRegistry registry)
         {
             ArgumentNullException.ThrowIfNull(registry);
 
@@ -35,7 +35,7 @@ namespace MadWizard.Desomnia.Configuration.Migration
         }
 
         /// <summary>The module registry: the format algebra whose <see cref="ModuleRegistry.RequiredVersion"/> decides what to migrate.</summary>
-        internal ModuleRegistry Registry { get; }
+        internal VersionedModuleRegistry Registry { get; }
 
         /// <summary>
         /// The migration log — the engine's OWN category, so migration lines are attributable
@@ -88,16 +88,16 @@ namespace MadWizard.Desomnia.Configuration.Migration
             // the file's version) must be able to migrate this document's format - checked
             // BEFORE the first step runs, so a hard error never follows a half-done (or
             // half-written) migration
-            var participants = Registry.ParticipantsBeyond(version);
+            var needMigration = Registry.OfType<ConfigurableModule>().Where(module => module.MinVersion > version).ToList();
 
-            if (participants.FirstOrDefault(module => !document.Supports(module)) is ConfigurableModule unsupported)
+            if (needMigration.FirstOrDefault(module => !document.Supports(module)) is ConfigurableModule unsupported)
                 throw new ConfigurationMigrationException($"<{unsupported.GetType().FullName}> requires configuration format version {unsupported.MinVersion}, " +
                     $"but cannot migrate this configuration automatically. Update the configuration file from version {version} to version {required} manually.");
 
-            Run(document, participants, version, required, settings);
+            Run(document, needMigration, version, required, settings);
         }
 
-        private void Run(IMigrationDocument document, IReadOnlyList<ConfigurableModule> participants, uint version, uint required, MigrationSettings settings)
+        private void Run(IMigrationDocument document, IReadOnlyList<ConfigurableModule> modules, uint version, uint required, MigrationSettings settings)
         {
             bool writing = settings.Option.HasFlag(MigrationOption.Persistent);
             bool transient = settings.Option.HasFlag(MigrationOption.Transient);
@@ -108,7 +108,7 @@ namespace MadWizard.Desomnia.Configuration.Migration
 
                 Logger.LogWarning($"Migrating the configuration from version {source} -> {target}...");
 
-                foreach (var module in participants.Where(module => module.MinVersion >= target))
+                foreach (var module in modules.Where(module => module.MinVersion >= target))
                 {
                     try
                     {

@@ -40,7 +40,7 @@ namespace MadWizard.Desomnia.Configuration.Xml
         /// <param name="registry">The module registry whose format algebra decides what to migrate.</param>
         /// <param name="filePath">The configuration file's full path — evaluated lazily, because a
         /// relative source path resolves its file provider only when the configuration is built.</param>
-        public XConfigurationMigrator(ModuleRegistry registry, Func<string?> filePath)
+        public XConfigurationMigrator(VersionedModuleRegistry registry, Func<string?> filePath)
         {
             ArgumentNullException.ThrowIfNull(registry);
             ArgumentNullException.ThrowIfNull(filePath);
@@ -51,13 +51,13 @@ namespace MadWizard.Desomnia.Configuration.Xml
         }
 
         /// <summary>The standalone convenience constructor (tests): a migrator over its own registry.</summary>
-        public XConfigurationMigrator(Func<string?> filePath) : this(new ModuleRegistry(), filePath) { }
+        public XConfigurationMigrator(Func<string?> filePath) : this(new VersionedModuleRegistry(), filePath) { }
 
         /// <summary>The format-agnostic engine: migration steps, policy, logging.</summary>
         internal ConfigurationMigrator Engine { get; }
 
         /// <summary>The module registry the engine works against (format algebra and version check).</summary>
-        internal ModuleRegistry Registry => Engine.Registry;
+        internal VersionedModuleRegistry Registry => Engine.Registry;
 
         /// <summary>The migration log (see <see cref="ConfigurationMigrator.Logger"/> - the engine's own category).</summary>
         internal ILogger Logger

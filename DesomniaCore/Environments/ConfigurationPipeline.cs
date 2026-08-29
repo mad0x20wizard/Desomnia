@@ -1,13 +1,12 @@
 using Autofac;
-using MadWizard.Desomnia.Configuration.Model;
+using MadWizard.Desomnia.Application.Registry;
 using MadWizard.Desomnia.Configuration.Binding;
-using MadWizard.Desomnia.Configuration.Migration;
+using MadWizard.Desomnia.Configuration.Model;
 using MadWizard.Desomnia.Configuration.Xml;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
 using System.Runtime.ExceptionServices;
-using MadWizard.Desomnia.Application.Registry;
 
 namespace MadWizard.Desomnia.Environments
 {
@@ -28,6 +27,13 @@ namespace MadWizard.Desomnia.Environments
     /// XML, unknown conditions, bad values). The <c>&lt;?system?&gt;</c> directives are
     /// not the pipeline's business: they are the root host's configuration, served (and
     /// reloaded) by the source's own nested root source.</para>
+    ///
+    /// <para>The pipeline works against the abstract <see cref="IConfigurationSource"/> and
+    /// reads the document through the file-transport surface of a
+    /// <see cref="FileConfigurationSource"/> (provider + path + reload flag) — where the
+    /// document physically lives is the provider's business. A source that is not file-based
+    /// serves no document at all: the pipeline stays a passthrough — no environments, no
+    /// version check, no watching — and the host consumes the source's own data directly.</para>
     /// </summary>
     internal sealed class ConfigurationPipeline : IStartable, IDisposable
     {
@@ -37,14 +43,22 @@ namespace MadWizard.Desomnia.Environments
         // after the editor has finished writing
         static readonly TimeSpan FileDebounce = TimeSpan.FromMilliseconds(500);
 
-        readonly ExtendedXmlConfigurationSource _source;
-        readonly string _configPath;
+        // the file-transport view of the source: provider, path and the reload flag. Null for
+        // a source that is not file-based - the pipeline then has no document to read and
+        // stays a passthrough (the host consumes the source's own data directly)
+        readonly FileConfigurationSource? _file;
+        readonly string? _configPath;
         readonly EnvironmentMonitor _monitor;
         readonly ILifetimeScope _scope;
 
         // the module registry: its version check is the authority that refuses a mismatched
-        // file, AFTER the migration (if any) had its chance and independent of it
-        readonly ModuleRegistry _registry;
+        // file, AFTER the migration (if any) had its chance and independent of it - and the
+        // module set the XML collection-element knowledge is derived from (see Collections)
+        readonly VersionedModuleRegistry _registry;
+
+        // which element names form collections - derived once from the registry's config
+        // types, when the first read needs it (the module set is fixed by then)
+        CollectionElements? _collections;
 
         readonly Lock _lock = new();
 
@@ -68,17 +82,20 @@ namespace MadWizard.Desomnia.Environments
 
         bool _disposed;
 
-        public ConfigurationPipeline(ExtendedXmlConfigurationSource source, EnvironmentMonitor monitor, ILifetimeScope scope,
-            ModuleRegistry registry)
+        public ConfigurationPipeline(IConfigurationSource source, EnvironmentMonitor monitor, ILifetimeScope scope,
+            VersionedModuleRegistry registry)
         {
-            _source = source;
-            _configPath = source.FullPath!;
+            _file = source as FileConfigurationSource;
+            _configPath = _file?.FullPath;
             _monitor = monitor;
             _scope = scope;
             _registry = registry;
 
             EffectiveSource = source;
         }
+
+        // under _lock
+        private CollectionElements Collections => _collections ??= CollectionElements.Derive(_registry.ConfigTypes);
 
         /// <summary>The configuration source the host consumes: the physical source
         /// (passthrough) or the monitor's own source (augmenting) - decided by
@@ -118,7 +135,7 @@ namespace MadWizard.Desomnia.Environments
                     {
                         var (settings, blocks, conditions) = Materialize(file);
 
-                        _monitor.Initialize(settings, blocks, _source.Collections, conditions);
+                        _monitor.Initialize(settings, blocks, Collections, conditions);
 
                         EffectiveSource = _monitor.ConfigurationSource;
                     }
@@ -128,7 +145,7 @@ namespace MadWizard.Desomnia.Environments
                     }
                 }
 
-                if (_source.ReloadOnChange)
+                if (_file is { ReloadOnChange: true })
                     StartWatching();
             }
         }
@@ -154,7 +171,7 @@ namespace MadWizard.Desomnia.Environments
         // uses), debounced by our one-shot timer
         private void StartWatching()
         {
-            if (_source.FileProvider is not { } provider || _source.Path is not string path)
+            if (_file?.FileProvider is not { } provider || _file.Path is not string path)
             {
                 Logger.LogWarning("Auto-reload is enabled, but the configuration source has no file to watch.");
                 return;
@@ -284,8 +301,8 @@ namespace MadWizard.Desomnia.Environments
         /// </summary>
         private string? TryReadText()
         {
-            if (_source.FileProvider is not { } provider || _source.Path is not string path)
-                return null; // no file to read; the host's own provider reports it
+            if (_file?.FileProvider is not { } provider || _file.Path is not string path)
+                return null; // no file to read (or no file-based source at all); the host's own provider reports it
 
             try
             {
@@ -350,7 +367,12 @@ namespace MadWizard.Desomnia.Environments
             if (output is null)
                 return null;
 
-            string configFullPath = Path.GetFullPath(_configPath);
+            // unreachable for a non-file source in practice (no document, no augmenting mode),
+            // but a pathless file source must not resolve relative outputs against guesswork
+            if (_configPath is not string configPath)
+                throw new ConfigurationValueException("An effective-configuration output requires a file-based configuration source.");
+
+            string configFullPath = Path.GetFullPath(configPath);
 
             string outputPath = Path.GetFullPath(output, Path.GetDirectoryName(configFullPath)!);
 
@@ -364,7 +386,7 @@ namespace MadWizard.Desomnia.Environments
 
         /// <summary>The data the host's provider would serve for the file (passthrough mode).</summary>
         private IReadOnlyList<KeyValuePair<string, string?>> Flatten(XmlConfigurationFile file)
-            => ConfigNodeFlattener.Flatten(file.ToConfigNode(), _source.Collections);
+            => ConfigNodeFlattener.Flatten(file.ToConfigNode(), Collections);
 
         #endregion
 

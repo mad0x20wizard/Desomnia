@@ -1,6 +1,5 @@
 ﻿using Autofac;
 using Autofac.Core;
-using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Environments;
 using MadWizard.Desomnia.Network.Address;
 using MadWizard.Desomnia.Network.Bridges;
@@ -35,13 +34,6 @@ namespace MadWizard.Desomnia.Network
             builder.RegisterLayoutRenderer<NetworkHostLayoutRenderer>();
             builder.RegisterLayoutRenderer<NetworkLayoutRenderer>(); 
             builder.RegisterLayoutRenderer<NetworkRealmLayoutRenderer>();
-        }
-
-        protected override void ConfigureConfigurationSource(ExtendedXmlConfigurationSource source)
-        {
-            base.ConfigureConfigurationSource(source); // derives collection element names from the config type
-
-            source.AddCollectionNameBuilder("NetworkMonitor", (element, nr) => NetworkMonitorConfig.NAMLESS_PREFIX + nr);
         }
 
         protected override void LoadOnce(ContainerBuilder builder)

@@ -9,10 +9,10 @@ namespace MadWizard.Desomnia.Configuration.Xml
 {
     /*
      * The self-contained XML file source: reads the file through the XmlConfigurationReader
-     * into the abstract ConfigNode form and flattens it into provider data - the same key
-     * layout the stock provider produces, plus what the old pipeline achieved by rewriting
-     * the XML before the stock parse (presence values for bare elements, synthesized names
-     * for nameless collection items), plus document order all the way into GetChildren().
+     * into the abstract ConfigNode form and flattens it into provider data - the same data
+     * SHAPE the stock JSON/YAML providers produce (collection items keyed by index or, for
+     * dictionary targets, by name - see ConfigNodeFlattener), plus presence values for bare
+     * elements and document order all the way into GetChildren().
      *
      * It stands for itself: no injection points, no version or migration knowledge. The
      * migration layer, when attached, sits UNDERNEATH as a decorator of FileProvider (see
@@ -29,8 +29,10 @@ namespace MadWizard.Desomnia.Configuration.Xml
     public class ExtendedXmlConfigurationSource : XmlConfigurationSource, IRootConfigurationSource
     {
         /// <summary>Which element names form collections of complex items - derived from the
-        /// modules' configuration types, shared with the environment merger.</summary>
-        public CollectionElementRegistry Collections { get; } = new();
+        /// modules' configuration types (see <see cref="CollectionElements.Derive"/>) and
+        /// assigned by the application builder before the file is first read; a standalone
+        /// source treats every element as singular.</summary>
+        public CollectionElements Collections { get; set; } = CollectionElements.Empty;
 
         public ExtendedXmlConfigurationSource(string path, bool optional = false, bool reloadOnChange = false)
         {
@@ -54,30 +56,6 @@ namespace MadWizard.Desomnia.Configuration.Xml
         /// missing file when the application configuration is built.
         /// </summary>
         IConfigurationSource IRootConfigurationSource.RootSource { get => field ?? new XmlRootConfigurationSource(this); }
-
-        /// <summary>
-        /// Registers an explicit name builder for nameless elements of the given collection.
-        /// Use this when code relies on the synthesized name format (which is otherwise an
-        /// implementation detail, defaulting to "{elementName}#{nr}").
-        /// </summary>
-        public ExtendedXmlConfigurationSource AddCollectionNameBuilder(string elementName, CollectionNameBuilder builder)
-        {
-            Collections.AddCollectionNameBuilder(elementName, builder);
-
-            return this;
-        }
-
-        /// <summary>
-        /// Walks the given configuration type and records the names of all properties holding
-        /// collections of complex items. XML elements with these names are collection elements
-        /// and get a synthesized name attribute if they don't carry one.
-        /// </summary>
-        public ExtendedXmlConfigurationSource AddCollectionElementsOf(Type configType)
-        {
-            Collections.AddCollectionElementsOf(configType);
-
-            return this;
-        }
 
         public override IConfigurationProvider Build(IConfigurationBuilder builder)
         {

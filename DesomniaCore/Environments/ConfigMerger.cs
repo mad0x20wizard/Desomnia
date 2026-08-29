@@ -28,7 +28,7 @@ namespace MadWizard.Desomnia.Environments
         /// <summary>Provenance of a merged value: which environment set it, at which priority.</summary>
         private sealed record MergeOrigin(int Priority, string Environment);
 
-        public static ConfigNode Merge(IEnumerable<EnvironmentBlock> blocks, CollectionElementRegistry collections, ConflictResolution onConflict)
+        public static ConfigNode Merge(IEnumerable<EnvironmentBlock> blocks, CollectionElements collections, ConflictResolution onConflict)
         {
             ConfigNode? result = null;
 
@@ -45,7 +45,7 @@ namespace MadWizard.Desomnia.Environments
             return result ?? new ConfigNode(EnvironmentParser.SYSTEM_MONITOR_ELEMENT, ConfigNodeKind.Element);
         }
 
-        private static void MergeNode(ConfigNode target, ConfigNode source, MergeOrigin origin, CollectionElementRegistry collections, ConflictResolution onConflict)
+        private static void MergeNode(ConfigNode target, ConfigNode source, MergeOrigin origin, CollectionElements collections, ConflictResolution onConflict)
         {
             MergeValue(target, source, origin, onConflict);
 

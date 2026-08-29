@@ -67,7 +67,7 @@ namespace MadWizard.Desomnia.Tests
             var monitor = new EnvironmentMonitor { Logger = NullLogger.Instance };
 
             // no migration layer attached: the pipeline works (version check included) without one
-            var pipeline = new ConfigurationPipeline(source, monitor, Conditions(toggle), new ModuleRegistry { Logger = NullLogger.Instance })
+            var pipeline = new ConfigurationPipeline(source, monitor, Conditions(toggle), new VersionedModuleRegistry {  })
             {
                 Logger = NullLogger.Instance,
             };
@@ -134,7 +134,7 @@ namespace MadWizard.Desomnia.Tests
         {
             var module = new MigratingModule();
 
-            var registry = new ModuleRegistry { LatestVersion = 2, Logger = NullLogger.Instance };
+            var registry = new VersionedModuleRegistry { LatestVersion = 2 };
             registry.Register(module);
 
             var source = new ExtendedXmlConfigurationSource(_path);

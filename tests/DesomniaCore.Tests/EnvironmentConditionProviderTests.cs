@@ -159,7 +159,7 @@ namespace MadWizard.Desomnia.Tests
 
             var monitor = new EnvironmentMonitor { Logger = NullLogger.Instance };
 
-            return new ConfigurationPipeline(source, monitor, ConditionScope(), new ModuleRegistry { Logger = NullLogger.Instance })
+            return new ConfigurationPipeline(source, monitor, ConditionScope(), new VersionedModuleRegistry {  })
             {
                 Logger = NullLogger.Instance,
             };

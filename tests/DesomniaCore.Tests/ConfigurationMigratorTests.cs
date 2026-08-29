@@ -94,7 +94,7 @@ namespace MadWizard.Desomnia.Tests
         {
             var migrator = new XConfigurationMigrator(() => _path) { LatestVersion = latest, Logger = _log = new CapturingLogger() };
 
-            migrator.Registry.Logger = _log; // engine and registry log distinct categories; the tests capture both
+            //migrator.Registry.Logger = _log; // engine and registry log distinct categories; the tests capture both
 
             foreach (var module in modules)
                 migrator.Register(module);
@@ -1262,8 +1262,8 @@ namespace MadWizard.Desomnia.Tests
             var content = new ConfigurationBuilder().Add(source).Build();
             var root = new ConfigurationBuilder().Add(((IRootConfigurationSource)source).RootSource).Build();
 
-            Assert.Equal("9", content["NetworkMonitor:Ethernet:watchPort"]);
-            Assert.Null(content["NetworkMonitor:Ethernet:watchUDPPort"]);
+            Assert.Equal("9", content["NetworkMonitor:watchPort"]);
+            Assert.Null(content["NetworkMonitor:watchUDPPort"]);
             Assert.Null(content["version"]); // the format declaration is not data
 
             Assert.Equal("false", root["useDBus"]);

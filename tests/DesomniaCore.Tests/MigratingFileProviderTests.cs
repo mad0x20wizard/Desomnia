@@ -37,7 +37,7 @@ namespace MadWizard.Desomnia.Tests
 
         private (ExtendedXmlConfigurationSource Source, XConfigurationMigrator Migrator) CreateDecoratedSource()
         {
-            var registry = new ModuleRegistry { LatestVersion = 2, Logger = NullLogger.Instance };
+            var registry = new VersionedModuleRegistry { LatestVersion = 2 };
             registry.Register(new RenamingModule());
 
             var source = new ExtendedXmlConfigurationSource(_path);
@@ -59,8 +59,8 @@ namespace MadWizard.Desomnia.Tests
             var content = new ConfigurationBuilder().Add(source).Build();
 
             // the provider reads the migrated form (no header needed: transient is the default) ...
-            Assert.Equal("9", content["NetworkMonitor:Ethernet:watchPort"]);
-            Assert.Null(content["NetworkMonitor:Ethernet:watchUDPPort"]);
+            Assert.Equal("9", content["NetworkMonitor:watchPort"]);
+            Assert.Null(content["NetworkMonitor:watchUDPPort"]);
             Assert.Null(content["version"]); // the stamped declaration is not data
 
             // ... while the file on disk stays exactly as the user wrote it
@@ -75,8 +75,8 @@ namespace MadWizard.Desomnia.Tests
 
             var content = new ConfigurationBuilder().Add(new ExtendedXmlConfigurationSource(_path)).Build();
 
-            Assert.Equal("9", content["NetworkMonitor:Ethernet:watchUDPPort"]);
-            Assert.Null(content["NetworkMonitor:Ethernet:watchPort"]);
+            Assert.Equal("9", content["NetworkMonitor:watchUDPPort"]);
+            Assert.Null(content["NetworkMonitor:watchPort"]);
         }
 
         [Fact]
@@ -94,7 +94,7 @@ namespace MadWizard.Desomnia.Tests
 
             var content = new ConfigurationBuilder().Add(source).Build();
 
-            Assert.Equal("9", content["NetworkMonitor:Ethernet:watchPort"]);
+            Assert.Equal("9", content["NetworkMonitor:watchPort"]);
 
             File.WriteAllText(_path, "<SystemMonitor><NetworkMonitor"); // a half-written edit
 

@@ -10,17 +10,8 @@ namespace MadWizard.Desomnia.Tests
 {
     public class ConfigMergerTests
     {
-        private static readonly CollectionElementRegistry Collections = CreateCollections();
-
-        private static CollectionElementRegistry CreateCollections()
-        {
-            var collections = new CollectionElementRegistry();
-
-            foreach (var element in new[] { "NetworkMonitor", "RemoteHost", "Process" })
-                collections.AddCollectionNameBuilder(element, (name, nr) => $"{name}#{nr}");
-
-            return collections;
-        }
+        private static readonly CollectionElements Collections =
+            CollectionElements.Of("NetworkMonitor", "RemoteHost", "Process");
 
         private static EnvironmentBlock Block(string name, string xml, int priority = 0) => new()
         {

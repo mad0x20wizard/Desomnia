@@ -5,7 +5,6 @@ using MadWizard.Desomnia.Application.Lifetime;
 using MadWizard.Desomnia.Application.Registry;
 using MadWizard.Desomnia.Application.Shutdown;
 using MadWizard.Desomnia.Configuration;
-using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Environments;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,15 +28,15 @@ namespace MadWizard.Desomnia.Application
     {
         protected abstract IConfigurationSource Source { get; }
 
-        // the central authority over the module system: the registered modules and everything
-        // derived from the set - the format algebra and the version check that refuses a
-        // mismatched file (the pipeline runs it), with or without the migration layer attached
-        internal readonly ModuleRegistry _registry = new();
-
         // the persistent host and its Autofac container (the machine-lifetime scope). Built once by
         // Build(), disposed only when the whole application stops — NOT on a configuration rebuild,
         // so the services and the OS state they hold survive reconfiguration
         private ILifetimeScope? _root;
+
+        // the central authority over the module system: the registered modules and everything
+        // derived from the set - the format algebra and the version check that refuses a
+        // mismatched file (the pipeline runs it), with or without the migration layer attached
+        internal readonly VersionedModuleRegistry _registry = new();
 
         public void RegisterModule(Module module)
         {
@@ -66,6 +65,8 @@ namespace MadWizard.Desomnia.Application
         /// </summary>
         public ApplicationHost Build()
         {
+            _registry.Lock();
+
             var builder = new HostApplicationBuilder(DefaultSettings);
 
             // logging first: adding the root source below reads the file at once, and an
@@ -78,7 +79,7 @@ namespace MadWizard.Desomnia.Application
 
             builder.ConfigureContainer(new AutofacServiceProviderFactory(), ConfigureContainer);
 
-            foreach (var module in _registry.Modules)
+            foreach (var module in _registry)
             {
                 module.BuildOnce(builder);
             }
@@ -105,15 +106,11 @@ namespace MadWizard.Desomnia.Application
             {
                 builder.Configuration.Sources.Add(root.RootSource);
             }
-
-            // fix the format algebra now (all modules are registered) - an unsatisfiable module
-            // set fails the boot deterministically, even when the configuration file is missing
-            _ = _registry.RequiredVersion;
         }
 
         protected virtual void ConfigureLogging(ILoggingBuilder builder)
         {
-            foreach (var module in _registry.Modules)
+            foreach (var module in _registry)
             {
                 LogManager.Setup().SetupExtensions(module.ConfigureLogging);
             }
@@ -133,18 +130,20 @@ namespace MadWizard.Desomnia.Application
 
             container.RegisterModule<FrameworkModule>();
 
-            // the stage between the physical file and the monitor: mode detection, parsing,
+            // the stage between the physical source and the monitor: mode detection, parsing,
             // condition binding, change watching, the version check - and the fatal-exit
-            // policy for changes the running process cannot apply. It reads the file through
-            // the source's provider, like every other consumer - the migration layer (when
-            // composed underneath, see AttachMigration) is invisible to it
+            // policy for changes the running process cannot apply. It works against the
+            // abstract source: a file-based source is read through its provider, like every
+            // other consumer - the migration layer (when composed underneath, see
+            // SystemApplicationBuilder.AttachMigration) is invisible to it - and any other
+            // source leaves the pipeline a passthrough
             container.RegisterType<ConfigurationPipeline>()
-                .WithParameter(TypedParameter.From((ExtendedXmlConfigurationSource)Source)) // FIXME
+                .WithParameter(TypedParameter.From(Source))
                 .WithParameter(TypedParameter.From(_registry))
                 .AsImplementedInterfaces().AsSelf()
                 .SingleInstance();
 
-            foreach (var module in _registry.Modules)
+            foreach (var module in _registry)
             {
                 module.LoadOnce(container);
             }
@@ -171,7 +170,7 @@ namespace MadWizard.Desomnia.Application
 
             builder.ConfigureContainer(new AutofacServiceProviderFactory(), ConfigureApplicationContainer);
 
-            foreach (var module in _registry.Modules)
+            foreach (var module in _registry)
             {
                 module.Build(builder);
             }
@@ -225,7 +224,7 @@ namespace MadWizard.Desomnia.Application
             // later-added source is the one consulted first.
             container.RegisterSource(new PriorityEnumerationSource());
 
-            foreach (var module in _registry.Modules)
+            foreach (var module in _registry)
             {
                 container.RegisterModule(module);
             }

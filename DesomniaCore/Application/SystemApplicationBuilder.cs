@@ -1,5 +1,6 @@
 ﻿using MadWizard.Desomnia.Application.Registry;
 using MadWizard.Desomnia.Configuration.Migration;
+using MadWizard.Desomnia.Configuration.Model;
 using MadWizard.Desomnia.Configuration.Xml;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -8,17 +9,23 @@ using NLog;
 using NLog.Config;
 using NLog.Extensions.Logging;
 using NLog.Targets;
+using System.CommandLine;
+using System.IO.Compression;
+using System.Reflection;
+using System.Runtime.Loader;
 
 namespace MadWizard.Desomnia.Application
 {
     public class SystemApplicationBuilder : ApplicationBuilder
     {
+        protected override FileConfigurationSource Source { get; }
+
+        protected virtual RootCommand CommandLine => new SystemDefaultCommandLine();
+
+        #region Default paths and lookup
         const string CONFIG_FILE_NAME = "monitor.xml";
         const string NLOG_CONFIG_FILE_NAME = "NLog.config";
 
-        protected override FileConfigurationSource Source { get; }
-
-        #region Default paths and lookup
         protected virtual string[] DefaultConfigPaths
         {
             get
@@ -96,23 +103,60 @@ namespace MadWizard.Desomnia.Application
 
         protected SystemApplicationBuilder(string[] args) : this()
         {
-            var result = new ApplicationCommandLine().Parse(args);
+            var result = CommandLine.Parse(args);
 
             if (Source is FileConfigurationSource file)
             {
-                file.ReloadOnChange = result.GetValue(ApplicationCommandLine.AutoReloadOption);
+                file.ReloadOnChange = result.GetValue(SystemDefaultCommandLine.AutoReloadOption);
             }
 
             result.Invoke();
         }
 
+        #region Plugin loading
         public void RegisterPluginModules()
         {
             foreach (var path in DefaultPluginsPaths)
             {
-                _registry.RegisterPluginModules(path);
+                foreach (var assembly in EnumPlugins(path))
+                {
+                    _registry.RegisterPluginAssembly(assembly);
+                }
             }
         }
+
+        private static IEnumerable<Assembly> EnumPlugins(string path)
+        {
+            if (Directory.Exists(path = Path.GetFullPath(path)))
+            {
+                // extract path
+                foreach (var zipFile in Directory.GetFiles(path, "plugin-*.zip"))
+                {
+                    // example: "plugin-FirewallKnockOperator_v3.0.0-beta8.zip"
+                    var name = Path.GetFileNameWithoutExtension(zipFile);
+                    name = name.Replace("plugin-", string.Empty);
+                    name = name.Split("_")[0];
+
+                    ZipFile.ExtractToDirectory(zipFile, Path.Combine(path, name));
+                    File.Delete(zipFile);
+                }
+
+                // register path
+                foreach (var pluginDir in Directory.GetDirectories(path))
+                {
+                    var pluginName = new DirectoryInfo(pluginDir).Name;
+                    var pluginPath = Path.Combine(pluginDir, $"{pluginName}.dll");
+
+                    if (File.Exists(pluginPath))
+                    {
+                        var pluginContext = new PluginLoadContext(pluginPath);
+
+                        yield return pluginContext.PluginAssembly;
+                    }
+                }
+            }
+        }
+        #endregion
 
         #region Logging
         protected override void ConfigureLogging(ILoggingBuilder builder)
@@ -174,11 +218,10 @@ namespace MadWizard.Desomnia.Application
             if (Source is ExtendedXmlConfigurationSource xml)
             {
                 // the collection-element knowledge must exist before the pipeline reads the file
-                // (the merger and the flattener need it); contributed by every configurable module
-                foreach (var module in _registry.ConfigurableModules)
-                {
-                    module.ConfigureConfigurationSource(xml);
-                }
+                // (the merger and the flattener need it); derived from the modules' configuration
+                // types — an XML-only concern, so the derivation happens HERE, in the format
+                // dispatch, and never inside the module API
+                xml.Collections = CollectionElements.Derive(_registry.ConfigTypes);
 
                 AttachMigration(xml);
             }
@@ -205,5 +248,16 @@ namespace MadWizard.Desomnia.Application
             xml.FileProvider = new MigratingFileProvider(provider, migrator, path);
         }
         #endregion
+    }
+
+    file class PluginLoadContext(string path) : AssemblyLoadContext
+    {
+        private readonly AssemblyDependencyResolver resolver = new(path);
+
+        protected override Assembly? Load(AssemblyName assemblyName) => resolver.ResolveAssemblyToPath(assemblyName) is string assemblyPath ? LoadFromAssemblyPath(assemblyPath) : null;
+
+        protected override nint LoadUnmanagedDll(string unmanagedDllName) => resolver.ResolveUnmanagedDllToPath(unmanagedDllName) is string libraryPath ? LoadUnmanagedDllFromPath(libraryPath) : 0;
+
+        public Assembly PluginAssembly => LoadFromAssemblyName(AssemblyName.GetAssemblyName(path));
     }
 }
