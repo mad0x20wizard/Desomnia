@@ -21,12 +21,16 @@ namespace MadWizard.Desomnia.Network.Configuration
     {
         const long DEFAULT_TIMEOUT_MS = 500;
 
-        internal const string NAMLESS_PREFIX = "NetworkMonitor#";
+        /// <summary>
+        /// The 0-based position of this network in its <see cref="ModuleConfig{T}.NetworkMonitor"/>
+        /// list — the identity that correlates the module's and the plugins' views of the same
+        /// configuration: every view binds the same sections in document order, so the ordinal
+        /// is the same in each (a name may not be written at all). Stamped by the list.
+        /// </summary>
+        internal int Ordinal { get; set; } = -1;
 
         // Network-Identification
-        public required string  Name                { get; init; }
-
-        public string?          Label               { get => !Name.StartsWith(NAMLESS_PREFIX, StringComparison.OrdinalIgnoreCase) ? Name : null; }
+        public string?          Name                { get; set; }
 
         public string?          Interface           { get; set; }
         public IPNetwork?       Network             { get; set; }

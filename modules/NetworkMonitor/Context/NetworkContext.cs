@@ -79,10 +79,10 @@ namespace MadWizard.Desomnia.Network.Context
         {
             Config = config;
 
-            Name = Config.Label ?? @interface.Name;
+            Name = Config.Name ?? @interface.Name;
 
             Plugins = parent.Resolve<IEnumerable<Meta<PluginModule, PluginModule.Metadata>>>()
-                .Where(x => x.Metadata.Name is not string name || name == config.Name)
+                .Where(x => x.Metadata.Network is not int ordinal || ordinal == config.Ordinal)
                 .Select(x => x.Value);
 
             Scope = parent.BeginLifetimeScope(MatchingScopeLifetimeTags.NetworkLifetimeScopeTag, builder =>

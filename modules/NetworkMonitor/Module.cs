@@ -209,8 +209,14 @@ namespace MadWizard.Desomnia.Network
     {
         public class Metadata
         {
+            /// <summary>
+            /// The <see cref="Configuration.NetworkMonitorConfig.Ordinal"/> of the one network
+            /// this module belongs to — null for a module that applies to every network. The
+            /// ordinal (not the name) is the correlation identity: the plugin binds its own
+            /// view of the same configuration, and a network may not be named at all.
+            /// </summary>
             [DefaultValue(null)]
-            public string? Name { get; set; }
+            public int? Network { get; set; }
         }
     }
 }

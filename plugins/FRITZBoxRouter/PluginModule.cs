@@ -1,8 +1,8 @@
 using Autofac;
-using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Options;
+using MadWizard.Desomnia.Network.Extensions;
 using MadWizard.Desomnia.Network.FRITZ.Actions;
 using MadWizard.Desomnia.Network.FRITZ.Configuration;
 using MadWizard.Desomnia.Network.FRITZ.Context;
@@ -29,13 +29,6 @@ namespace MadWizard.Desomnia.Network.FRITZ
     /// </summary>
     public class PluginModule : ConfigurableModule<ModuleConfig<NetworkMonitorConfig>>
     {
-        protected override void ConfigureConfigurationSource(ExtendedXmlConfigurationSource source)
-        {
-            base.ConfigureConfigurationSource(source); // derives collection element names from the config type
-
-            source.AddCollectionNameBuilder("FRITZBoxRouter", (element, nr) => "fritz.box");
-        }
-
         protected override void Load(ContainerBuilder builder, ModuleConfig<NetworkMonitorConfig> config)
         {
             // A network is in scope if it configures a box, or opted into router autodetect (which enables zero-conf mDNS discovery of boxes it never configured).
@@ -46,12 +39,14 @@ namespace MadWizard.Desomnia.Network.FRITZ
                 builder.RegisterType<FRITZBoxOperator>().As<ActionProvider>()
                     .SingleInstance();
 
-                // Per-network binding: the NetworkMonitor picks up plugin modules whose metadata name
-                // matches the network (see NetworkContext), and runs their Load inside that scope.
+                // Per-network binding: the NetworkMonitor picks up plugin modules whose metadata
+                // ordinal matches the network (see NetworkContext), and runs their Load inside
+                // that scope. The ordinal correlates this module's view of the configuration
+                // with the NetworkMonitor's — both bind the same sections in the same order.
                 foreach (var network in networks)
                 {
                     builder.RegisterType<NetworkPluginModule>().As<Desomnia.Network.PluginModule>()
-                        .WithMetadata<Desomnia.Network.PluginModule.Metadata>(meta => meta.For(m => m.Name, network.Name))
+                        .WithMetadata<Desomnia.Network.PluginModule.Metadata>(meta => meta.ForNetwork(network))
                         .WithParameter(TypedParameter.From(network))
                         .SingleInstance();
                 }
