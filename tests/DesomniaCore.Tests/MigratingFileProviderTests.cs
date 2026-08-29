@@ -39,6 +39,7 @@ namespace MadWizard.Desomnia.Tests
         {
             var registry = new VersionedModuleRegistry { LatestVersion = 2 };
             registry.Register(new RenamingModule());
+            registry.Lock();
 
             var source = new ExtendedXmlConfigurationSource(_path);
 

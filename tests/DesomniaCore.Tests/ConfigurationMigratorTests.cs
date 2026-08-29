@@ -99,6 +99,8 @@ namespace MadWizard.Desomnia.Tests
             foreach (var module in modules)
                 migrator.Register(module);
 
+            migrator.Registry.Lock();
+
             return migrator;
         }
 
@@ -149,35 +151,27 @@ namespace MadWizard.Desomnia.Tests
         }
 
         [Fact]
-        internal void Algebra_StrictModule_IsWarnedAbout_Once()
+        internal void Algebra_StrictModule_LimitsTheSupportedVersion()
         {
             var migrator = CreateMigrator(latest: 3, new ModuleA { Max = 2 }, new ModuleB());
 
-            _ = migrator.SupportedVersion;
-            _ = migrator.RequiredVersion;
-
-            Assert.Equal(["ModuleA limits the configuration format to version 2 (current: 3)."], _log.At(LogLevel.Warning));
+            Assert.Equal(2u, migrator.SupportedVersion);
+            Assert.Equal(1u, migrator.RequiredVersion);
         }
 
         [Fact]
         internal void Algebra_RequiredAboveSupported_Throws_NamingBoth()
         {
-            var migrator = CreateMigrator(latest: 3, new ModuleA { Min = 3 }, new ModuleB { Max = 2 });
-
-            var ex = Assert.Throws<ConfigurationMigrationException>(() => migrator.SupportedVersion);
+            var ex = Assert.Throws<ConfigurationMigrationException>(() =>
+                CreateMigrator(latest: 3, new ModuleA { Min = 3 }, new ModuleB { Max = 2 }));
 
             Assert.Equal("The configuration format cannot be satisfied: ModuleA requires version 3, but ModuleB supports at most version 2.", ex.Message);
-
-            // and the same at the first read of a file
-            Assert.Throws<ConfigurationMigrationException>(() => migrator.Read("""<?config version="1" autoMigrate="transient"?><SystemMonitor />"""));
         }
 
         [Fact]
-        internal void Register_AfterTheFirstRead_Throws()
+        internal void Register_AfterTheRegistryIsLocked_Throws()
         {
             var migrator = CreateMigrator(latest: 1);
-
-            migrator.Read("""<?config version="1" autoMigrate="transient"?><SystemMonitor />""");
 
             Assert.Throws<InvalidOperationException>(() => migrator.Register(new ModuleA()));
         }
@@ -347,7 +341,8 @@ namespace MadWizard.Desomnia.Tests
         [Fact]
         internal void Version_OlderThanRequired_AndNotMigrated_IsRefusedByTheCheck()
         {
-            // autoMigrate="never": the migrator stays away, the version check names the demanding module
+            // autoMigrate="never": the migrator stays away, and the version check reports the
+            // minimum version computed when the registry was locked
             var migrator = CreateMigrator(latest: 2, new ModuleA { Min = 2 });
 
             var file = migrator.Read("""<?config autoMigrate="never"?><SystemMonitor version="1" />""");
@@ -356,7 +351,7 @@ namespace MadWizard.Desomnia.Tests
 
             var ex = Assert.Throws<ConfigurationMigrationException>(() => migrator.Registry.Validate(file.Version));
 
-            Assert.Equal("The configuration file uses format version 1, but ModuleA requires at least version 2. " +
+            Assert.Equal("The configuration file uses format version 1, but this build requires at least version 2. " +
                 "Update the configuration file manually, or declare autoMigrate=\"transient\" or \"persistent\" " +
                 "in the <?config?> header to have it migrated automatically.", ex.Message);
         }

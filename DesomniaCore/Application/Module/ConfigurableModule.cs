@@ -10,14 +10,6 @@ namespace MadWizard.Desomnia
     {
         private IConfiguration? _rootConfig;
 
-        /// <summary>
-        /// The configuration types this module binds — a plain module fact, collected by the
-        /// <see cref="ModuleRegistry"/>. Everything derived from the types (e.g. which XML
-        /// elements form collections) is computed OUTSIDE the module API, by the layer that
-        /// needs it: a module never sees a configuration file format.
-        /// </summary>
-        internal virtual IEnumerable<Type> ConfigTypes => [];
-
         #region Versioning
         /// <summary>
         /// The product-wide configuration format version: bumped whenever ANY module introduces
@@ -87,8 +79,6 @@ namespace MadWizard.Desomnia
         // bound anew for every application instance — derived modules receive it as the
         // config parameter of their Load overload instead of touching mutable state
         private T Config { get; set; } = default!;
-
-        internal override IEnumerable<Type> ConfigTypes => [typeof(T)];
 
         #region Application configuration
         protected internal override void Build(HostApplicationBuilder builder)

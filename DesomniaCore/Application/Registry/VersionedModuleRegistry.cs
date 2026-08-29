@@ -5,14 +5,29 @@ namespace MadWizard.Desomnia.Application.Registry
     internal class VersionedModuleRegistry : ModuleRegistry
     {
         /// <summary>
-        /// The configuration types of the registered modules, in registration order — the raw
-        /// material every format-specific derivation works from (e.g. the XML collection-element
-        /// knowledge, see <c>CollectionElements.Derive</c>). A plain module fact: the registry
-        /// stays free of any configuration format.
+        /// The configuration types of the registered modules, in registration order, discovered
+        /// from their <see cref="ConfigurableModule{T}"/> base class — the raw material every
+        /// format-specific derivation works from (e.g. the XML collection-element knowledge, see
+        /// <c>CollectionElements.Derive</c>). The registry stays free of any configuration format.
         /// </summary>
         internal IEnumerable<Type> ConfigTypes
         {
-            get { lock (this) return _modules.OfType<ConfigurableModule>().SelectMany(module => module.ConfigTypes).ToList(); }
+            get
+            {
+                static Type? ConfigType(ConfigurableModule module)
+                {
+                    for (Type? type = module.GetType(); type is not null; type = type.BaseType)
+                        if (type.IsConstructedGenericType && type.GetGenericTypeDefinition() == typeof(ConfigurableModule<>))
+                            return type.GenericTypeArguments[0];
+
+                    return null;
+                }
+
+                lock (this)
+                {
+                    return [.. _modules.OfType<ConfigurableModule>().Select(ConfigType).OfType<Type>()];
+                }
+            }
         }
 
         /// <summary>
