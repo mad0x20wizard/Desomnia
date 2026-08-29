@@ -2,7 +2,7 @@
 
 namespace MadWizard.Desomnia
 {
-    internal class AOTModule : Autofac.Module
+    internal sealed class AOTModule : Autofac.Module
     {
         protected override void Load(ContainerBuilder builder)
         {
