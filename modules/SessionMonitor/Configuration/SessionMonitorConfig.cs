@@ -45,9 +45,9 @@ namespace MadWizard.Desomnia.Session.Configuration
         internal bool RegisterWithSleepProxy { get; set; } = true;
 
         #region SessionMonitor :: ClockOptions
-        internal bool ClockTime         { get; set; } = true;
-        internal bool ClockRemote       { get; set; } = false;
-        internal bool ClockDisconnected { get; set; } = false;
+        internal bool WatchInput                { get; set; } = true;
+        internal bool WatchInputRemote          { get; set; } = false;
+        internal bool WatchInputDisconnected    { get; set; } = false;
         #endregion
     }
 }

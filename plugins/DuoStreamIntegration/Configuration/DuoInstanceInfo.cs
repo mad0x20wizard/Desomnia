@@ -18,7 +18,7 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
 
         public DuoInstanceInfo()
         {
-            ClockRemote = true; // Duo sessions should be generally checked for idleness
+            WatchInputRemote = true; // Duo sessions are remote and should be generally checked for input idleness
         }
     }
 }

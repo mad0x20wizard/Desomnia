@@ -32,9 +32,9 @@ namespace MadWizard.Desomnia.Session
         public required Func<ProcessWatchMetrics, AnySessionProcessWatch>   CreateAnyProcessWatch   { private get; init; }
         public required Func<SessionProcessWatchInfo, SessionProcessWatch>  CreateProcessWatch      { private get; init; }
 
-        public TimeSpan? MaxIdleTime { get; private set; }
+        public TimeSpan? MaxLastInputTime { get; private set; }
 
-        private ClockOptions Clock { get; set; } = new() { Time = true };
+        private WatchInputOptions? WatchInput { get; set; } = new();
 
         public event EventInvocation? Login;
         public event EventInvocation? RemoteLogin;
@@ -77,10 +77,10 @@ namespace MadWizard.Desomnia.Session
 
         public void ApplyConfiguration(SessionMonitorConfig config, SessionWatchInfo info)
         {
-            if (MaxIdleTime == null || MaxIdleTime.Value < info.MaxIdleTime)
-                MaxIdleTime = info.MaxIdleTime;
+            if (MaxLastInputTime == null || MaxLastInputTime.Value < info.MaxLastInputTime)
+                MaxLastInputTime = info.MaxLastInputTime;
 
-            Clock += info.MakeClockOptions(config);
+            WatchInput += info.MakeWatchInputOptions(config);
 
             GetEvent(nameof(Idle)).AddAction(info.OnIdle);
 
@@ -122,7 +122,7 @@ namespace MadWizard.Desomnia.Session
 
         private bool HadUsageSince(SessionUsage usage, TimeSpan interval)
         {
-            if (_aggregates.Count > 0) // user specified at least one minimum requirement
+            if (_aggregates.Count > 0) // user specified at least one min-metric
             {
                 try
                 {
@@ -137,22 +137,26 @@ namespace MadWizard.Desomnia.Session
                 }
             }
 
-            if (Clock.Time)
+            if (WatchInput is WatchInputOptions watch)
             {
-                if (Session.IsRemoteConnected && !Clock.Remote)
+                if (Session.IsRemoteConnected && !watch.Remote)
                 {
                     return true;
                 }
-                else if ((Clock.Disconnected || Session.IsConnected) && Session.IdleTime is TimeSpan time)
+                else if ((watch.Disconnected || Session.IsConnected) && Session.IdleTime is TimeSpan time)
                 {
-                    if (time < (MaxIdleTime ?? interval))
+                    if (time < (MaxLastInputTime ?? interval))
                     {
                         return true;
                     }
                 }
-            }
 
-            return false;
+                return false; // session has no user input
+            }
+            else
+            {
+                return true; // either no min-metric set or all satisfied
+            }
         }
 
         [ActionHandler("lock")]

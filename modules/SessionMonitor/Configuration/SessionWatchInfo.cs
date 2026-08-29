@@ -6,19 +6,19 @@ namespace MadWizard.Desomnia.Session.Configuration
 {
     public class SessionWatchInfo : ProcessWatchMetrics
     {
-        public TimeSpan? MaxIdleTime { get; set; }
+        public TimeSpan? MaxLastInputTime { get; set; }
 
-        #region Session :: ClockOptions
-        protected bool? ClockTime { get; set; }
-        protected bool? ClockRemote { get; set; }
-        protected bool? ClockDisconnected { get; set; }
+        #region Session :: WatchInputOptions
+        protected bool? WatchInput { get; set; }
+        protected bool? WatchInputRemote { get; set; }
+        protected bool? WatchInputDisconnected { get; set; }
 
-        public virtual ClockOptions MakeClockOptions(SessionMonitorConfig config) => new()
-        {
-            Time = this.ClockTime ?? config.ClockTime,
-            Remote = this.ClockRemote ?? config.ClockRemote,
-            Disconnected = this.ClockDisconnected ?? config.ClockDisconnected,
-        };
+        public virtual WatchInputOptions? MakeWatchInputOptions(SessionMonitorConfig config) =>
+            this.WatchInput ?? config.WatchInput ? new()
+            {
+                Remote = this.WatchInputRemote ?? config.WatchInputRemote,
+                Disconnected = this.WatchInputDisconnected ?? config.WatchInputDisconnected,
+            } : null;
         #endregion
 
         public DelayedActionInfo? OnIdle { get; set; }
