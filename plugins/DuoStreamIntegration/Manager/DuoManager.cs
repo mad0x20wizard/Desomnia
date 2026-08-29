@@ -141,7 +141,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                     info.OnStop     ??= config.OnInstanceStopped;
                     info.OnLogout   ??= config.OnInstanceLogout;
 
-                    info.PreventIdleIfStreaming ??= config.PreventIdleIfStreaming;
+                    info.WatchStreamTraffic ??= config.WatchStreamTraffic;
 
                     var instance = CreateInstance(info, instancesKey.OpenSubKey(name!, writable: true)!);
 

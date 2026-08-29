@@ -12,7 +12,7 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
         public DelayedActionInfo? OnStart { get; set; }
         public DelayedActionInfo? OnStop { get; set; }
 
-        public bool? PreventIdleIfStreaming { get; set; }
+        public bool? WatchStreamTraffic { get; set; }
 
         public TransmissionThreshold? MinStreamTraffic { get; set; }
 

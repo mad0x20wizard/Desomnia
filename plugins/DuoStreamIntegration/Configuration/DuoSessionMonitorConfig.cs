@@ -21,7 +21,7 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
         public ScheduledActionInfo? OnInstanceStopped   { get; set; }
         public ScheduledActionInfo? OnInstanceLogout    { get; set; }
 
-        public bool PreventIdleIfStreaming { get; set; } = true;
+        public bool WatchStreamTraffic { get; set; } = true;
 
         public IList<DuoInstanceInfo> Instance { get; private set; } = [];
 

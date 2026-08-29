@@ -13,13 +13,13 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine
             {
                 watch.Demand += instance.NetworkServiceWatch_Demand;
 
-                if (instance.Info.PreventIdleIfStreaming ?? true)
+                if (instance.Info.WatchStreamTraffic ?? true)
                 {
                     instance.StartTracking(watch);
                 }
                 else
                 {
-                    instance.Inspected += Instance_Inspected;
+                    instance.Inspected += Instance_Inspected; // delegate inspection event
                 }
 
                 _watches[instance] = watch;
@@ -30,6 +30,11 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine
             }
         }
 
+        /// <summary>
+        /// Here we trigger the inspection manually, in order to have the NetworkServiceWatch update
+        /// their internal counters, which would normally happen automatically,
+        /// if it were tracked by a parent monitor.
+        /// </summary>
         private void Instance_Inspected(object? sender, TimeSpan interval)
         {
             if (sender is DuoInstance instance && _watches.TryGetValue(instance, out var watch))
