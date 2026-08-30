@@ -122,7 +122,7 @@ namespace MadWizard.Desomnia.Session
 
         private bool HadUsageSince(SessionUsage usage, TimeSpan interval)
         {
-            if (_aggregates.Count > 0) // user specified at least one min-metric
+            if (_aggregates.Count > 0) // user specified at least one process metric
             {
                 try
                 {
@@ -147,6 +147,8 @@ namespace MadWizard.Desomnia.Session
                 {
                     if (time < (MaxLastInputTime ?? interval))
                     {
+                        usage.LastInputTime = time;
+
                         return true;
                     }
                 }
@@ -155,7 +157,7 @@ namespace MadWizard.Desomnia.Session
             }
             else
             {
-                return true; // either no min-metric set or all satisfied
+                return true; // either no process metric set or all satisfied
             }
         }
 

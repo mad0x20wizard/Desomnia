@@ -11,6 +11,7 @@ namespace MadWizard.Desomnia.Session
 
         public SessionUsage(ISession session) : this(session.UserName, session.ClientName) { }
 
+        public TimeSpan? LastInputTime { get; set; }
         public ProcessUsageMetrics? Metrics { get; set; }
 
         public bool HasNetworkSession { get; set; }
@@ -26,6 +27,11 @@ namespace MadWizard.Desomnia.Session
 
             str += (clientName != null ? @$"{clientName}\" : string.Empty) + userName;
 
+            if (LastInputTime is TimeSpan time)
+            {
+                str += " ~ " + FormatTimeSpan(time);
+            }
+
             if (Metrics is not null)
             {
                 str += " @ " + Metrics.ToString();
@@ -39,6 +45,15 @@ namespace MadWizard.Desomnia.Session
             str += ">";
 
             return str;
+        }
+
+        static string FormatTimeSpan(TimeSpan value)
+        {
+            int hours = (int)value.TotalHours;
+
+            return hours != 0
+                ? $"{hours}:{value.Minutes}:{value.Seconds:00}"
+                : $"{value.Minutes}:{value.Seconds:00}";
         }
     }
 }

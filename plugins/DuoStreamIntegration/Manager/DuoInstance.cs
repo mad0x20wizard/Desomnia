@@ -132,6 +132,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                     switch (token)
                     {
                         case SessionUsage session:
+                            duo.LastInputTime = session.LastInputTime;
                             duo.Metrics = session.Metrics;
                             foreach (var t in session.Tokens)
                                 duo.Tokens.Add(t);
