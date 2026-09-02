@@ -1,22 +1,11 @@
 using MadWizard.Desomnia.Configuration;
-using System.Globalization;
+using MadWizard.Desomnia.Processes.Metrics;
 using Xunit;
 
 namespace MadWizard.Desomnia.Processes.Tests
 {
-    /// <summary>
-    /// The usage token's rendering contract: only what was measured appears, each part in the
-    /// unit its threshold compared – a share as a percentage, an amount in bytes, a rate per
-    /// second – in the fixed order CPU, GPU, IO, Tx.
-    /// </summary>
     public class ProcessUsageTests
     {
-        public ProcessUsageTests()
-        {
-            // the formats under test carry decimal separators; the assertion strings are invariant
-            CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
-        }
-
         [Fact]
         public void WithoutThresholds_RendersBare()
         {
@@ -24,16 +13,17 @@ namespace MadWizard.Desomnia.Processes.Tests
         }
 
         [Fact]
-        public void EveryPart_RendersInItsUnit()
+        public void EveryPart_RendersInItsConfiguredFormat()
         {
+            var sample = TimeSpan.FromSeconds(10);
             var usage = new ProcessUsage("Steam")
             {
-                Metrics = new()
+                Metrics = new(sample)
                 {
-                    ProcessingUsage = 0.20,
-                    GraphicsProcessingUsage = 0.05,
-                    StorageRate = 4.0 * (1L << 20),  // storage is spoken of in bytes...
-                    TrafficRate = 10.0 * (1L << 10) / 8,  // ...and a line speed in bits
+                    Processor = new(TimeSpan.FromSeconds(2), sample, ProcessingMetricFormat.Percentage),
+                    GraphicsProcessor = new(TimeSpan.FromSeconds(0.5), sample, ProcessingMetricFormat.Percentage),
+                    Storage = new(40L << 20, TransferMetricFormat.BytesPerSecond),
+                    Traffic = new(12800, TransferMetricFormat.BitsPerSecond),
                 }
             };
 
@@ -43,14 +33,14 @@ namespace MadWizard.Desomnia.Processes.Tests
         [Fact]
         public void AbsoluteThresholds_RenderAmounts()
         {
-            // an amount stays bytes on both counters: only a speed is quoted in bits
+            var sample = TimeSpan.FromSeconds(2);
             var usage = new ProcessUsage("Backup")
             {
-                Metrics = new()
+                Metrics = new(sample)
                 {
-                    ProcessingTime = TimeSpan.FromSeconds(1),
-                    Storage = 100L << 20,
-                    Traffic = 512,
+                    Processor = new(TimeSpan.FromSeconds(1), sample, ProcessingMetricFormat.Time),
+                    Storage = new(100L << 20, TransferMetricFormat.Bytes),
+                    Traffic = new(512, TransferMetricFormat.Bytes),
                 }
             };
 
@@ -60,29 +50,37 @@ namespace MadWizard.Desomnia.Processes.Tests
         [Fact]
         public void TrafficRate_RoundTripsTheThresholdItWasComparedAgainst()
         {
-            // "5Mbit/s" configured, exactly 5Mbit/s measured – the log has to say so, which it
-            // only does while the formatter steps in the same binary thousands the parser reads
             var threshold = (TransmissionThreshold)new IOThresholdConverter().ConvertFromInvariantString("5Mbit/s")!;
+            var metrics = new ProcessUsageMetrics(TimeSpan.FromSeconds(1))
+            {
+                Traffic = new(threshold.Amount * threshold.ByteUnit!.Value, TransferMetricFormat.BitsPerSecond),
+            };
 
-            var usage = new ProcessUsage("Stream") { Metrics = new() { TrafficRate = threshold.Amount * threshold.ByteUnit!.Value } };
-
-            Assert.Equal("{Stream @ Tx=5Mbit/s}", usage.ToString());
+            Assert.Equal("{Stream @ Tx=5Mbit/s}", new ProcessUsage("Stream") { Metrics = metrics }.ToString());
         }
 
         [Fact]
-        public void GraphicsTime_RendersLikeTheProcessorTime()
+        public void GraphicsTime_RendersLikeProcessorTime()
         {
-            var usage = new ProcessUsage("Game") { Metrics = new() { GraphicsProcessingTime = TimeSpan.FromSeconds(2) } };
+            var sample = TimeSpan.FromSeconds(5);
+            var metrics = new ProcessUsageMetrics(sample)
+            {
+                GraphicsProcessor = new(TimeSpan.FromSeconds(2), sample, ProcessingMetricFormat.Time),
+            };
 
-            Assert.Equal("{Game @ GPU=00:00:02}", usage.ToString());
+            Assert.Equal("{Game @ GPU=00:00:02}", new ProcessUsage("Game") { Metrics = metrics }.ToString());
         }
 
         [Fact]
         public void FractionalShares_KeepOneDecimal()
         {
-            var usage = new ProcessUsage("Browser") { Metrics = new() { ProcessingUsage = 0.123 } };
+            var sample = TimeSpan.FromSeconds(10);
+            var metrics = new ProcessUsageMetrics(sample)
+            {
+                Processor = new(TimeSpan.FromSeconds(1.23), sample, ProcessingMetricFormat.Percentage),
+            };
 
-            Assert.Equal("{Browser @ CPU=12.3%}", usage.ToString());
+            Assert.Equal("{Browser @ CPU=12.3%}", new ProcessUsage("Browser") { Metrics = metrics }.ToString());
         }
     }
 }

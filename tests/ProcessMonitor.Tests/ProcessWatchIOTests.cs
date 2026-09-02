@@ -1,6 +1,7 @@
 ﻿using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Processes.Manager;
+using MadWizard.Desomnia.Processes.Metrics;
 using Xunit;
 
 namespace MadWizard.Desomnia.Processes.Tests
@@ -52,7 +53,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var token = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
 
-            Assert.Equal(4L << 20, token.Metrics().Storage);
+            Assert.Equal(4L << 20, token.Metrics().Storage?.Bytes);
         }
 
         [Fact]
@@ -86,7 +87,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var token = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
 
-            Assert.Equal(2L << 20, token.Metrics().Storage);
+            Assert.Equal(2L << 20, token.Metrics().Storage?.Bytes);
         }
 
         [Fact]
@@ -125,7 +126,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
 
-            Assert.NotNull(usage.ProcessingTime);  // both measurements ride the one token
+            Assert.NotNull(usage.Processor);  // both measurements ride the one token
             Assert.NotNull(usage.Storage);
         }
 
@@ -144,7 +145,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
 
-            Assert.Equal(4L << 20, usage.Traffic);
+            Assert.Equal(4L << 20, usage.Traffic?.Bytes);
             Assert.Null(usage.Storage);                                   // nothing measured storage
         }
 
@@ -164,7 +165,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var token = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
 
-            Assert.Equal(2L << 20, token.Metrics().Storage);
+            Assert.Equal(2L << 20, token.Metrics().Storage?.Bytes);
         }
 
         [Fact]
@@ -219,11 +220,10 @@ namespace MadWizard.Desomnia.Processes.Tests
         }
 
         [Fact]
-        public void RateThreshold_TokensCarryTheRate_NotTheAmount()
+        public void RateThreshold_TokensCarryAmountsAndDisplayFormats()
         {
-            // each side of the token follows its own threshold's shape: the rate-configured one
-            // fills the per-second field, the absolute one keeps carrying the amount – a watch
-            // cross-wiring the two flags would fail here in both directions
+            // Both sides retain interval bytes; their format records whether ToString should
+            // present that amount directly or derive a per-second rate from the sample duration.
             var rate = new TransmissionThreshold { Amount = 1, ByteUnit = 1L << 20, TimeUnit = TimeSpan.FromSeconds(1) };
 
             var chrome = new FakeProcess(101, "chrome") { Disk = new ProcessInputOutput(0, 0), Net = new ProcessInputOutput(0, 0) };
@@ -237,12 +237,11 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
 
-            Assert.Null(usage.Storage);
-            Assert.NotNull(usage.StorageRate);
-            Assert.True(usage.StorageRate > 0);
+            Assert.Equal(TransferMetricFormat.BytesPerSecond, usage.Storage?.Format);
+            Assert.True(usage.Storage?.Bytes > 0);
 
-            Assert.Equal(4L << 20, usage.Traffic);
-            Assert.Null(usage.TrafficRate);
+            Assert.Equal(4L << 20, usage.Traffic?.Bytes);
+            Assert.Equal(TransferMetricFormat.Bytes, usage.Traffic?.Format);
         }
 
         [Fact]

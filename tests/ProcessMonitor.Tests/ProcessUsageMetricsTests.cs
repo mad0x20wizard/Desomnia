@@ -1,86 +1,77 @@
+using MadWizard.Desomnia.Processes.Metrics;
 using Xunit;
 
 namespace MadWizard.Desomnia.Processes.Tests
 {
     public class ProcessUsageMetricsTests
     {
+        private static readonly TimeSpan SampleDuration = TimeSpan.FromSeconds(10);
+
         [Fact]
         public void NullLeftOperand_ReturnsRightOperand()
         {
             ProcessUsageMetrics? left = null;
-            var right = new ProcessUsageMetrics { ProcessingUsage = 0.5 };
+            var right = new ProcessUsageMetrics(SampleDuration)
+            {
+                Processor = new(TimeSpan.FromSeconds(5), SampleDuration, ProcessingMetricFormat.Percentage),
+            };
 
-            var result = left + right;
-
-            Assert.Same(right, result);
+            Assert.Same(right, left | right);
         }
 
         [Fact]
         public void ComplementaryValues_AreAllPreserved()
         {
-            var left = new ProcessUsageMetrics
-            {
-                ProcessingUsage = 0.1,
-                GraphicsProcessingTime = TimeSpan.FromSeconds(2),
-                Storage = 3,
-                TrafficRate = 4,
-            };
-            var right = new ProcessUsageMetrics
-            {
-                ProcessingTime = TimeSpan.FromSeconds(5),
-                GraphicsProcessingUsage = 0.6,
-                StorageRate = 7,
-                Traffic = 8,
-            };
+            var processor = new ProcessingMetric(TimeSpan.FromSeconds(1), SampleDuration, ProcessingMetricFormat.Percentage);
+            var graphics = new ProcessingMetric(TimeSpan.FromSeconds(2), SampleDuration, ProcessingMetricFormat.Time);
+            var storage = new TransferMetric(3, TransferMetricFormat.Bytes);
+            var traffic = new TransferMetric(4, TransferMetricFormat.BitsPerSecond);
 
-            var result = left + right;
+            var left = new ProcessUsageMetrics(SampleDuration) { Processor = processor, Storage = storage };
+            var right = new ProcessUsageMetrics(SampleDuration) { GraphicsProcessor = graphics, Traffic = traffic };
 
-            Assert.Equal(0.1, result.ProcessingUsage);
-            Assert.Equal(TimeSpan.FromSeconds(5), result.ProcessingTime);
-            Assert.Equal(0.6, result.GraphicsProcessingUsage);
-            Assert.Equal(TimeSpan.FromSeconds(2), result.GraphicsProcessingTime);
-            Assert.Equal(3, result.Storage);
-            Assert.Equal(7, result.StorageRate);
-            Assert.Equal(8, result.Traffic);
-            Assert.Equal(4, result.TrafficRate);
+            var result = left | right;
+
+            Assert.Equal(SampleDuration, result.SampleDuration);
+            Assert.Equal(processor, result.Processor);
+            Assert.Equal(graphics, result.GraphicsProcessor);
+            Assert.Equal(storage, result.Storage);
+            Assert.Equal(traffic, result.Traffic);
         }
 
         [Fact]
-        public void OverlappingValues_UseEachMaximum()
+        public void OverlappingValues_KeepTheWholeGreatestMeasurement()
         {
-            var left = new ProcessUsageMetrics
+            var left = new ProcessUsageMetrics(SampleDuration)
             {
-                ProcessingUsage = 0.7,
-                ProcessingTime = TimeSpan.FromSeconds(1),
-                GraphicsProcessingUsage = 0.1,
-                GraphicsProcessingTime = TimeSpan.FromSeconds(4),
-                Storage = 100,
-                StorageRate = 500,
-                Traffic = 700,
-                TrafficRate = 800,
+                Processor = new(TimeSpan.FromSeconds(7), SampleDuration, ProcessingMetricFormat.Percentage),
+                GraphicsProcessor = new(TimeSpan.FromSeconds(1), SampleDuration, ProcessingMetricFormat.Time),
+                Storage = new(100, TransferMetricFormat.Bytes),
+                Traffic = new(700, TransferMetricFormat.Bytes),
             };
-            var right = new ProcessUsageMetrics
+            var right = new ProcessUsageMetrics(SampleDuration)
             {
-                ProcessingUsage = 0.2,
-                ProcessingTime = TimeSpan.FromSeconds(2),
-                GraphicsProcessingUsage = 0.8,
-                GraphicsProcessingTime = TimeSpan.FromSeconds(3),
-                Storage = 200,
-                StorageRate = 400,
-                Traffic = 600,
-                TrafficRate = 900,
+                Processor = new(TimeSpan.FromSeconds(2), SampleDuration, ProcessingMetricFormat.Time),
+                GraphicsProcessor = new(TimeSpan.FromSeconds(8), SampleDuration, ProcessingMetricFormat.Percentage),
+                Storage = new(200, TransferMetricFormat.BytesPerSecond),
+                Traffic = new(600, TransferMetricFormat.BitsPerSecond),
             };
 
-            var result = left + right;
+            var result = left | right;
 
-            Assert.Equal(0.7, result.ProcessingUsage);
-            Assert.Equal(TimeSpan.FromSeconds(2), result.ProcessingTime);
-            Assert.Equal(0.8, result.GraphicsProcessingUsage);
-            Assert.Equal(TimeSpan.FromSeconds(4), result.GraphicsProcessingTime);
-            Assert.Equal(200, result.Storage);
-            Assert.Equal(500, result.StorageRate);
-            Assert.Equal(700, result.Traffic);
-            Assert.Equal(900, result.TrafficRate);
+            Assert.Equal(left.Processor, result.Processor);
+            Assert.Equal(right.GraphicsProcessor, result.GraphicsProcessor);
+            Assert.Equal(right.Storage, result.Storage);
+            Assert.Equal(left.Traffic, result.Traffic);
+        }
+
+        [Fact]
+        public void DifferentSampleDurations_CannotBeCombined()
+        {
+            var left = new ProcessUsageMetrics(TimeSpan.FromSeconds(1));
+            var right = new ProcessUsageMetrics(TimeSpan.FromSeconds(2));
+
+            Assert.Throws<ArgumentException>(() => left | right);
         }
     }
 }

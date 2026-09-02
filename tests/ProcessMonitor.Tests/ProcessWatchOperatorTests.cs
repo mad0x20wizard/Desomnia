@@ -14,13 +14,28 @@ namespace MadWizard.Desomnia.Processes.Tests
     public class ProcessWatchOperatorTests
     {
         private static readonly ProcessingThreshold TenMilliseconds = new(TimeSpan.FromMilliseconds(10));
+        private static readonly ProcessingThreshold TenPercent = new(0.1);
 
         private static readonly TransmissionThreshold OneMegabyte = new() { Amount = 1, ByteUnit = 1L << 20 };
+        private static readonly TransmissionThreshold OneMegabytePerSecond = new()
+        {
+            Amount = 1,
+            ByteUnit = 1L << 20,
+            TimeUnit = TimeSpan.FromSeconds(1),
+        };
 
         private static ProcessWatchInfo Info(WatchOperator min, ProcessingThreshold? minCPU = null,
-            ProcessingThreshold? minGPU = null, TransmissionThreshold? minTraffic = null)
+            ProcessingThreshold? minGPU = null, TransmissionThreshold? minIO = null, TransmissionThreshold? minTraffic = null)
         {
-            return new ProcessWatchInfo("game") { Name = "Game", Watch = min, MinCPU = minCPU, MinGPU = minGPU, MinTraffic = minTraffic };
+            return new ProcessWatchInfo("game")
+            {
+                Name = "Game",
+                Watch = min,
+                MinCPU = minCPU,
+                MinGPU = minGPU,
+                MinIO = minIO,
+                MinTraffic = minTraffic,
+            };
         }
 
         private static ProcessWatch Watch(ProcessWatchInfo info, params IProcess[] processes)
@@ -49,10 +64,68 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
 
-            // the token still reports both, so the log says what the group did and not merely
-            // which threshold happened to carry it
-            Assert.Equal(TimeSpan.FromMilliseconds(500), usage.GraphicsProcessingTime);
-            Assert.Equal(TimeSpan.Zero, usage.ProcessingTime);
+            Assert.Equal(TimeSpan.FromMilliseconds(500), usage.GraphicsProcessor?.Time);
+            Assert.Null(usage.Processor);
+        }
+
+        [Fact]
+        public void Or_YieldedMetricsContainOnlyReachedThresholds()
+        {
+            var game = new FakeProcess(101, "game")
+            {
+                Cpu = TimeSpan.Zero,
+                Gpu = TimeSpan.Zero,
+                Disk = new ProcessInputOutput(0, 0),
+                Net = new ProcessInputOutput(0, 0),
+            };
+
+            var watch = Watch(Info(WatchOperator.OR,
+                minCPU: TenPercent,
+                minGPU: TenMilliseconds,
+                minIO: OneMegabytePerSecond,
+                minTraffic: OneMegabyte), game);
+
+            watch.Inspect(TimeSpan.FromSeconds(2));
+
+            game.Gpu = TimeSpan.FromMilliseconds(20);
+            game.Net = new ProcessInputOutput(2L << 20, 0);
+
+            var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
+
+            Assert.Null(usage.Processor);
+            Assert.Equal(TimeSpan.FromMilliseconds(20), usage.GraphicsProcessor?.Time);
+            Assert.Null(usage.Storage);
+            Assert.Equal(2L << 20, usage.Traffic?.Bytes);
+        }
+
+        [Fact]
+        public void Or_FilteringAlsoAppliesToTheOtherMetricUnits()
+        {
+            var game = new FakeProcess(101, "game")
+            {
+                Cpu = TimeSpan.Zero,
+                Gpu = TimeSpan.Zero,
+                Disk = new ProcessInputOutput(0, 0),
+                Net = new ProcessInputOutput(0, 0),
+            };
+
+            var watch = Watch(Info(WatchOperator.OR,
+                minCPU: TenMilliseconds,
+                minGPU: TenPercent,
+                minIO: OneMegabyte,
+                minTraffic: OneMegabytePerSecond), game);
+
+            watch.Inspect(TimeSpan.FromSeconds(2));
+
+            game.Cpu = TimeSpan.FromMilliseconds(20);
+            game.Disk = new ProcessInputOutput(512L << 10, 0);
+
+            var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
+
+            Assert.Equal(TimeSpan.FromMilliseconds(20), usage.Processor?.Time);
+            Assert.Null(usage.GraphicsProcessor);
+            Assert.Null(usage.Storage);
+            Assert.Null(usage.Traffic);
         }
 
         [Fact]
@@ -147,7 +220,9 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var watch = Watch(Info(WatchOperator.OR, minGPU: TenMilliseconds, minTraffic: OneMegabyte), game);
 
-            Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
+            var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
+
+            Assert.Empty(usage.ToString());
         }
 
         [Fact]

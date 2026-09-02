@@ -55,7 +55,7 @@ namespace MadWizard.Desomnia.Processes
 
             if (_metricsWatch is not null)
             {
-                if ((metrics = _metricsWatch.TakeMeasurement(TakeSnapshot())) is null)
+                if ((metrics = _metricsWatch.TakeMeasurement(TakeSnapshot(), interval)) is null)
                 {
                     yield break; // didn't satisfy the metrics minimum
                 }

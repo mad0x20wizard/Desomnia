@@ -1,6 +1,7 @@
 using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Processes.Manager;
+using MadWizard.Desomnia.Processes.Metrics;
 using Xunit;
 
 namespace MadWizard.Desomnia.Processes.Tests
@@ -47,9 +48,11 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             game.Gpu = TimeSpan.FromMinutes(10); // far beyond any share of the interval
 
-            var token = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
+            var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
 
-            Assert.NotNull(token.Metrics().GraphicsProcessingUsage);
+            Assert.Equal(TimeSpan.FromSeconds(2), usage.SampleDuration);
+            Assert.Equal(TimeSpan.FromSeconds(2), usage.GraphicsProcessor?.TimeReference);
+            Assert.Equal(ProcessingMetricFormat.Percentage, usage.GraphicsProcessor?.Format);
         }
 
         [Fact]
@@ -78,7 +81,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var token = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
 
-            Assert.Equal(TimeSpan.FromMilliseconds(500), token.Metrics().GraphicsProcessingTime);
+            Assert.Equal(TimeSpan.FromMilliseconds(500), token.Metrics().GraphicsProcessor?.Time);
         }
 
         [Fact]
@@ -116,7 +119,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
 
-            Assert.NotNull(usage.GraphicsProcessingTime); // both measurements ride the one token
+            Assert.NotNull(usage.GraphicsProcessor); // both measurements ride the one token
             Assert.NotNull(usage.Storage);
         }
 
@@ -232,7 +235,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var token = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
 
-            Assert.Equal(TimeSpan.FromMilliseconds(16), token.Metrics().GraphicsProcessingTime);
+            Assert.Equal(TimeSpan.FromMilliseconds(16), token.Metrics().GraphicsProcessor?.Time);
         }
 
         [Fact]

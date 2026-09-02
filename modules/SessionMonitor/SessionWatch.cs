@@ -142,7 +142,7 @@ namespace MadWizard.Desomnia.Session
                 {
                     if (process.Metrics is ProcessUsageMetrics metrics)
                     {
-                        usage.Metrics += metrics;
+                        usage.Metrics |= metrics;
 
                         matchesMetrics++;
                     }

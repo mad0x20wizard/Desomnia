@@ -1,5 +1,6 @@
 using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Processes.Manager;
+using MadWizard.Desomnia.Processes.Metrics;
 using MadWizard.Desomnia.Processes.Watch;
 using Xunit;
 
@@ -113,7 +114,15 @@ namespace MadWizard.Desomnia.Processes.Tests
             chrome.Cpu = TimeSpan.FromMilliseconds(500);  // half a second of work since
             var tokens = watch.Inspect(TimeSpan.FromSeconds(2));
 
-            Assert.Single(tokens);
+            var usage = Assert.Single(tokens).Metrics();
+            var expectedCapacity = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows)
+                ? TimeSpan.FromSeconds(2) * Environment.ProcessorCount
+                : TimeSpan.FromSeconds(2);
+
+            Assert.Equal(TimeSpan.FromSeconds(2), usage.SampleDuration);
+            Assert.Equal(TimeSpan.FromMilliseconds(500), usage.Processor?.Time);
+            Assert.Equal(expectedCapacity, usage.Processor?.TimeReference);
+            Assert.Equal(ProcessingMetricFormat.Time, usage.Processor?.Format);
             Assert.Equal(2, chrome.CpuSamples);
         }
 
