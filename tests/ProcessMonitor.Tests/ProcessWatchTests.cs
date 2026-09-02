@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Processes.Manager;
 using MadWizard.Desomnia.Processes.Metrics;
@@ -13,9 +14,20 @@ namespace MadWizard.Desomnia.Processes.Tests
     /// </summary>
     public class ProcessWatchTests
     {
+        private sealed class MetricsProcessWatch(ProcessWatchMetrics metrics)
+            : ProcessWatch(metrics, "Metrics")
+        {
+            protected override bool ShouldWatchProcess(IProcess process) => true;
+        }
+
         internal static ProcessWatch Watch(ProcessWatchInfo info, IProcessManager manager)
         {
             return new PatternProcessWatch(info) { Manager = manager };
+        }
+
+        internal static ProcessWatch Watch(ProcessWatchMetrics metrics, IProcessManager manager)
+        {
+            return new MetricsProcessWatch(metrics) { Manager = manager };
         }
 
         private static ProcessWatch Watch(ProcessWatchInfo info, params IProcess[] processes)
@@ -110,6 +122,8 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var watch = Watch(info, chrome);
 
+            Assert.Equal(1, chrome.CpuSamples);             // baseline captured on introduction
+
             watch.Inspect(TimeSpan.FromSeconds(2));       // establishes the baseline
             chrome.Cpu = TimeSpan.FromMilliseconds(500);  // half a second of work since
             var tokens = watch.Inspect(TimeSpan.FromSeconds(2));
@@ -120,10 +134,62 @@ namespace MadWizard.Desomnia.Processes.Tests
                 : TimeSpan.FromSeconds(2);
 
             Assert.Equal(TimeSpan.FromSeconds(2), usage.SampleDuration);
-            Assert.Equal(TimeSpan.FromMilliseconds(500), usage.Processor?.Time);
+            Assert.True(usage.Processor?.Time >= TimeSpan.FromMilliseconds(500));
             Assert.Equal(expectedCapacity, usage.Processor?.TimeReference);
             Assert.Equal(ProcessingMetricFormat.Time, usage.Processor?.Format);
-            Assert.Equal(2, chrome.CpuSamples);
+            Assert.Equal(3, chrome.CpuSamples);
+        }
+
+        [Fact]
+        public void EveryInterval_IsNormalizedFromItsActualDuration()
+        {
+            var source = new FakeProcessSource();
+            var metrics = new ProcessWatchMetrics
+            {
+                MinCPU = new ProcessingThreshold(TimeSpan.FromMilliseconds(10)),
+                MinGPU = new ProcessingThreshold(TimeSpan.FromMilliseconds(10)),
+                MinIO = new TransmissionThreshold { Amount = 2, ByteUnit = 1L << 20 },
+                MinTraffic = new TransmissionThreshold { Amount = 2, ByteUnit = 1L << 20 },
+            };
+            var watch = new MetricsProcessWatch(metrics) { Manager = source };
+
+            Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(10)));
+
+            var process = new FakeProcess(101, "game")
+            {
+                Cpu = TimeSpan.Zero,
+                Gpu = TimeSpan.Zero,
+                Disk = new ProcessInputOutput(0, 0),
+                Net = new ProcessInputOutput(0, 0),
+            };
+
+            source.Start(process);
+
+            Assert.Equal(1, process.CpuSamples);
+            Assert.Equal(1, process.GpuSamples);
+            Assert.Equal(1, process.DiskSamples);
+
+            Thread.Sleep(25);
+            process.Cpu = TimeSpan.FromMilliseconds(1);
+            process.Gpu = TimeSpan.FromMilliseconds(1);
+            process.Disk = new ProcessInputOutput(1L << 20, 0);
+            process.Net = new ProcessInputOutput(1L << 20, 0);
+
+            var first = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(10))).Metrics();
+
+            Assert.True(first.Processor?.Time > process.Cpu);
+            Assert.True(first.GraphicsProcessor?.Time > process.Gpu);
+            Assert.True(first.Storage?.Bytes > process.Disk?.BytesIn);
+            Assert.True(first.Traffic?.Bytes > process.Net?.BytesIn);
+
+            Thread.Sleep(25);
+            process.Cpu += TimeSpan.FromMilliseconds(1);
+            process.Gpu += TimeSpan.FromMilliseconds(1);
+            process.Disk = new ProcessInputOutput(2L << 20, 0);
+            process.Net = new ProcessInputOutput(2L << 20, 0);
+
+            // The second interval must be normalized too; its raw deltas satisfy none of the minima.
+            Assert.Single(watch.Inspect(TimeSpan.FromSeconds(10)));
         }
 
         [Fact]

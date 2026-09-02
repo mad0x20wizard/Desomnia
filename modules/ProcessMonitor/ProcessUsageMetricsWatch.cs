@@ -2,33 +2,56 @@ using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Processes.Manager;
 using MadWizard.Desomnia.Processes.Metrics;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace MadWizard.Desomnia.Processes
 {
     internal class ProcessUsageMetricsWatch(ProcessWatchMetrics metrics)
     {
-        private Dictionary<object, TimeSpan> _lastProcessorTime = [];
-        private Dictionary<object, TimeSpan> _lastGraphicsTime = [];
-        private Dictionary<IProcess, ProcessInputOutput> _lastIO = [];
-        private Dictionary<IProcess, ProcessInputOutput> _lastTraffic = [];
+        private readonly Lock _historyLock = new();
+
+        private Dictionary<object, Sample<TimeSpan>> _lastProcessorTime = [];
+        private Dictionary<object, Sample<TimeSpan>> _lastGraphicsTime = [];
+        private Dictionary<IProcess, Sample<ProcessInputOutput>> _lastIO = [];
+        private Dictionary<IProcess, Sample<ProcessInputOutput>> _lastTraffic = [];
+
+        private readonly record struct Sample<T>(T Value, long Timestamp);
+
+        internal void Track(IProcess process)
+        {
+            lock (_historyLock)
+            {
+                if (metrics.MinCPU is not null)
+                    Start(process, _lastProcessorTime, static process => process, static process => process.ProcessorTime);
+                if (metrics.MinGPU is not null)
+                    Start(process, _lastGraphicsTime, static process => process.GraphicsProcessorScope, static process => process.GraphicsProcessorTime);
+                if (metrics.MinIO is not null)
+                    Start(process, _lastIO, static process => process, static process => process.StorageData);
+                if (metrics.MinTraffic is not null)
+                    Start(process, _lastTraffic, static process => process, static process => process.NetworkData);
+            }
+        }
 
         internal ProcessUsageMetrics? TakeMeasurement(IProcess[] processes, TimeSpan sampleDuration)
         {
             if (sampleDuration <= TimeSpan.Zero)
-                sampleDuration = TimeSpan.FromMilliseconds(1);
+                throw new ArgumentException("TakeMeasurement(): SampleDuration =< 0");
 
             TimeSpan? processor = null, graphics = null;
             long? storage = null, traffic = null;
 
-            if (metrics.MinCPU is not null)
-                processor = MeasureTime(processes, ref _lastProcessorTime, static process => process, static process => process.ProcessorTime) ?? TimeSpan.Zero;
-            if (metrics.MinGPU is not null)
-                graphics = MeasureTime(processes, ref _lastGraphicsTime, static process => process.GraphicsProcessorScope, static process => process.GraphicsProcessorTime);
-            if (metrics.MinIO is not null)
-                storage = MeasureBytes(processes, ref _lastIO, static process => process.StorageData);
-            if (metrics.MinTraffic is not null)
-                traffic = MeasureBytes(processes, ref _lastTraffic, static process => process.NetworkData);
+            lock (_historyLock)
+            {
+                if (metrics.MinCPU is not null)
+                    processor = MeasureTime(processes, ref _lastProcessorTime, sampleDuration, static process => process, static process => process.ProcessorTime) ?? TimeSpan.Zero;
+                if (metrics.MinGPU is not null)
+                    graphics = MeasureTime(processes, ref _lastGraphicsTime, sampleDuration, static process => process.GraphicsProcessorScope, static process => process.GraphicsProcessorTime);
+                if (metrics.MinIO is not null)
+                    storage = MeasureBytes(processes, ref _lastIO, sampleDuration, static process => process.StorageData);
+                if (metrics.MinTraffic is not null)
+                    traffic = MeasureBytes(processes, ref _lastTraffic, sampleDuration, static process => process.NetworkData);
+            }
 
             if (processes.Length == 0)
                 return null;
@@ -85,11 +108,21 @@ namespace MadWizard.Desomnia.Processes
             return demand || !measured ? result : null;
         }
 
-        /// <summary>Returns the interval delta of each distinct clock, or null when none answered.</summary>
-        private static TimeSpan? MeasureTime(IProcess[] processes, ref Dictionary<object, TimeSpan> history,
+        private void Start<TKey, TValue>(IProcess process, Dictionary<TKey, Sample<TValue>> history,
+            Func<IProcess, TKey> scope, Func<IProcess, TValue?> counter) where TKey : notnull where TValue : struct
+        {
+            var key = scope(process);
+
+            if (!history.ContainsKey(key) && counter(process) is TValue value)
+                history[key] = new(value, Stopwatch.GetTimestamp());
+        }
+
+        /// <summary>Returns normalized interval deltas for each distinct clock, or null when none answered.</summary>
+        private TimeSpan? MeasureTime(IProcess[] processes, ref Dictionary<object, Sample<TimeSpan>> history,
+            TimeSpan sampleDuration,
             Func<IProcess, object> scope, Func<IProcess, TimeSpan?> clock)
         {
-            var measured = new Dictionary<object, TimeSpan>(history.Count);
+            var measured = new Dictionary<object, Sample<TimeSpan>>(history.Count);
             var consumed = TimeSpan.Zero;
             var sampled = false;
 
@@ -100,12 +133,15 @@ namespace MadWizard.Desomnia.Processes
                 if (measured.ContainsKey(key) || clock(process) is not TimeSpan total)
                     continue;
 
+                var timestamp = Stopwatch.GetTimestamp();
                 sampled = true;
 
-                if (history.TryGetValue(key, out var last) && total > last)
-                    consumed += total - last;
+                if (history.TryGetValue(key, out var last) && total > last.Value)
+                {
+                    consumed += Extrapolate(total - last.Value, last.Timestamp, timestamp, sampleDuration);
+                }
 
-                measured[key] = total;
+                measured[key] = new(total, timestamp);
             }
 
             history = measured;
@@ -113,11 +149,12 @@ namespace MadWizard.Desomnia.Processes
             return sampled ? consumed : null;
         }
 
-        /// <summary>Returns the interval delta of each process' counters, or null when none answered.</summary>
-        private static long? MeasureBytes(IProcess[] processes, ref Dictionary<IProcess, ProcessInputOutput> history,
+        /// <summary>Returns normalized interval deltas for each process' counters, or null when none answered.</summary>
+        private long? MeasureBytes(IProcess[] processes, ref Dictionary<IProcess, Sample<ProcessInputOutput>> history,
+            TimeSpan sampleDuration,
             Func<IProcess, ProcessInputOutput?> counters)
         {
-            var measured = new Dictionary<IProcess, ProcessInputOutput>(history.Count);
+            var measured = new Dictionary<IProcess, Sample<ProcessInputOutput>>(history.Count);
             long bytes = 0;
             var sampled = false;
 
@@ -126,21 +163,53 @@ namespace MadWizard.Desomnia.Processes
                 if (counters(process) is not ProcessInputOutput total)
                     continue;
 
+                var timestamp = Stopwatch.GetTimestamp();
                 sampled = true;
 
                 if (history.TryGetValue(process, out var last))
                 {
-                    bytes += Math.Max(0, total.BytesIn - last.BytesIn)
-                           + Math.Max(0, total.BytesOut - last.BytesOut);
+                    var transferred = Add(
+                        Math.Max(0, total.BytesIn - last.Value.BytesIn),
+                        Math.Max(0, total.BytesOut - last.Value.BytesOut));
+
+                    bytes = Add(bytes, Extrapolate(transferred, last.Timestamp, timestamp, sampleDuration));
                 }
 
-                measured[process] = total;
+                measured[process] = new(total, timestamp);
             }
 
             history = measured;
 
             return sampled ? bytes : null;
         }
+
+        private static TimeSpan Elapsed(long start, long end) => Stopwatch.GetElapsedTime(start, end);
+
+        private TimeSpan Extrapolate(TimeSpan value, long start, long end, TimeSpan sampleDuration)
+        {
+            var measuredDuration = Elapsed(start, end);
+
+            if (measuredDuration <= TimeSpan.Zero)
+                return value;
+
+            var ticks = value.Ticks * (sampleDuration / measuredDuration);
+
+            return ticks >= TimeSpan.MaxValue.Ticks ? TimeSpan.MaxValue : TimeSpan.FromTicks((long)Math.Round(ticks));
+        }
+
+        private long Extrapolate(long value, long start, long end, TimeSpan sampleDuration)
+        {
+            var measuredDuration = Elapsed(start, end);
+
+            if (measuredDuration <= TimeSpan.Zero)
+                return value;
+
+            var extrapolated = value * (sampleDuration / measuredDuration);
+
+            return extrapolated >= long.MaxValue ? long.MaxValue : (long)Math.Round(extrapolated);
+        }
+
+        private static long Add(long left, long right) => left > long.MaxValue - right ? long.MaxValue : left + right;
 
         /// <summary>Windows reports total CPU capacity as all logical processors; macOS uses one core as 100%.</summary>
         private static TimeSpan ProcessorCapacity(TimeSpan sampleDuration) =>

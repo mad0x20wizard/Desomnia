@@ -11,8 +11,12 @@ namespace MadWizard.Desomnia.Processes
 
         public ProcessUsageMetrics? Metrics { get; init; }
 
-        public override string ToString() => Name != null
-            ? "{" + Name + (Metrics?.ToString() is { Length: > 0 } parts ? " @ " + parts : "") + "}"
-            : "{{" + Metrics?.ToString() + "}}";
+        public override string ToString()
+        {
+            if (Name != null)
+                return "{" + Name + (Metrics?.ToString() is { Length: > 0 } parts ? " @ " + parts : "") + "}";
+            else
+                return "{{" + Metrics?.ToString() + "}}"; ;
+        }
     }
 }

@@ -40,13 +40,47 @@ namespace MadWizard.Desomnia.Processes
                 {
                     foreach (var process in Manager.Where(ShouldWatchProcess))
                     {
-                        _watchedProcesses.TryAdd(process.Id, process);
+                        WatchProcess(process);
                     }
                 }
             }
         }
 
         protected abstract bool ShouldWatchProcess(IProcess process);
+
+        private bool WatchProcess(IProcess process)
+        {
+            lock (_watchedProcesses)
+            {
+                if (_watchedProcesses.TryAdd(process.Id, process))
+                {
+                    _metricsWatch?.Track(process);
+
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool UnWatchProcess(IProcess process)
+        {
+            lock (_watchedProcesses)
+            {
+                if (_watchedProcesses.Remove(process.Id))
+                {
+                    // remove any processes, that are not longer watched children
+                    while (_watchedProcesses.Values.FirstOrDefault(p => !ShouldWatchProcess(p)) is IProcess child)
+                    {
+                        _watchedProcesses.Remove(child.Id);
+                    }
+
+                    return true;
+                }
+            }
+
+            return false;
+        }
 
         #region Inspection
         protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
@@ -80,10 +114,8 @@ namespace MadWizard.Desomnia.Processes
             if (ShouldWatchProcess(process))
             {
                 lock (_watchedProcesses)
-                {
-                    if (!_watchedProcesses.TryAdd(process.Id, process) || _watchedProcesses.Count > 1)
+                    if (!WatchProcess(process) || _watchedProcesses.Count > 1)
                         return;
-                }
 
                 Started.TriggerEvent();
             }
@@ -92,19 +124,8 @@ namespace MadWizard.Desomnia.Processes
         private void Manager_ProcessStopped(object? sender, IProcess process)
         {
             lock (_watchedProcesses)
-            {
-                if (_watchedProcesses.Remove(process.Id))
-                {
-                    // remove any processes, that are not longer watched children
-                    while (_watchedProcesses.Values.FirstOrDefault(p => !ShouldWatchProcess(p)) is IProcess child)
-                    {
-                        _watchedProcesses.Remove(child.Id);
-                    }
-                }
-
-                if (_watchedProcesses.Count > 0)
-                    return;  // there are more processes to watch
-            }
+                if (!UnWatchProcess(process) || _watchedProcesses.Count > 0)
+                    return; // there are more processes to watch
 
             Stopped.TriggerEvent();
         }

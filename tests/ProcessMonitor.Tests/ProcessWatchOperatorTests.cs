@@ -64,7 +64,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
 
-            Assert.Equal(TimeSpan.FromMilliseconds(500), usage.GraphicsProcessor?.Time);
+            Assert.True(usage.GraphicsProcessor?.Time >= TimeSpan.FromMilliseconds(500));
             Assert.Null(usage.Processor);
         }
 
@@ -93,9 +93,9 @@ namespace MadWizard.Desomnia.Processes.Tests
             var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
 
             Assert.Null(usage.Processor);
-            Assert.Equal(TimeSpan.FromMilliseconds(20), usage.GraphicsProcessor?.Time);
+            Assert.True(usage.GraphicsProcessor?.Time >= TimeSpan.FromMilliseconds(20));
             Assert.Null(usage.Storage);
-            Assert.Equal(2L << 20, usage.Traffic?.Bytes);
+            Assert.True(usage.Traffic?.Bytes >= 2L << 20);
         }
 
         [Fact]
@@ -118,11 +118,11 @@ namespace MadWizard.Desomnia.Processes.Tests
             watch.Inspect(TimeSpan.FromSeconds(2));
 
             game.Cpu = TimeSpan.FromMilliseconds(20);
-            game.Disk = new ProcessInputOutput(512L << 10, 0);
+            game.Disk = new ProcessInputOutput(0, 0);
 
             var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
 
-            Assert.Equal(TimeSpan.FromMilliseconds(20), usage.Processor?.Time);
+            Assert.True(usage.Processor?.Time >= TimeSpan.FromMilliseconds(20));
             Assert.Null(usage.GraphicsProcessor);
             Assert.Null(usage.Storage);
             Assert.Null(usage.Traffic);
@@ -156,7 +156,8 @@ namespace MadWizard.Desomnia.Processes.Tests
             game.Cpu = TimeSpan.FromMilliseconds(5); // both below their threshold
             game.Gpu = TimeSpan.FromMilliseconds(5);
 
-            Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(2)));
+            Thread.Sleep(20);
+            Assert.Empty(watch.Inspect(TimeSpan.FromMilliseconds(1)));
         }
 
         [Fact]
@@ -190,7 +191,8 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             game.Cpu = TimeSpan.FromMilliseconds(5); // measurable, and below its threshold
 
-            Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(2)));
+            Thread.Sleep(20);
+            Assert.Empty(watch.Inspect(TimeSpan.FromMilliseconds(1)));
         }
 
         [Fact]

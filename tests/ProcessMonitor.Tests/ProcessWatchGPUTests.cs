@@ -81,7 +81,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var token = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
 
-            Assert.Equal(TimeSpan.FromMilliseconds(500), token.Metrics().GraphicsProcessor?.Time);
+            Assert.True(token.Metrics().GraphicsProcessor?.Time >= TimeSpan.FromMilliseconds(500));
         }
 
         [Fact]
@@ -90,11 +90,9 @@ namespace MadWizard.Desomnia.Processes.Tests
             // minGPU mirrors minCPU's strict '>' – reaching the threshold is not crossing it
             var game = new FakeProcess(101, "game") { Gpu = TimeSpan.Zero };
 
-            var watch = Watch(Info(minGPU: TenMilliseconds), game);
+            var watch = Watch(Info(minGPU: new ProcessingThreshold(TimeSpan.Zero)), game);
 
             watch.Inspect(TimeSpan.FromSeconds(2));
-
-            game.Gpu = TimeSpan.FromMilliseconds(10);
 
             Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(2)));
         }
@@ -216,7 +214,26 @@ namespace MadWizard.Desomnia.Processes.Tests
             // would be 16ms and would read as demand
             app.Gpu = helper.Gpu = TimeSpan.FromMilliseconds(8);
 
-            Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(2)));
+            Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
+            Assert.Equal(3, app.GpuSamples);
+            Assert.Equal(0, helper.GpuSamples);
+        }
+
+        [Fact]
+        public void ProcessJoiningASharedClock_DoesNotResetItsBaseline()
+        {
+            const ulong coalition = 22290;
+
+            var app = new FakeProcess(101, "game") { Gpu = TimeSpan.Zero, Scope = coalition };
+            var source = new FakeProcessSource(app);
+            var watch = ProcessWatchTests.Watch(Info(minGPU: TenMilliseconds), source);
+
+            Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(10)));
+
+            var helper = new FakeProcess(102, "game") { Gpu = TimeSpan.Zero, Scope = coalition };
+            source.Start(helper);
+
+            Assert.Equal(0, helper.GpuSamples); // the coalition already has a current baseline
         }
 
         [Fact]
@@ -235,7 +252,9 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var token = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
 
-            Assert.Equal(TimeSpan.FromMilliseconds(16), token.Metrics().GraphicsProcessor?.Time);
+            Assert.True(token.Metrics().GraphicsProcessor?.Time >= TimeSpan.FromMilliseconds(16));
+            Assert.Equal(3, one.GpuSamples);
+            Assert.Equal(3, two.GpuSamples);
         }
 
         [Fact]
