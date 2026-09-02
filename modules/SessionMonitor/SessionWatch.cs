@@ -24,7 +24,7 @@ namespace MadWizard.Desomnia.Session
          * session's token. So they are inspected by hand below – but not disposed, because they are
          * resolved from the session's own lifetime scope and the container disposes them with it.
          */
-        private readonly List<AnySessionProcessWatch> _aggregates = [];
+        private readonly List<ProcessWatch> _aggregates = [];
 
         [EventContext]
         public required ISession Session { get; init; }

@@ -29,7 +29,6 @@ namespace MadWizard.Desomnia.Processes.Manager
 
         public virtual TimeSpan? ProcessorTime => Target.ProcessorTime;
         public virtual TimeSpan? GraphicsProcessorTime => Target.GraphicsProcessorTime;
-        public virtual object GraphicsProcessorScope => Target.GraphicsProcessorScope;
         public virtual ProcessInputOutput? StorageData => Target.StorageData;
         public virtual ProcessInputOutput? NetworkData => Target.NetworkData;
 

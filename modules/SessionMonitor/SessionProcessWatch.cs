@@ -1,5 +1,4 @@
 using MadWizard.Desomnia.Events;
-using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Processes.Watch;
 using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
@@ -93,5 +92,5 @@ namespace MadWizard.Desomnia.Session
         }
     }
 
-    public class AnySessionProcessWatch(ProcessWatchMetrics info) : AnyProcessWatch(info);
+    public class AnySessionProcessWatch : AnyProcessWatch;
 }

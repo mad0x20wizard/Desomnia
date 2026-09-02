@@ -13,7 +13,7 @@ namespace MadWizard.Desomnia.Processes.Watch
         /// every process start asks, and the pattern cannot change under us.</summary>
         public bool IsFilePathPattern { get; }
 
-        public PatternProcessWatch(ProcessWatchInfo info) : base(info, info.Name)
+        public PatternProcessWatch(ProcessWatchInfo info) : base(info.Name)
         {
             _pattern = info.Pattern;
 

@@ -15,6 +15,10 @@ namespace MadWizard.Desomnia
         public DateTime     LastTime { get; private set; } = DateTime.Now;
         public DateTime?    NextTime => LastTime + Interval;
 
+        /// <summary>Raised synchronously immediately before the resource tree is inspected.</summary>
+        public event EventHandler? Inspecting;
+
+        /// <summary>Raised synchronously after the inspection attempt, including a failed one.</summary>
         public event EventHandler? Inspected;
 
         private CancellationTokenSource _cancel = new();
@@ -47,6 +51,8 @@ namespace MadWizard.Desomnia
 
                 try
                 {
+                    Inspecting?.Invoke(this, EventArgs.Empty);
+
                     LastTokens = [.. system.Inspect(DateTime.Now - LastTime)];
                 }
                 catch (Exception e)
@@ -56,9 +62,9 @@ namespace MadWizard.Desomnia
                 finally
                 {
                     LastTime = DateTime.Now;
-                }
 
-                Inspected?.Invoke(this, EventArgs.Empty);
+                    Inspected?.Invoke(this, EventArgs.Empty);
+                }
             }
         }
 

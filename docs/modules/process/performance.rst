@@ -16,13 +16,6 @@ The default ``pollInterval`` is ``2s``, which is adequate for most home-lab work
 
 .. include:: attributes/poll.rst
 
-.. code:: xml
-
-   <ProcessMonitor pollInterval="5s">
-     <Process name="Browser">chrome|edge|firefox</Process>
-   </ProcessMonitor>
-
-
 Event Trace for Windows (ETW)
 ------------------------------
 
@@ -46,6 +39,13 @@ Instead, Desomnia asks the kernel directly through ``libproc``. A tick that find
 The same lookup reports each process' parent, which the .NET abstraction has no cross-platform way to expose — so ``watchChildren`` works on macOS just as it does on Windows.
 
 Process *exits*, unlike starts, need no polling at all. macOS will report those on request through ``kqueue``, for any process and without an entitlement, so Desomnia asks the kernel to tell it when a watched process ends and hears about it the moment it happens rather than up to ``pollInterval`` later. This also covers the one case an enumeration gets wrong: a process that exits under a parent which never collects it stays in the kernel's process list until it is cleaned up, and only the exit notification says otherwise.
+
+Graphics processor accounting
+-----------------------------
+
+:OS: macOS
+
+.. include:: attributes/gpu.rst
 
 Native process enumeration
 --------------------------

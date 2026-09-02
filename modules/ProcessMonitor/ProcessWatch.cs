@@ -1,28 +1,16 @@
 ﻿using MadWizard.Desomnia.Events;
-using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Processes.Manager;
 
 namespace MadWizard.Desomnia.Processes
 {
     public abstract class ProcessWatch(string? name) : Resource
     {
-        readonly ProcessUsageMetricsWatch? _metricsWatch;
-
         /**
          * Mutated by whichever thread reports a process change – the poll loop, an ETW callback, a
-         * kqueue notification, the runtime's Exited event – while the inspection loop reads it.
-         * Every path in and out locks the roster itself, and reads take a snapshot rather than hold
-         * the lock while they work.
+         * kqueue notification, or the runtime's Exited event. Every path in and out locks the
+         * roster; long-running process actions use a snapshot rather than hold that lock.
          */
-        protected readonly Dictionary<int, IProcess> _watchedProcesses = [];
-
-        protected ProcessWatch(ProcessWatchMetrics metrics, string? name = null) : this(name)
-        {
-            if (metrics.HasThresholds)
-            {
-                _metricsWatch = new(metrics);
-            }
-        }
+        readonly Dictionary<int, IProcess> _watchedProcesses = [];
 
         public string? Name => name;
 
@@ -46,18 +34,32 @@ namespace MadWizard.Desomnia.Processes
             }
         }
 
+        public required ProcessUsageMetricsWatch? MetricsWatch
+        {
+            private get; init
+            {
+                if ((field = value) is not null)
+                {
+                    lock (_watchedProcesses)
+                    {
+                        foreach (var process in _watchedProcesses.Values)
+                        {
+                            field.Track(process);
+                        }
+                    }
+                }
+            }
+        }
+
         protected abstract bool ShouldWatchProcess(IProcess process);
 
         private bool WatchProcess(IProcess process)
         {
-            lock (_watchedProcesses)
+            if (_watchedProcesses.TryAdd(process.Id, process))
             {
-                if (_watchedProcesses.TryAdd(process.Id, process))
-                {
-                    _metricsWatch?.Track(process);
+                MetricsWatch?.Track(process);
 
-                    return true;
-                }
+                return true;
             }
 
             return false;
@@ -65,18 +67,18 @@ namespace MadWizard.Desomnia.Processes
 
         private bool UnWatchProcess(IProcess process)
         {
-            lock (_watchedProcesses)
+            if (_watchedProcesses.Remove(process.Id, out var watched))
             {
-                if (_watchedProcesses.Remove(process.Id))
-                {
-                    // remove any processes, that are not longer watched children
-                    while (_watchedProcesses.Values.FirstOrDefault(p => !ShouldWatchProcess(p)) is IProcess child)
-                    {
-                        _watchedProcesses.Remove(child.Id);
-                    }
+                MetricsWatch?.Untrack(watched);
 
-                    return true;
+                // remove any processes, that are not longer watched children
+                while (_watchedProcesses.Values.FirstOrDefault(p => !ShouldWatchProcess(p)) is IProcess child)
+                {
+                    _watchedProcesses.Remove(child.Id);
+                    MetricsWatch?.Untrack(child);
                 }
+
+                return true;
             }
 
             return false;
@@ -87,9 +89,9 @@ namespace MadWizard.Desomnia.Processes
         {
             ProcessUsageMetrics? metrics = null;
 
-            if (_metricsWatch is not null)
+            if (MetricsWatch is not null)
             {
-                if ((metrics = _metricsWatch.TakeMeasurement(TakeSnapshot(), interval)) is null)
+                if ((metrics = MetricsWatch.TakeMeasurement(interval)) is null)
                 {
                     yield break; // didn't satisfy the metrics minimum
                 }

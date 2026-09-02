@@ -23,7 +23,7 @@ namespace MadWizard.Desomnia.Processes.Middleware
      * never do what it says, and the resolve should fail rather than hand back a watch that quietly
      * guards nothing.
      */
-    public sealed class ProcessMetricValidation : IResolveMiddleware
+    public sealed class ProcessMetricWatchBuilder : IResolveMiddleware
     {
         public PipelinePhase Phase => PipelinePhase.ParameterSelection;
 
@@ -34,14 +34,25 @@ namespace MadWizard.Desomnia.Processes.Middleware
             // this asks about. A watch built without any is simply not asking for a counter.
             if (context.FirstParameterOfType<ProcessWatchMetrics>() is ProcessWatchMetrics metrics)
             {
-                string name = metrics switch
-                {
-                    ProcessMonitorConfig    => $"<ProcessMonitor>",
-                    ProcessWatchInfo info   => $"<Process name=\"{info.Name}\">",
-                    _                       => $"<{metrics.GetType().Name}>"
-                };
+                ProcessUsageMetricsWatch? watch = null;
 
-                Validate(name, metrics, context.Resolve<IProcessMetricSupport>().SupportedMetrics);
+                if (metrics.HasThresholds)
+                {
+                    string name = metrics switch
+                    {
+                        ProcessMonitorConfig    => $"<ProcessMonitor>",
+                        ProcessWatchInfo info   => $"<Process name=\"{info.Name}\">",
+                        _                       => $"<{metrics.GetType().Name}>"
+                    };
+
+                    var platform = context.Resolve<IProcessMetricSupport>();
+
+                    Validate(name, metrics, platform.SupportedMetrics);
+
+                    watch = new ProcessUsageMetricsWatch(metrics, platform.SharedMetrics);
+                }
+
+                context.ChangeParameters([.. context.Parameters, TypedParameter.From(watch)]);
             }
 
             next(context);

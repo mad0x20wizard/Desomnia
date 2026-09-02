@@ -47,7 +47,7 @@ namespace MadWizard.Desomnia.Processes
             {
                 if (args.ComponentRegistration.IsLimitedTo<ProcessWatch>())
                     args.ComponentRegistration.PipelineBuilding += (_, pipeline) =>
-                        pipeline.Use(new ProcessMetricValidation());
+                        pipeline.Use(new ProcessMetricWatchBuilder());
             };
 
             if (config.ProcessMonitor is ProcessMonitorConfig monitor)

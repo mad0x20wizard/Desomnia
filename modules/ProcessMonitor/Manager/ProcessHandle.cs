@@ -99,9 +99,6 @@ namespace MadWizard.Desomnia.Processes.Manager
          */
         public virtual TimeSpan? GraphicsProcessorTime => null;
 
-        /// <summary>Its own, until a platform says its graphics clock is shared with others.</summary>
-        public virtual object GraphicsProcessorScope => this;
-
         public virtual ProcessInputOutput? StorageData => null;
         public virtual ProcessInputOutput? NetworkData => null;
 

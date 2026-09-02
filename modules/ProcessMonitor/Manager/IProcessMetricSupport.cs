@@ -16,6 +16,12 @@ namespace MadWizard.Desomnia.Processes.Manager
     {
         /// <summary>The counters this platform's processes can be asked for.</summary>
         ProcessMetric SupportedMetrics { get; }
+
+        /// <summary>
+        /// Supported counters whose value can represent one resource shared by several processes.
+        /// A watch deduplicates equal samples only for these counters.
+        /// </summary>
+        ProcessMetric SharedMetrics => ProcessMetric.None;
     }
 
     /// <summary>The per-process counters a threshold can be measured against, one per min attribute.</summary>
@@ -52,6 +58,14 @@ namespace MadWizard.Desomnia.Processes.Manager
             get
             {
                 return supporter.Aggregate(ProcessMetric.None, (metrics, support) => metrics |= support.SupportedMetrics);
+            }
+        }
+
+        ProcessMetric IProcessMetricSupport.SharedMetrics
+        {
+            get
+            {
+                return supporter.Aggregate(ProcessMetric.None, (metrics, support) => metrics |= support.SharedMetrics);
             }
         }
     }
