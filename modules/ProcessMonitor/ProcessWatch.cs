@@ -24,6 +24,8 @@ namespace MadWizard.Desomnia.Processes
             }
         }
 
+        public string? Name => name;
+
         public required IProcessManager Manager
         {
             private get; init
@@ -91,8 +93,17 @@ namespace MadWizard.Desomnia.Processes
         {
             lock (_watchedProcesses)
             {
-                if (!_watchedProcesses.Remove(process.Id) || _watchedProcesses.Count > 0)
-                    return; // there are more processes to watch
+                if (_watchedProcesses.Remove(process.Id))
+                {
+                    // remove any processes, that are not longer watched children
+                    while (_watchedProcesses.Values.FirstOrDefault(p => !ShouldWatchProcess(p)) is IProcess child)
+                    {
+                        _watchedProcesses.Remove(child.Id);
+                    }
+                }
+
+                if (_watchedProcesses.Count > 0)
+                    return;  // there are more processes to watch
             }
 
             Stopped.TriggerEvent();

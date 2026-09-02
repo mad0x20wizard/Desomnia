@@ -1,5 +1,7 @@
 using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network;
+using MadWizard.Desomnia.Network.Watch;
+using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Service.Duo.Configuration;
 using MadWizard.Desomnia.Service.Duo.Sunshine;
 using MadWizard.Desomnia.Session;
@@ -132,8 +134,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                     switch (token)
                     {
                         case SessionUsage session:
-                            duo.LastInputTime = session.LastInputTime;
                             duo.Metrics = session.Metrics;
+                            duo.LastInputTime = session.LastInputTime;
                             foreach (var t in session.Tokens)
                                 duo.Tokens.Add(t);
                             break;
@@ -143,6 +145,15 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                             duo.Tokens.Add(network);
                             break;
                     }
+                }
+
+                if (Info.Watch == WatchOperator.AND)
+                {
+                    if (this.OfType<SessionWatch>().Any() && !tokens.OfType<SessionUsage>().Any())
+                        yield break;
+
+                    if (this.OfType<NetworkServiceWatch>().Any() && !tokens.OfType<NetworkServiceUsage>().Any())
+                        yield break;
                 }
 
                 yield return duo;

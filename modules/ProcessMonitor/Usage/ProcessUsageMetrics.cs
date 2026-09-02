@@ -24,6 +24,41 @@ namespace MadWizard.Desomnia.Processes
         /// <summary>Network bytes per second, when a minTraffic rate was compared instead.</summary>
         public double? TrafficRate { get; init; }
 
+        /// <summary>
+        /// Combines two measurements, retaining every measured value and the greater value where
+        /// both measurements contain the same metric.
+        /// </summary>
+        public static ProcessUsageMetrics operator +(ProcessUsageMetrics? left, ProcessUsageMetrics right)
+        {
+            if (left is null)
+                return right;
+
+            return new()
+            {
+                ProcessingUsage = Highest(left.ProcessingUsage, right.ProcessingUsage),
+                ProcessingTime = Highest(left.ProcessingTime, right.ProcessingTime),
+
+                GraphicsProcessingUsage = Highest(left.GraphicsProcessingUsage, right.GraphicsProcessingUsage),
+                GraphicsProcessingTime = Highest(left.GraphicsProcessingTime, right.GraphicsProcessingTime),
+
+                Storage = Highest(left.Storage, right.Storage),
+                StorageRate = Highest(left.StorageRate, right.StorageRate),
+
+                Traffic = Highest(left.Traffic, right.Traffic),
+                TrafficRate = Highest(left.TrafficRate, right.TrafficRate),
+            };
+        }
+
+        private static T? Highest<T>(T? left, T? right) where T : struct, IComparable<T>
+        {
+            if (left is null)
+                return right;
+            if (right is null)
+                return left;
+
+            return left.Value.CompareTo(right.Value) >= 0 ? left : right;
+        }
+
         private static string Percentage(double usage) => string.Create(CultureInfo.InvariantCulture, $"{usage * 100:0.#}%");
 
         /// <summary>Renders whatever was measured, in a fixed order: CPU, GPU, storage, then traffic.</summary>

@@ -11,7 +11,7 @@ namespace MadWizard.Desomnia.Processes.Configuration
         /// the metrics rather than doing all of them together (rendering without computing, or the
         /// reverse) needs <c>or</c>, or it reads as idle in the middle of the work.
         /// </summary>
-        public Operator                 Min         { get; set; } = Operator.AND;
+        public WatchOperator            Watch       { get; set; } = WatchOperator.AND;
 
         public ProcessingThreshold?     MinCPU      { get; set; }
         public ProcessingThreshold?     MinGPU      { get; set; }
@@ -25,12 +25,11 @@ namespace MadWizard.Desomnia.Processes.Configuration
         /// silently ignored a threshold this list did not know about.
         /// </summary>
         public bool HasThresholds => MinCPU is not null || MinGPU is not null || MinIO is not null || MinTraffic is not null;
+    }
 
-        /// <summary>The default is AND, so an existing configuration keeps the behaviour it had.</summary>
-        public enum Operator
-        {
-            AND = 0,
-            OR = 1,
-        }
+    public enum WatchOperator
+    {
+        OR = 0,
+        AND = 1,
     }
 }

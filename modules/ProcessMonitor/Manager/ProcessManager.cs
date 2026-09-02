@@ -209,10 +209,13 @@ namespace MadWizard.Desomnia.Processes.Manager
             {
                 Logger.LogTrace("Process '{name}' ({pid}) stopped", process.Name, process.Id);
 
-                if (process.Layer<ProcessHandle>() is { } handle)
+                // if parent dies, remove it from all children
+                foreach (var orphaned in _processList.Values.Where(p => p.Parent == process))
                 {
-                    handle.TriggerStop(); // a no-op when this stop came from the process itself
+                    orphaned.Layer<ProcessHandle>()?.Parent = null;
                 }
+
+                process.Layer<ProcessHandle>()?.TriggerStop();  // a no-op when this stop came from the process itself
 
                 ProcessStopped?.Invoke(this, process);
             }

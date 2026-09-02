@@ -48,6 +48,11 @@ namespace MadWizard.Desomnia.Processes.Manager
         }
 
         public virtual void Dispose() => Target.Dispose();
+
+        public override string? ToString()
+        {
+            return Target.ToString();
+        }
     }
 
     public static class ProcessDecoratorExt

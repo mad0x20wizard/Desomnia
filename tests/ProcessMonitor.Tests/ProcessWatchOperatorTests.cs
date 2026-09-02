@@ -17,10 +17,10 @@ namespace MadWizard.Desomnia.Processes.Tests
 
         private static readonly TransmissionThreshold OneMegabyte = new() { Amount = 1, ByteUnit = 1L << 20 };
 
-        private static ProcessWatchInfo Info(ProcessWatchMetrics.Operator min, ProcessingThreshold? minCPU = null,
+        private static ProcessWatchInfo Info(WatchOperator min, ProcessingThreshold? minCPU = null,
             ProcessingThreshold? minGPU = null, TransmissionThreshold? minTraffic = null)
         {
-            return new ProcessWatchInfo("game") { Name = "Game", Min = min, MinCPU = minCPU, MinGPU = minGPU, MinTraffic = minTraffic };
+            return new ProcessWatchInfo("game") { Name = "Game", Watch = min, MinCPU = minCPU, MinGPU = minGPU, MinTraffic = minTraffic };
         }
 
         private static ProcessWatch Watch(ProcessWatchInfo info, params IProcess[] processes)
@@ -32,7 +32,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         public void TheDefault_IsAnd()
         {
             // an existing configuration keeps the reading it always had
-            Assert.Equal(ProcessWatchMetrics.Operator.AND, new ProcessWatchInfo("game") { Name = "Game" }.Min);
+            Assert.Equal(WatchOperator.AND, new ProcessWatchInfo("game") { Name = "Game" }.Watch);
         }
 
         [Fact]
@@ -41,7 +41,7 @@ namespace MadWizard.Desomnia.Processes.Tests
             // the case the operator exists for: rendering hard, computing almost nothing
             var game = new FakeProcess(101, "game") { Cpu = TimeSpan.Zero, Gpu = TimeSpan.Zero };
 
-            var watch = Watch(Info(ProcessWatchMetrics.Operator.OR, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
+            var watch = Watch(Info(WatchOperator.OR, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
 
             watch.Inspect(TimeSpan.FromSeconds(2));
 
@@ -62,7 +62,7 @@ namespace MadWizard.Desomnia.Processes.Tests
             // the flag worth having
             var game = new FakeProcess(101, "game") { Cpu = TimeSpan.Zero, Gpu = TimeSpan.Zero };
 
-            var watch = Watch(Info(ProcessWatchMetrics.Operator.AND, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
+            var watch = Watch(Info(WatchOperator.AND, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
 
             watch.Inspect(TimeSpan.FromSeconds(2));
 
@@ -76,7 +76,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var game = new FakeProcess(101, "game") { Cpu = TimeSpan.Zero, Gpu = TimeSpan.Zero };
 
-            var watch = Watch(Info(ProcessWatchMetrics.Operator.OR, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
+            var watch = Watch(Info(WatchOperator.OR, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
 
             watch.Inspect(TimeSpan.FromSeconds(2));
 
@@ -91,7 +91,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var game = new FakeProcess(101, "game") { Cpu = TimeSpan.Zero, Gpu = TimeSpan.Zero };
 
-            var watch = Watch(Info(ProcessWatchMetrics.Operator.OR, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
+            var watch = Watch(Info(WatchOperator.OR, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
 
             watch.Inspect(TimeSpan.FromSeconds(2));
 
@@ -111,7 +111,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var game = new FakeProcess(101, "game") { Cpu = TimeSpan.Zero, Gpu = null }; // no graphics clock here
 
-            var watch = Watch(Info(ProcessWatchMetrics.Operator.OR, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
+            var watch = Watch(Info(WatchOperator.OR, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
 
             watch.Inspect(TimeSpan.FromSeconds(2));
 
@@ -125,7 +125,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var game = new FakeProcess(101, "game") { Cpu = TimeSpan.Zero, Gpu = null };
 
-            var watch = Watch(Info(ProcessWatchMetrics.Operator.OR, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
+            var watch = Watch(Info(WatchOperator.OR, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
 
             watch.Inspect(TimeSpan.FromSeconds(2));
 
@@ -145,7 +145,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var game = new FakeProcess(101, "game") { Gpu = null, Net = null };
 
-            var watch = Watch(Info(ProcessWatchMetrics.Operator.OR, minGPU: TenMilliseconds, minTraffic: OneMegabyte), game);
+            var watch = Watch(Info(WatchOperator.OR, minGPU: TenMilliseconds, minTraffic: OneMegabyte), game);
 
             Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
         }
@@ -154,7 +154,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         public void Or_EmptyRoster_YieldsNothing()
         {
             // 'or' starts unsatisfied, but an empty group must not reach the fail-open path either
-            var watch = Watch(Info(ProcessWatchMetrics.Operator.OR, minGPU: TenMilliseconds, minCPU: TenMilliseconds));
+            var watch = Watch(Info(WatchOperator.OR, minGPU: TenMilliseconds, minCPU: TenMilliseconds));
 
             Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(2)));
         }
@@ -167,8 +167,8 @@ namespace MadWizard.Desomnia.Processes.Tests
             var busy = new FakeProcess(101, "game") { Cpu = TimeSpan.Zero };
             var quiet = new FakeProcess(102, "game") { Cpu = TimeSpan.Zero };
 
-            var or = Watch(Info(ProcessWatchMetrics.Operator.OR, minCPU: TenMilliseconds), busy);
-            var and = Watch(Info(ProcessWatchMetrics.Operator.AND, minCPU: TenMilliseconds), quiet);
+            var or = Watch(Info(WatchOperator.OR, minCPU: TenMilliseconds), busy);
+            var and = Watch(Info(WatchOperator.AND, minCPU: TenMilliseconds), quiet);
 
             or.Inspect(TimeSpan.FromSeconds(2));
             and.Inspect(TimeSpan.FromSeconds(2));

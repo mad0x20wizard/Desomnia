@@ -197,5 +197,10 @@ namespace MadWizard.Desomnia.Processes.Manager
                 _heldResources.Dispose();
             }
         }
+
+        public override string ToString()
+        {
+            return $"ProcessHandle('{info.Name}')";
+        }
     }
 }

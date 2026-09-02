@@ -71,7 +71,7 @@ namespace MadWizard.Desomnia.Processes
              * left is the momentary gap: a group whose processes all exited between the poll and
              * this cycle, or one nothing may open.
              */
-            var all = metrics.Min == ProcessWatchMetrics.Operator.AND;
+            var all = metrics.Watch == WatchOperator.AND;
 
             var demand = all;
             var measured = false;

@@ -46,14 +46,9 @@ namespace MadWizard.Desomnia.Processes.Watch
                     return true;
             }
 
-            if (ShouldWatchChildren)
+            if (ShouldWatchChildren && process.Parent is IProcess parent)
             {
-                lock (_watchedProcesses)
-                {
-                    foreach (var watched in _watchedProcesses.Values)
-                        if (process.HasParent(watched))
-                            return true;
-                }
+                return ShouldWatchProcess(parent);
             }
 
             return false;

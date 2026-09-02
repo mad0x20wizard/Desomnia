@@ -32,7 +32,12 @@ namespace MadWizard.Desomnia.Session
         public required Func<ProcessWatchMetrics, AnySessionProcessWatch>   CreateAnyProcessWatch   { private get; init; }
         public required Func<SessionProcessWatchInfo, SessionProcessWatch>  CreateProcessWatch      { private get; init; }
 
-        public TimeSpan? MaxLastInputTime { get; private set; }
+        private WatchOperator _watchOperator = WatchOperator.OR;
+
+        private TimeSpan? _maxLastInputTime;
+        private TimeSpan? _minLastInputTime;
+
+        private TimeSpan? MaxLastInputTime => _watchOperator == WatchOperator.AND ? _minLastInputTime : _maxLastInputTime;
 
         private WatchInputOptions? WatchInput { get; set; } = new();
 
@@ -77,8 +82,12 @@ namespace MadWizard.Desomnia.Session
 
         public void ApplyConfiguration(SessionMonitorConfig config, SessionWatchInfo info)
         {
-            if (MaxLastInputTime == null || MaxLastInputTime.Value < info.MaxLastInputTime)
-                MaxLastInputTime = info.MaxLastInputTime;
+            _watchOperator = info.Watch == WatchOperator.AND ? info.Watch : _watchOperator;
+
+            if (_maxLastInputTime == null || _maxLastInputTime < info.MaxLastInputTime)
+                _maxLastInputTime = info.MaxLastInputTime;
+            if (_minLastInputTime == null || _minLastInputTime > info.MaxLastInputTime)
+                _minLastInputTime = info.MaxLastInputTime;
 
             WatchInput += info.MakeWatchInputOptions(config);
 
@@ -122,26 +131,33 @@ namespace MadWizard.Desomnia.Session
 
         private bool HadUsageSince(SessionUsage usage, TimeSpan interval)
         {
+            bool needsMatch = false;
+
+            int matchesMetrics = 0;
             if (_aggregates.Count > 0) // user specified at least one process metric
             {
-                try
+                needsMatch = true;
+
+                foreach (var process in _aggregates.Select(a => a.Inspect(interval).FirstOrDefault()).OfType<ProcessUsage>())
                 {
-                    foreach (var process in _aggregates.Select(a => a.Inspect(interval).First()).OfType<ProcessUsage>())
+                    if (process.Metrics is ProcessUsageMetrics metrics)
                     {
-                        usage.Metrics = process.Metrics; // last one wins
+                        usage.Metrics += metrics;
+
+                        matchesMetrics++;
                     }
-                }
-                catch (InvalidOperationException)
-                {
-                    return false; // the session must satisfy all metrics
                 }
             }
 
+            bool? matchesInput = null;
             if (WatchInput is WatchInputOptions watch)
             {
+                needsMatch = true;
+
+                matchesInput = false;
                 if (Session.IsRemoteConnected && !watch.Remote)
                 {
-                    return true;
+                    matchesInput = true;
                 }
                 else if ((watch.Disconnected || Session.IsConnected) && Session.IdleTime is TimeSpan time)
                 {
@@ -149,16 +165,26 @@ namespace MadWizard.Desomnia.Session
                     {
                         usage.LastInputTime = time;
 
-                        return true;
+                        matchesInput = true;
                     }
                 }
+            }
 
-                return false; // session has no user input
-            }
-            else
+            if (needsMatch)
             {
-                return true; // either no process metric set or all satisfied
+                switch (_watchOperator)
+                {
+                    case WatchOperator.OR:
+                        return matchesInput == true || matchesMetrics > 0;
+
+                    case WatchOperator.AND:
+                        return matchesInput != false && matchesMetrics == _aggregates.Count;
+                }
+
+                throw new InvalidOperationException($"Unknown WatchOperator = {_watchOperator}");
             }
+
+            return true;
         }
 
         [ActionHandler("lock")]

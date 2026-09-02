@@ -6,6 +6,11 @@ namespace MadWizard.Desomnia.Session.Configuration
 {
     public class SessionWatchInfo : ProcessWatchMetrics
     {
+        public SessionWatchInfo()
+        {
+            Watch = WatchOperator.OR;
+        }
+
         public TimeSpan? MaxLastInputTime { get; set; }
 
         #region Session :: WatchInputOptions
