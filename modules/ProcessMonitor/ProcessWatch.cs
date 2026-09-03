@@ -34,7 +34,7 @@ namespace MadWizard.Desomnia.Processes
             }
         }
 
-        public required ProcessUsageMetricsWatch? MetricsWatch
+        public required ProcessMetricsWatch? Metrics
         {
             private get; init
             {
@@ -57,7 +57,7 @@ namespace MadWizard.Desomnia.Processes
         {
             if (_watchedProcesses.TryAdd(process.Id, process))
             {
-                MetricsWatch?.Track(process);
+                Metrics?.Track(process);
 
                 return true;
             }
@@ -69,13 +69,13 @@ namespace MadWizard.Desomnia.Processes
         {
             if (_watchedProcesses.Remove(process.Id, out var watched))
             {
-                MetricsWatch?.Untrack(watched);
+                Metrics?.Untrack(watched);
 
                 // remove any processes, that are not longer watched children
                 while (_watchedProcesses.Values.FirstOrDefault(p => !ShouldWatchProcess(p)) is IProcess child)
                 {
                     _watchedProcesses.Remove(child.Id);
-                    MetricsWatch?.Untrack(child);
+                    Metrics?.Untrack(child);
                 }
 
                 return true;
@@ -89,9 +89,9 @@ namespace MadWizard.Desomnia.Processes
         {
             ProcessUsageMetrics? metrics = null;
 
-            if (MetricsWatch is not null)
+            if (Metrics is not null)
             {
-                if ((metrics = MetricsWatch.TakeMeasurement(interval)) is null)
+                if ((metrics = Metrics.TakeMeasurement(interval)) is null)
                 {
                     yield break; // didn't satisfy the metrics minimum
                 }

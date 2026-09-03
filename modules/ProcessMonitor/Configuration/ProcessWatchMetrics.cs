@@ -2,7 +2,7 @@
 
 namespace MadWizard.Desomnia.Processes.Configuration
 {
-    public class ProcessWatchMetrics
+    public record ProcessWatchMetrics
     {
         /// <summary>
         /// How the configured thresholds combine: with <c>and</c> – the default, and the reading

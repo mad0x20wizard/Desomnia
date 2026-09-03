@@ -34,7 +34,7 @@ namespace MadWizard.Desomnia.Processes.Middleware
             // this asks about. A watch built without any is simply not asking for a counter.
             if (context.FirstParameterOfType<ProcessWatchMetrics>() is ProcessWatchMetrics metrics)
             {
-                ProcessUsageMetricsWatch? watch = null;
+                ProcessMetricsWatch? watch = null;
 
                 if (metrics.HasThresholds)
                 {
@@ -49,7 +49,7 @@ namespace MadWizard.Desomnia.Processes.Middleware
 
                     Validate(name, metrics, platform.SupportedMetrics);
 
-                    watch = new ProcessUsageMetricsWatch(metrics, platform.SharedMetrics);
+                    watch = new ProcessMetricsWatch(metrics, platform.SharedMetrics);
                 }
 
                 context.ChangeParameters([.. context.Parameters, TypedParameter.From(watch)]);

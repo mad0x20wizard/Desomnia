@@ -7,7 +7,7 @@ namespace MadWizard.Desomnia.Processes.Configuration
         public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(2);
     }
 
-    public class ProcessMonitorConfig : ProcessWatchMetrics
+    public record ProcessMonitorConfig : ProcessWatchMetrics
     {
         public DelayedActionInfo? OnIdle { get; set; }
         public DelayedActionInfo? OnDemand { get; set; }

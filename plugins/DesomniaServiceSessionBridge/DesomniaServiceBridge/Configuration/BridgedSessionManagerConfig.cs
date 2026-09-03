@@ -7,7 +7,7 @@ namespace MadWizard.Desomnia.Service.Bridge.Configuration
         public bool? SpawnMinions { get; set; } = true;
     }
 
-    public class BridgedSessionDescriptor : SessionWatchDescriptor
+    public record BridgedSessionDescriptor : SessionWatchDescriptor
     {
         public SessionSelector? AllowControlSession { get; set; }
         public bool? AllowControlSleep { get; set; }

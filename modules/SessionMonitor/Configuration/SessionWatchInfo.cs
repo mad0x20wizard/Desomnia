@@ -4,7 +4,7 @@ using MadWizard.Desomnia.Processes.Configuration;
 
 namespace MadWizard.Desomnia.Session.Configuration
 {
-    public class SessionWatchInfo : ProcessWatchMetrics
+    public record SessionWatchInfo : ProcessWatchMetrics
     {
         public SessionWatchInfo()
         {

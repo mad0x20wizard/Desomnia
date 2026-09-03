@@ -3,7 +3,7 @@ using MadWizard.Desomnia.Session.Manager;
 
 namespace MadWizard.Desomnia.Session.Configuration
 {
-    public class SessionWatchDescriptor : SessionWatchInfo
+    public record SessionWatchDescriptor : SessionWatchInfo
     {
         public SessionSelector? Name { get; set; }
     }
@@ -25,6 +25,8 @@ namespace MadWizard.Desomnia.Session.Configuration
 
             if (this.Everyone is TDesc desc)
                 configure(self, desc);
+
+            // SOMEDAY add group
 
             if (session.IsUser)
                 foreach (var userDesc in this.User)

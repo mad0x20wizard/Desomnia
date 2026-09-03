@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 
 namespace MadWizard.Desomnia.Processes
 {
-    public class ProcessUsageMetricsWatch(ProcessWatchMetrics metrics, ProcessMetric shared = ProcessMetric.None)
+    public class ProcessMetricsWatch(ProcessWatchMetrics metrics, ProcessMetric shared = ProcessMetric.None)
     {
         private readonly Lock _lock = new();
         private readonly HashSet<IProcess> _processes = [];
