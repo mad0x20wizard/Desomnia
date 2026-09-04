@@ -32,7 +32,7 @@ namespace MadWizard.Desomnia.Processes.Middleware
             // the metrics arrive as the watch's own configuration – ProcessWatchInfo for a pattern
             // watch, a session's descriptor for the aggregate one – and both are the thresholds
             // this asks about. A watch built without any is simply not asking for a counter.
-            if (context.FirstParameterOfType<ProcessWatchMetrics>() is ProcessWatchMetrics metrics)
+            if (context.FirstParameterOfType<ProcessWatchMetrics>() is { } metrics)
             {
                 ProcessMetricsWatch? watch = null;
 
@@ -69,10 +69,10 @@ namespace MadWizard.Desomnia.Processes.Middleware
          */
         static void Validate(string name, ProcessWatchMetrics metrics, ProcessMetric supported)
         {
-            Refuse(metrics.MinCPU       is not null, ProcessMetric.Processor,   nameof(metrics.MinCPU));
-            Refuse(metrics.MinGPU       is not null, ProcessMetric.Graphics,    nameof(metrics.MinGPU));
-            Refuse(metrics.MinIO        is not null, ProcessMetric.Storage,     nameof(metrics.MinIO));
-            Refuse(metrics.MinTraffic   is not null, ProcessMetric.Traffic,     nameof(metrics.MinTraffic));
+            CheckSupport(metrics.MinCPU       is not null, ProcessMetric.Processor,   nameof(metrics.MinCPU));
+            CheckSupport(metrics.MinGPU       is not null, ProcessMetric.Graphics,    nameof(metrics.MinGPU));
+            CheckSupport(metrics.MinIO        is not null, ProcessMetric.Storage,     nameof(metrics.MinIO));
+            CheckSupport(metrics.MinTraffic   is not null, ProcessMetric.Traffic,     nameof(metrics.MinTraffic));
 
             // NetworkWatch reads a unit-less threshold as raw packets, which processes cannot
             // count – and read as bytes, a naked number per interval would be satisfied by noise.
@@ -80,7 +80,7 @@ namespace MadWizard.Desomnia.Processes.Middleware
             RequireByteUnit(metrics.MinIO,      "minIO");
             RequireByteUnit(metrics.MinTraffic, "minTraffic");
 
-            void Refuse(bool configured, ProcessMetric metric, string attribute)
+            void CheckSupport(bool configured, ProcessMetric metric, string attribute)
             {
                 if (configured && !supported.HasFlag(metric))
                 {
@@ -92,8 +92,10 @@ namespace MadWizard.Desomnia.Processes.Middleware
 
             void RequireByteUnit(TransmissionThreshold? threshold, string attribute)
             {
-                if (threshold is TransmissionThreshold t && t.ByteUnit is null)
+                if (threshold is TransmissionThreshold { Amount: not 0, ByteUnit: null })
+                {
                     throw new FormatException($"'{name}': {attribute} requires a byte unit (e.g. \"100kb\" or \"1MB/s\")");
+                }
             }
         }
     }

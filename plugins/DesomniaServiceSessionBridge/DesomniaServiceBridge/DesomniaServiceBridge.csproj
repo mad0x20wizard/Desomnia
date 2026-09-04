@@ -45,7 +45,6 @@
 		  <ExcludeAssets>all</ExcludeAssets>
 	  </ProjectReference>
 
-
 	  <ProjectReference Include="..\DesomniaPipe\DesomniaPipe.csproj" />
   </ItemGroup>
 

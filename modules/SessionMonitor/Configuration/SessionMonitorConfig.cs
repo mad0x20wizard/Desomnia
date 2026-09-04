@@ -46,10 +46,12 @@ namespace MadWizard.Desomnia.Session.Configuration
 
         internal bool RegisterWithSleepProxy { get; set; } = true;
 
-        #region SessionMonitor :: ClockOptions
+        #region SessionMonitor :: WatchInputOptions
         internal bool WatchInput                { get; set; } = true;
         internal bool WatchInputRemote          { get; set; } = false;
         internal bool WatchInputDisconnected    { get; set; } = false;
+
+        internal TimeSpan? MaxLastInputTime     { get; set; } = null;
         #endregion
     }
 }

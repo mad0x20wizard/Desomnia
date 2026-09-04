@@ -9,7 +9,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         [Fact]
         public void WithoutThresholds_RendersBare()
         {
-            Assert.Equal("{Browser}", new ProcessUsage("Browser").ToString());
+            Assert.Equal("{Browser}", new ProcessUsage("Browser") { Metrics = null }.ToString());
         }
 
         [Fact]
@@ -51,7 +51,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         public void TrafficRate_RoundTripsTheThresholdItWasComparedAgainst()
         {
             var threshold = (TransmissionThreshold)new IOThresholdConverter().ConvertFromInvariantString("5Mbit/s")!;
-            var metrics = new ProcessUsageMetrics(TimeSpan.FromSeconds(1))
+            var metrics = new ProcessMetricsUsage(TimeSpan.FromSeconds(1))
             {
                 Traffic = new(threshold.Amount * threshold.ByteUnit!.Value, TransferMetricFormat.BitsPerSecond),
             };
@@ -63,7 +63,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         public void GraphicsTime_RendersLikeProcessorTime()
         {
             var sample = TimeSpan.FromSeconds(5);
-            var metrics = new ProcessUsageMetrics(sample)
+            var metrics = new ProcessMetricsUsage(sample)
             {
                 GraphicsProcessor = new(TimeSpan.FromSeconds(2), sample, ProcessingMetricFormat.Time),
             };
@@ -75,7 +75,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         public void FractionalShares_KeepOneDecimal()
         {
             var sample = TimeSpan.FromSeconds(10);
-            var metrics = new ProcessUsageMetrics(sample)
+            var metrics = new ProcessMetricsUsage(sample)
             {
                 Processor = new(TimeSpan.FromSeconds(1.23), sample, ProcessingMetricFormat.Percentage),
             };

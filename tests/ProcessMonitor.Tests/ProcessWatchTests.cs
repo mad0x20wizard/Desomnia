@@ -14,20 +14,22 @@ namespace MadWizard.Desomnia.Processes.Tests
     /// </summary>
     public class ProcessWatchTests
     {
-        private sealed class MetricsProcessWatch(ProcessWatchMetrics metrics)
-            : ProcessWatch(metrics, "Metrics")
+        private sealed class MetricsProcessWatch() : ProcessWatch("Metrics")
         {
             protected override bool ShouldWatchProcess(IProcess process) => true;
         }
 
+        private static ProcessMetricsWatch? Metrics(ProcessWatchMetrics metrics, ProcessMetric shared = ProcessMetric.None)
+            => new(metrics, shared);
+
         internal static ProcessWatch Watch(ProcessWatchInfo info, IProcessManager manager)
         {
-            return new PatternProcessWatch(info) { Manager = manager };
+            return new PatternProcessWatch(info) { MetricsWatch = Metrics(info), Manager = manager };
         }
 
-        internal static ProcessWatch Watch(ProcessWatchMetrics metrics, IProcessManager manager)
+        internal static ProcessWatch Watch(ProcessWatchMetrics metrics, IProcessManager manager, ProcessMetric shared = ProcessMetric.None)
         {
-            return new MetricsProcessWatch(metrics) { Manager = manager };
+            return new MetricsProcessWatch { MetricsWatch = Metrics(metrics, shared), Manager = manager };
         }
 
         private static ProcessWatch Watch(ProcessWatchInfo info, params IProcess[] processes)
@@ -106,6 +108,26 @@ namespace MadWizard.Desomnia.Processes.Tests
         }
 
         [Fact]
+        public void StopEventWithEquivalentPid_UntracksTheStoredProcess()
+        {
+            var chrome = new FakeProcess(101, "chrome") { Cpu = TimeSpan.Zero };
+            var source = new FakeProcessSource(chrome);
+            var info = new ProcessWatchInfo("chrome")
+            {
+                Name = "Browser",
+                MinCPU = new ProcessingThreshold(TimeSpan.FromMilliseconds(1)),
+            };
+            var watch = Watch(info, source);
+
+            Assert.Equal(1, chrome.CpuSamples); // introduction baseline
+
+            source.Stop(new FakeProcess(101, "chrome"));
+            Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(2)));
+
+            Assert.Equal(1, chrome.CpuSamples); // the metrics roster removed the stored object
+        }
+
+        [Fact]
         public void WithoutThreshold_EmptyRosterReportsNoUsage()
         {
             var watch = Watch(new ProcessWatchInfo("chrome") { Name = "Browser" });
@@ -151,7 +173,7 @@ namespace MadWizard.Desomnia.Processes.Tests
                 MinIO = new TransmissionThreshold { Amount = 2, ByteUnit = 1L << 20 },
                 MinTraffic = new TransmissionThreshold { Amount = 2, ByteUnit = 1L << 20 },
             };
-            var watch = new MetricsProcessWatch(metrics) { Manager = source };
+            var watch = new MetricsProcessWatch { MetricsWatch = Metrics(metrics), Manager = source };
 
             Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(10)));
 
@@ -211,6 +233,7 @@ namespace MadWizard.Desomnia.Processes.Tests
             // measured as one group total, the departure would read as -59s of work and report the
             // whole browser idle for this cycle
             Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
+            Assert.Equal(2, tab.CpuSamples);
         }
 
         [Fact]

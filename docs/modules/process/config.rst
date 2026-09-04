@@ -28,7 +28,7 @@ Process
 
 .. code:: xml
 
-  <Process name="Browser" watchChildren="false" minCPU="1%"
+  <Process name="Browser" watchChildren="false" minCPU="1%" watch="CPU"
     onIdle="stop" onStart="" onStop="">
 
     chrome|edge|firefox
@@ -74,7 +74,8 @@ onIdle
 
 :⚡️ event:
 
-This event is triggered if the configured thresholds (``minCPU``, ``minIO``, ``minTraffic``) were not all met since the last timeout. If no threshold is configured, this event will not be triggered.
+This event is triggered when the ``watch`` expression evaluates to false for a running process
+group. With no thresholds, the default catch-all expression keeps a matching process demanded.
 
 onStart
 +++++++
@@ -88,4 +89,4 @@ onStop
 
 :⚡️ event:
 
-This event is triggered when the last process of this group exits. 
+This event is triggered when the last process of this group exits.

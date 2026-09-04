@@ -1,43 +1,26 @@
-﻿using MadWizard.Desomnia.Events;
+using MadWizard.Desomnia.Configuration;
+using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Processes;
 using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
 
-
 namespace MadWizard.Desomnia.Session
 {
     public class SessionWatch : ResourceMonitor<ProcessWatch>
     {
-        /**
-         * The session-wide metric watches – one per descriptor that configured a threshold.
-         *
-         * A list rather than a single watch because a session collects its configuration from every
-         * selector that matched it (Everyone, its user, Administrator – and the Duo plugin, which
-         * applies an instance's info to an already-configured watch). Keeping one would mean the
-         * last of them silently replacing the thresholds of the others, and leaving the replaced
-         * watch subscribed to the manager's process events for the life of the session.
-         *
-         * They are deliberately not tracked as children: a child's token would be listed beside the
-         * declared process groups, where this is the session's own measurement and belongs on the
-         * session's token. So they are inspected by hand below – but not disposed, because they are
-         * resolved from the session's own lifetime scope and the container disposes them with it.
-         */
-        private readonly List<ProcessWatch> _aggregates = [];
+        // The one process-metric collector for this session. It is deliberately not attached as a
+        // child resource: its values belong to the session's own expression and Usage token.
+        private ProcessWatch? _processWatch;
 
         [EventContext]
         public required ISession Session { get; init; }
 
-        public required Func<ProcessWatchMetrics, AnySessionProcessWatch>   CreateAnyProcessWatch   { private get; init; }
-        public required Func<SessionProcessWatchInfo, SessionProcessWatch>  CreateProcessWatch      { private get; init; }
+        public required Func<ProcessWatchMetrics, AnySessionProcessWatch>  CreateAnyProcessWatch { private get; init; }
+        public required Func<SessionProcessWatchInfo, SessionProcessWatch> CreateProcessWatch    { private get; init; }
 
-        private WatchOperator _watchOperator = WatchOperator.OR;
-
-        private TimeSpan? _maxLastInputTime;
-        private TimeSpan? _minLastInputTime;
-
-        private TimeSpan? MaxLastInputTime => _watchOperator == WatchOperator.AND ? _minLastInputTime : _maxLastInputTime;
+        public WatchExpression Watch { get; private set; } = WatchExpression.DefaultOR;
 
         private WatchInputOptions? WatchInput { get; set; } = new();
 
@@ -72,24 +55,19 @@ namespace MadWizard.Desomnia.Session
             else if (Session.IsRemoteConnected)
                 RemoteConnect.TriggerEvent();
         }
-
         private void Session_Disconnected(object? sender, EventArgs e) => Disconnect.TriggerEvent();
         private void Session_Unlocked(object? sender, EventArgs e) => Unlock.TriggerEvent();
         private void Session_Locked(object? sender, EventArgs e) => Lock.TriggerEvent();
 
-        internal void ApplyConfiguration(SessionMonitorConfig config, SessionWatchDescriptor desc) => 
+        #region Configuration
+        internal void ApplyConfiguration(SessionMonitorConfig config, SessionWatchDescriptor desc) =>
             ApplyConfiguration(config, (SessionWatchInfo)desc);
 
         public void ApplyConfiguration(SessionMonitorConfig config, SessionWatchInfo info)
         {
-            _watchOperator = info.Watch == WatchOperator.AND ? info.Watch : _watchOperator;
+            Watch <<= info.Watch;
 
-            if (_maxLastInputTime == null || _maxLastInputTime < info.MaxLastInputTime)
-                _maxLastInputTime = info.MaxLastInputTime;
-            if (_minLastInputTime == null || _minLastInputTime > info.MaxLastInputTime)
-                _minLastInputTime = info.MaxLastInputTime;
-
-            WatchInput += info.MakeWatchInputOptions(config);
+            WatchInput &= info.MakeWatchInputOptions(config);
 
             GetEvent(nameof(Idle)).AddAction(info.OnIdle);
 
@@ -103,10 +81,7 @@ namespace MadWizard.Desomnia.Session
             Lock.AddAction(info.OnLock);
             Logout.AddAction(info.OnLogout);
 
-            if (info.HasThresholds)
-            {
-                _aggregates.Add(CreateAnyProcessWatch(info));
-            }
+            MergeProcessMetrics(info);
 
             foreach (var process in info.Process)
             {
@@ -114,78 +89,105 @@ namespace MadWizard.Desomnia.Session
             }
         }
 
+        private void MergeProcessMetrics(ProcessWatchMetrics metrics)
+        {
+            metrics = new ProcessWatchMetrics(WatchExpression.Yield)
+            {
+                MinCPU      = metrics.MinCPU       ?? _processWatch?.Metrics?.MinCPU,
+                MinGPU      = metrics.MinGPU       ?? _processWatch?.Metrics?.MinGPU,
+                MinIO       = metrics.MinIO        ?? _processWatch?.Metrics?.MinIO,
+                MinTraffic  = metrics.MinTraffic   ?? _processWatch?.Metrics?.MinTraffic,
+            };
+
+            if (metrics != _processWatch?.Metrics)
+            {
+                _processWatch?.Dispose();
+                _processWatch = null;
+
+                if (metrics.HasThresholds)
+                {
+                    _processWatch = CreateAnyProcessWatch(metrics);
+                }
+            }
+        }
+        #endregion
+
+        #region Inspection
         protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
         {
-            var usage = new SessionUsage(Session);
+            var usage = new SessionUsage(Session) { Metrics = CollectMetrics(interval) };
 
             foreach (var token in base.InspectResource(interval))
             {
                 usage.Tokens.Add(token);
             }
 
-            if (HadUsageSince(usage, interval) || usage.Tokens.Count > 0)
+            if (Watch.IsYield || Watch.Evaluate(usage.Metrics) || usage.Tokens.Count > 0)
             {
                 yield return usage;
             }
         }
 
-        private bool HadUsageSince(SessionUsage usage, TimeSpan interval)
+        private SessionMetricsUsage CollectMetrics(TimeSpan interval)
         {
-            bool needsMatch = false;
+            var metrics = new SessionMetricsUsage(CollectProcessMetrics(interval));
 
-            int matchesMetrics = 0;
-            if (_aggregates.Count > 0) // user specified at least one process metric
-            {
-                needsMatch = true;
-
-                foreach (var process in _aggregates.Select(a => a.Inspect(interval).FirstOrDefault()).OfType<ProcessUsage>())
-                {
-                    if (process.Metrics is ProcessUsageMetrics metrics)
-                    {
-                        usage.Metrics |= metrics;
-
-                        matchesMetrics++;
-                    }
-                }
-            }
-
-            bool? matchesInput = null;
             if (WatchInput is WatchInputOptions watch)
             {
-                needsMatch = true;
+                var matches = false;
 
-                matchesInput = false;
                 if (Session.IsRemoteConnected && !watch.Remote)
                 {
-                    matchesInput = true;
+                    matches = true;
                 }
-                else if ((watch.Disconnected || Session.IsConnected) && Session.IdleTime is TimeSpan time)
+                else if (watch.Disconnected || Session.IsConnected)
                 {
-                    if (time < (MaxLastInputTime ?? interval))
-                    {
-                        usage.LastInputTime = time;
+                    if (Session.IdleTime is not TimeSpan time)
+                        throw new InvalidOperationException("Configured session metric 'Input' cannot be read.");
 
-                        matchesInput = true;
+                    if (matches = time < (watch.MaxLastInputTime ?? interval))
+                    {
+                        metrics.LastInputTime = time;
                     }
                 }
+
+                metrics.Add("Input", matches);
             }
 
-            if (needsMatch)
-            {
-                switch (_watchOperator)
-                {
-                    case WatchOperator.OR:
-                        return matchesInput == true || matchesMetrics > 0;
-
-                    case WatchOperator.AND:
-                        return matchesInput != false && matchesMetrics == _aggregates.Count;
-                }
-
-                throw new InvalidOperationException($"Unknown WatchOperator = {_watchOperator}");
-            }
-
-            return true;
+            return metrics;
         }
+
+        private ProcessMetricsUsage CollectProcessMetrics(TimeSpan interval)
+        {
+            if (_processWatch?.Inspect(interval).SingleOrDefault() is ProcessUsage process)
+            {
+                if (process.Metrics is ProcessMetricsUsage metrics)
+                {
+                    return metrics;
+                }
+            }
+
+            return new ProcessMetricsUsage(interval);
+        }
+        #endregion
+
+        #region Inspection Synchronization
+        protected override void HandleInspectionResult(TimeSpan duration, IEnumerable<UsageToken> tokens)
+        {
+            if (!Watch.IsYield)
+            {
+                base.HandleInspectionResult(duration, tokens);
+            }
+        }
+
+        public void InjectInspectionResult(TimeSpan duration, IEnumerable<UsageToken> tokens)
+        {
+            if (!Watch.IsYield)
+                throw new InvalidOperationException("Only a yielding SessionWatch can accept an external inspection result.");
+
+            base.HandleInspectionResult(duration, tokens);
+        }
+        #endregion
 
         [ActionHandler("lock")]
         internal void HandleActionLock() => Session.Lock();
@@ -219,6 +221,8 @@ namespace MadWizard.Desomnia.Session
             Session.Unlocked -= Session_Unlocked;
             Session.Disconnected -= Session_Disconnected;
             Session.Connected -= Session_Connected;
+
+            _processWatch?.Dispose();
 
             base.Dispose();
         }

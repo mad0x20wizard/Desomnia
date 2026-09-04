@@ -6,12 +6,12 @@ using Xunit;
 namespace MadWizard.Desomnia.Processes.Tests
 {
     /// <summary>
-    /// How the min attributes combine. The default is 'and' – every configured threshold has to
+    /// How watch expressions combine metric results. The default is 'and' – every configured threshold has to
     /// hold at once – which is what a group doing one kind of work wants. A group whose work moves
     /// between the metrics needs 'or': a game renders without computing much, a build computes
     /// without rendering at all, and under 'and' either reads as idle in the middle of the work.
     /// </summary>
-    public class ProcessWatchOperatorTests
+    public class ProcessWatchExpressionTests
     {
         private static readonly ProcessingThreshold TenMilliseconds = new(TimeSpan.FromMilliseconds(10));
         private static readonly ProcessingThreshold TenPercent = new(0.1);
@@ -24,13 +24,13 @@ namespace MadWizard.Desomnia.Processes.Tests
             TimeUnit = TimeSpan.FromSeconds(1),
         };
 
-        private static ProcessWatchInfo Info(WatchOperator min, ProcessingThreshold? minCPU = null,
+        private static ProcessWatchInfo Info(WatchExpression watch, ProcessingThreshold? minCPU = null,
             ProcessingThreshold? minGPU = null, TransmissionThreshold? minIO = null, TransmissionThreshold? minTraffic = null)
         {
             return new ProcessWatchInfo("game")
             {
                 Name = "Game",
-                Watch = min,
+                Watch = watch,
                 MinCPU = minCPU,
                 MinGPU = minGPU,
                 MinIO = minIO,
@@ -47,7 +47,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         public void TheDefault_IsAnd()
         {
             // an existing configuration keeps the reading it always had
-            Assert.Equal(WatchOperator.AND, new ProcessWatchInfo("game") { Name = "Game" }.Watch);
+            Assert.Equal(WatchExpression.DefaultAND, new ProcessWatchInfo("game") { Name = "Game" }.Watch);
         }
 
         [Fact]
@@ -56,7 +56,7 @@ namespace MadWizard.Desomnia.Processes.Tests
             // the case the operator exists for: rendering hard, computing almost nothing
             var game = new FakeProcess(101, "game") { Cpu = TimeSpan.Zero, Gpu = TimeSpan.Zero };
 
-            var watch = Watch(Info(WatchOperator.OR, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
+            var watch = Watch(Info(new WatchExpression("OR"), minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
 
             watch.Inspect(TimeSpan.FromSeconds(2));
 
@@ -79,7 +79,7 @@ namespace MadWizard.Desomnia.Processes.Tests
                 Net = new ProcessInputOutput(0, 0),
             };
 
-            var watch = Watch(Info(WatchOperator.OR,
+            var watch = Watch(Info(new WatchExpression("OR"),
                 minCPU: TenPercent,
                 minGPU: TenMilliseconds,
                 minIO: OneMegabytePerSecond,
@@ -109,7 +109,7 @@ namespace MadWizard.Desomnia.Processes.Tests
                 Net = new ProcessInputOutput(0, 0),
             };
 
-            var watch = Watch(Info(WatchOperator.OR,
+            var watch = Watch(Info(new WatchExpression("OR"),
                 minCPU: TenMilliseconds,
                 minGPU: TenPercent,
                 minIO: OneMegabyte,
@@ -135,7 +135,7 @@ namespace MadWizard.Desomnia.Processes.Tests
             // the flag worth having
             var game = new FakeProcess(101, "game") { Cpu = TimeSpan.Zero, Gpu = TimeSpan.Zero };
 
-            var watch = Watch(Info(WatchOperator.AND, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
+            var watch = Watch(Info(new WatchExpression("AND"), minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
 
             watch.Inspect(TimeSpan.FromSeconds(2));
 
@@ -149,7 +149,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var game = new FakeProcess(101, "game") { Cpu = TimeSpan.Zero, Gpu = TimeSpan.Zero };
 
-            var watch = Watch(Info(WatchOperator.OR, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
+            var watch = Watch(Info(new WatchExpression("OR"), minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
 
             watch.Inspect(TimeSpan.FromSeconds(2));
 
@@ -165,7 +165,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var game = new FakeProcess(101, "game") { Cpu = TimeSpan.Zero, Gpu = TimeSpan.Zero };
 
-            var watch = Watch(Info(WatchOperator.OR, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
+            var watch = Watch(Info(new WatchExpression("OR"), minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
 
             watch.Inspect(TimeSpan.FromSeconds(2));
 
@@ -176,62 +176,48 @@ namespace MadWizard.Desomnia.Processes.Tests
         }
 
         /// <summary>
-        /// An attribute nothing could measure contributes the operator's identity, so it is left
-        /// out of the tally entirely: under 'or' it must not carry a group nobody found busy, just
-        /// as under 'and' it must not veto one the others did.
+        /// An explicitly configured metric has to be readable; it cannot disappear from the
+        /// expression merely because the current process did not supply its counter.
         /// </summary>
         [Fact]
-        public void Or_UnmeasurableThreshold_DoesNotCarryTheGroupOnItsOwn()
+        public void Or_UnmeasurableThreshold_IsAnError()
         {
             var game = new FakeProcess(101, "game") { Cpu = TimeSpan.Zero, Gpu = null }; // no graphics clock here
 
-            var watch = Watch(Info(WatchOperator.OR, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
+            var watch = Watch(Info(new WatchExpression("OR"), minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
 
-            watch.Inspect(TimeSpan.FromSeconds(2));
-
-            game.Cpu = TimeSpan.FromMilliseconds(5); // measurable, and below its threshold
-
-            Thread.Sleep(20);
-            Assert.Empty(watch.Inspect(TimeSpan.FromMilliseconds(1)));
+            Assert.Throws<InvalidOperationException>(() => watch.Inspect(TimeSpan.FromSeconds(2)).ToArray());
         }
 
         [Fact]
-        public void Or_UnmeasurableThreshold_LeavesTheOthersToCarryIt()
+        public void Or_UnmeasurableThreshold_IsAnErrorEvenWhenAnotherMetricMatches()
         {
             var game = new FakeProcess(101, "game") { Cpu = TimeSpan.Zero, Gpu = null };
 
-            var watch = Watch(Info(WatchOperator.OR, minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
+            var watch = Watch(Info(new WatchExpression("OR"), minCPU: TenMilliseconds, minGPU: TenMilliseconds), game);
 
-            watch.Inspect(TimeSpan.FromSeconds(2));
-
-            game.Cpu = TimeSpan.FromMilliseconds(500);
-
-            Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
+            Assert.Throws<InvalidOperationException>(() => watch.Inspect(TimeSpan.FromSeconds(2)).ToArray());
         }
 
         /// <summary>
-        /// With nothing measurable at all there is no tally to believe either way, and the identity
-        /// alone would answer on the operator: 'and' would assume demand and 'or' would report the
-        /// group idle. Both fail open instead, because onIdle can be 'stop' – a missing counter
-        /// must not be what kills a working process.
+        /// Failure to read every configured metric is an inspection error, independent of the
+        /// expression's catch-all identity.
         /// </summary>
         [Fact]
-        public void Or_NothingMeasurableAtAll_StillFailsOpen()
+        public void Or_NothingMeasurableAtAll_IsAnError()
         {
             var game = new FakeProcess(101, "game") { Gpu = null, Net = null };
 
-            var watch = Watch(Info(WatchOperator.OR, minGPU: TenMilliseconds, minTraffic: OneMegabyte), game);
+            var watch = Watch(Info(new WatchExpression("OR"), minGPU: TenMilliseconds, minTraffic: OneMegabyte), game);
 
-            var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
-
-            Assert.Empty(usage.ToString());
+            Assert.Throws<InvalidOperationException>(() => watch.Inspect(TimeSpan.FromSeconds(2)).ToArray());
         }
 
         [Fact]
         public void Or_EmptyRoster_YieldsNothing()
         {
-            // 'or' starts unsatisfied, but an empty group must not reach the fail-open path either
-            var watch = Watch(Info(WatchOperator.OR, minGPU: TenMilliseconds, minCPU: TenMilliseconds));
+            // A user-facing process resource still requires at least one matching process.
+            var watch = Watch(Info(new WatchExpression("OR"), minGPU: TenMilliseconds, minCPU: TenMilliseconds));
 
             Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(2)));
         }
@@ -244,8 +230,8 @@ namespace MadWizard.Desomnia.Processes.Tests
             var busy = new FakeProcess(101, "game") { Cpu = TimeSpan.Zero };
             var quiet = new FakeProcess(102, "game") { Cpu = TimeSpan.Zero };
 
-            var or = Watch(Info(WatchOperator.OR, minCPU: TenMilliseconds), busy);
-            var and = Watch(Info(WatchOperator.AND, minCPU: TenMilliseconds), quiet);
+            var or = Watch(Info(new WatchExpression("OR"), minCPU: TenMilliseconds), busy);
+            var and = Watch(Info(new WatchExpression("AND"), minCPU: TenMilliseconds), quiet);
 
             or.Inspect(TimeSpan.FromSeconds(2));
             and.Inspect(TimeSpan.FromSeconds(2));
@@ -254,6 +240,52 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             Assert.Single(or.Inspect(TimeSpan.FromSeconds(2)));
             Assert.Single(and.Inspect(TimeSpan.FromSeconds(2)));
+        }
+
+        [Fact]
+        public void FormulaCombinesNamedMetricResults()
+        {
+            var game = new FakeProcess(101, "game")
+            {
+                Cpu = TimeSpan.Zero,
+                Gpu = TimeSpan.Zero,
+                Net = new ProcessInputOutput(0, 0),
+            };
+            var watch = Watch(Info(new WatchExpression("(cpu or GPU) and traffic"),
+                minCPU: TenMilliseconds,
+                minGPU: TenMilliseconds,
+                minTraffic: OneMegabyte), game);
+
+            watch.Inspect(TimeSpan.FromSeconds(2));
+            game.Cpu = TimeSpan.FromMilliseconds(500);
+
+            Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(2)));
+
+            game.Cpu = TimeSpan.FromSeconds(1);
+            game.Net = new ProcessInputOutput(2L << 20, 0);
+
+            var metrics = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
+            Assert.True(metrics["CPU"]);
+            Assert.False(metrics["GPU"]);
+            Assert.True(metrics["Traffic"]);
+        }
+
+        [Fact]
+        public void LiteralFalseDisablesAnExistingProcessResource()
+        {
+            var game = new FakeProcess(101, "game");
+            var watch = Watch(Info(new WatchExpression("false")), game);
+
+            Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(2)));
+        }
+
+        [Fact]
+        public void ReferencingAnUnconfiguredMetricFailsOnlyDuringEvaluation()
+        {
+            var game = new FakeProcess(101, "game");
+            var watch = Watch(Info(new WatchExpression("CPU")), game);
+
+            Assert.Throws<InvalidOperationException>(() => watch.Inspect(TimeSpan.FromSeconds(2)).ToArray());
         }
     }
 }

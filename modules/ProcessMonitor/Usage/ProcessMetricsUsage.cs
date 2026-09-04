@@ -2,9 +2,9 @@ using MadWizard.Desomnia.Processes.Metrics;
 
 namespace MadWizard.Desomnia.Processes
 {
-    public class ProcessUsageMetrics
+    public class ProcessMetricsUsage : MetricsUsage
     {
-        public ProcessUsageMetrics(TimeSpan duration)
+        public ProcessMetricsUsage(TimeSpan duration)
         {
             ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(duration, TimeSpan.Zero, nameof(duration));
 
@@ -21,7 +21,7 @@ namespace MadWizard.Desomnia.Processes
         /// <summary>
         ///     Combines measurements from the same sample, retaining the greatest value of each metric.
         /// </summary>
-        public static ProcessUsageMetrics operator |(ProcessUsageMetrics? left, ProcessUsageMetrics right)
+        public static ProcessMetricsUsage operator |(ProcessMetricsUsage? left, ProcessMetricsUsage right)
         {
             if (left is null)
                 return right;

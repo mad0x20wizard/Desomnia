@@ -5,18 +5,16 @@ namespace MadWizard.Desomnia.Processes
     /// of its pair – the relative or the absolute member, the amount or the rate – and only a
     /// filled member is rendered. A watch without thresholds fills nothing and renders bare.
     /// </summary>
-    public class ProcessUsage(string? name) : UsageToken
+    public class ProcessUsage(string? name) : MetricsUsageToken<ProcessMetricsUsage?>
     {
         public string? Name => name;
-
-        public ProcessUsageMetrics? Metrics { get; init; }
 
         public override string ToString()
         {
             if (Name != null)
                 return "{" + Name + (Metrics?.ToString() is { Length: > 0 } parts ? " @ " + parts : "") + "}";
             else
-                return "{{" + Metrics?.ToString() + "}}"; ;
+                return "{{" + Metrics?.ToString() + "}}";
         }
     }
 }

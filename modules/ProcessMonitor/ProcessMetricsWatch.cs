@@ -19,6 +19,8 @@ namespace MadWizard.Desomnia.Processes
 
         private readonly record struct Sample<T>(T Value, long Timestamp);
 
+        public ProcessWatchMetrics Metrics => metrics;
+
         internal void Track(IProcess process)
         {
             lock (_lock)
@@ -51,79 +53,93 @@ namespace MadWizard.Desomnia.Processes
             }
         }
 
-        internal ProcessUsageMetrics? TakeMeasurement(TimeSpan sampleDuration)
+        internal ProcessMetricsUsage? TakeMeasurement(TimeSpan sampleDuration)
         {
             if (sampleDuration <= TimeSpan.Zero)
                 throw new ArgumentException("TakeMeasurement(): SampleDuration =< 0");
 
             TimeSpan? processor = null, graphics = null;
             long? storage = null, traffic = null;
+            int processCount;
 
             lock (_lock)
             {
-                if (_processes.Count == 0)
-                    return null;
+                processCount = _processes.Count;
 
-                if (metrics.MinCPU is not null)
-                    processor = MeasureTime(_lastProcessorTime, sampleDuration, static process => process.ProcessorTime, distinct: shared.HasFlag(ProcessMetric.Processor)) ?? TimeSpan.Zero;
-                if (metrics.MinGPU is not null)
+                if (processCount > 0 && metrics.MinCPU is not null)
+                    processor = MeasureTime(_lastProcessorTime, sampleDuration, static process => process.ProcessorTime, distinct: shared.HasFlag(ProcessMetric.Processor));
+                if (processCount > 0 && metrics.MinGPU is not null)
                     graphics = MeasureTime(_lastGraphicsTime, sampleDuration, static process => process.GraphicsProcessorTime, distinct: shared.HasFlag(ProcessMetric.Graphics));
-                if (metrics.MinIO is not null)
+                if (processCount > 0 && metrics.MinIO is not null)
                     storage = MeasureBytes(_lastIO, sampleDuration, static process => process.StorageData);
-                if (metrics.MinTraffic is not null)
+                if (processCount > 0 && metrics.MinTraffic is not null)
                     traffic = MeasureBytes(_lastTraffic, sampleDuration, static process => process.NetworkData);
             }
 
-            var matchAll = metrics.Watch == WatchOperator.AND;
-            var demand = matchAll;
-            var measured = false;
+            var watchMetrics = new MetricsUsage();
 
-            bool Include(bool matches)
+            ProcessingMetric? Match(string name, ProcessingThreshold? threshold, TimeSpan? value, TimeSpan capacity)
             {
-                measured = true;
-                demand = matchAll ? demand & matches : demand | matches;
-
-                return matches;
-            }
-
-            ProcessingMetric? Match(ProcessingThreshold? threshold, TimeSpan? value, TimeSpan capacity)
-            {
-                if (threshold is not ProcessingThreshold minimum || value is not TimeSpan consumed)
+                if (threshold is not ProcessingThreshold minimum)
                     return null;
 
+                if (processCount == 0)
+                {
+                    watchMetrics.Add(name, false);
+                    return null;
+                }
+                if (value is not TimeSpan consumed)
+                    throw new InvalidOperationException($"Configured process metric '{name}' cannot be read.");
+
                 if (minimum.AbsoluteTime is TimeSpan absolute)
-                    return Include(consumed > absolute) ? new(consumed, capacity, ProcessingMetricFormat.Time) : null;
+                {
+                    var matches = absolute == TimeSpan.Zero || consumed > absolute;
+                    watchMetrics.Add(name, matches);
+                    return matches ? new(consumed, capacity, ProcessingMetricFormat.Time) : null;
+                }
                 if (minimum.RelativeUsage is double relative)
                 {
                     var result = new ProcessingMetric(consumed, capacity, ProcessingMetricFormat.Percentage);
-
-                    return Include(result.Usage > relative) ? result : null;
+                    var matches = relative == 0 || result.Usage > relative;
+                    watchMetrics.Add(name, matches);
+                    return matches ? result : null;
                 }
 
-                return null;
+                throw new InvalidOperationException($"Configured process metric '{name}' has no threshold value.");
             }
 
-            TransferMetric? MatchTransfer(TransmissionThreshold? threshold, long? value, TransferMetricFormat rateFormat)
+            TransferMetric? MatchTransfer(string name, TransmissionThreshold? threshold, long? value, TransferMetricFormat rateFormat)
             {
-                if (threshold is not TransmissionThreshold minimum || value is not long bytes)
+                if (threshold is not TransmissionThreshold minimum)
                     return null;
 
-                var format = minimum.TimeUnit is null ? TransferMetricFormat.Bytes : rateFormat;
+                if (processCount == 0)
+                {
+                    watchMetrics.Add(name, false);
+                    return null;
+                }
+                if (value is not long bytes)
+                    throw new InvalidOperationException($"Configured process metric '{name}' cannot be read.");
 
-                return Include(Satisfies(minimum, bytes, sampleDuration)) ? new(bytes, format) : null;
+                var format = minimum.TimeUnit is null ? TransferMetricFormat.Bytes : rateFormat;
+                var matches = Satisfies(minimum, bytes, sampleDuration);
+                watchMetrics.Add(name, matches);
+
+                return matches ? new(bytes, format) : null;
             }
 
-            var result = new ProcessUsageMetrics(sampleDuration)
+            var result = new ProcessMetricsUsage(sampleDuration)
             {
-                Processor = Match(metrics.MinCPU, processor, ProcessorCapacity(sampleDuration)),
+                Processor = Match("CPU", metrics.MinCPU, processor, ProcessorCapacity(sampleDuration)),
                 // One engine busy for the full sample is 100%; simultaneous engines may exceed it.
-                GraphicsProcessor = Match(metrics.MinGPU, graphics, sampleDuration),
-                Storage = MatchTransfer(metrics.MinIO, storage, TransferMetricFormat.BytesPerSecond),
-                Traffic = MatchTransfer(metrics.MinTraffic, traffic, TransferMetricFormat.BitsPerSecond),
+                GraphicsProcessor = Match("GPU", metrics.MinGPU, graphics, sampleDuration),
+                Storage = MatchTransfer("IO", metrics.MinIO, storage, TransferMetricFormat.BytesPerSecond),
+                Traffic = MatchTransfer("Traffic", metrics.MinTraffic, traffic, TransferMetricFormat.BitsPerSecond),
             };
 
-            // A wholly unreadable set fails open: missing counters must not make a working process idle.
-            return demand || !measured ? result : null;
+            result.AddRange(watchMetrics);
+
+            return metrics.Watch.IsYield || metrics.Watch.Evaluate(result) ? result : null;
         }
 
         private void Start<T>(IProcess process, Dictionary<IProcess, Sample<T>> history,
@@ -226,6 +242,9 @@ namespace MadWizard.Desomnia.Processes
 
         private static bool Satisfies(TransmissionThreshold threshold, long bytes, TimeSpan sampleDuration)
         {
+            if (threshold.Amount == 0)
+                return true;
+
             double value = bytes;
             double minimum = threshold.Amount * threshold.ByteUnit!.Value;
 

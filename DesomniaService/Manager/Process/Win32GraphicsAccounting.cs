@@ -36,7 +36,7 @@ namespace MadWizard.Desomnia.Processes.Manager
         /**
          * The graphics time the process has consumed, zero for one the scheduler has no record
          * of, or null where nothing could be asked – no adapter, no handle – which the watch
-         * turns into its fail-open path rather than a phantom idle.
+         * reports as an unreadable configured metric.
          */
         internal static TimeSpan? QueryTime(int pid)
         {

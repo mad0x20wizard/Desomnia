@@ -1,4 +1,5 @@
 ﻿using MadWizard.Desomnia.Events;
+using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Processes.Manager;
 
 namespace MadWizard.Desomnia.Processes
@@ -34,7 +35,7 @@ namespace MadWizard.Desomnia.Processes
             }
         }
 
-        public required ProcessMetricsWatch? Metrics
+        public required ProcessMetricsWatch? MetricsWatch
         {
             private get; init
             {
@@ -51,31 +52,33 @@ namespace MadWizard.Desomnia.Processes
             }
         }
 
+        public ProcessWatchMetrics? Metrics => MetricsWatch?.Metrics;
+
         protected abstract bool ShouldWatchProcess(IProcess process);
 
         private bool WatchProcess(IProcess process)
         {
             if (_watchedProcesses.TryAdd(process.Id, process))
             {
-                Metrics?.Track(process);
+                MetricsWatch?.Track(process);
 
                 return true;
             }
 
             return false;
         }
-
         private bool UnWatchProcess(IProcess process)
         {
             if (_watchedProcesses.Remove(process.Id, out var watched))
             {
-                Metrics?.Untrack(watched);
+                MetricsWatch?.Untrack(watched);
 
                 // remove any processes, that are not longer watched children
                 while (_watchedProcesses.Values.FirstOrDefault(p => !ShouldWatchProcess(p)) is IProcess child)
                 {
                     _watchedProcesses.Remove(child.Id);
-                    Metrics?.Untrack(child);
+
+                    MetricsWatch?.Untrack(child);
                 }
 
                 return true;
@@ -87,13 +90,13 @@ namespace MadWizard.Desomnia.Processes
         #region Inspection
         protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
         {
-            ProcessUsageMetrics? metrics = null;
+            ProcessMetricsUsage? metrics = null;
 
-            if (Metrics is not null)
+            if (MetricsWatch is not null)
             {
-                if ((metrics = Metrics.TakeMeasurement(interval)) is null)
+                if ((metrics = MetricsWatch.TakeMeasurement(interval)) is null)
                 {
-                    yield break; // didn't satisfy the metrics minimum
+                    yield break; // the specified metrics weren't satisfied
                 }
             }
 

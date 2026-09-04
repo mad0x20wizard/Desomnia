@@ -8,8 +8,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 {
     /// <summary>
     /// The graphics threshold: minGPU deltas the graphics clock exactly like minCPU deltas the
-    /// processor's – same threshold type, same strict comparison – but fails open where a whole
-    /// platform cannot answer, the way the byte counters do.
+    /// processor's and reports an error when no matching process can supply the configured clock.
     /// </summary>
     public class ProcessWatchGPUTests
     {
@@ -23,6 +22,11 @@ namespace MadWizard.Desomnia.Processes.Tests
         private static ProcessWatch Watch(ProcessWatchInfo info, params IProcess[] processes)
         {
             return ProcessWatchTests.Watch(info, new FakeProcessSource(processes));
+        }
+
+        private static ProcessWatch Watch(ProcessWatchInfo info, ProcessMetric shared, params IProcess[] processes)
+        {
+            return ProcessWatchTests.Watch(info, new FakeProcessSource(processes), shared);
         }
 
         [Fact]
@@ -85,16 +89,17 @@ namespace MadWizard.Desomnia.Processes.Tests
         }
 
         [Fact]
-        public void ExactlyTheThreshold_IsIdle()
+        public void ZeroThreshold_AlwaysMatchesTheMeasuredMetric()
         {
-            // minGPU mirrors minCPU's strict '>' – reaching the threshold is not crossing it
             var game = new FakeProcess(101, "game") { Gpu = TimeSpan.Zero };
 
             var watch = Watch(Info(minGPU: new ProcessingThreshold(TimeSpan.Zero)), game);
 
-            watch.Inspect(TimeSpan.FromSeconds(2));
+            var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
 
-            Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(2)));
+            Assert.Equal(TimeSpan.Zero, usage.GraphicsProcessor?.Time);
+            Assert.True(usage["GPU"]);
+            Assert.Equal(2, game.GpuSamples);
         }
 
         [Fact]
@@ -122,7 +127,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         }
 
         [Fact]
-        public void UnansweredThreshold_FailsOpen()
+        public void UnansweredThreshold_IsAnError()
         {
             // a platform without a graphics clock answers null for every process; failing closed
             // would let that gap report the group idle – and onIdle can be 'stop'
@@ -130,26 +135,23 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var watch = Watch(Info(minGPU: TenMilliseconds), game);
 
-            Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
+            Assert.Throws<InvalidOperationException>(() => watch.Inspect(TimeSpan.FromSeconds(2)).ToArray());
         }
 
         [Fact]
-        public void UnansweredThreshold_StillVetoedByTheOthers()
+        public void UnansweredThreshold_IsAnErrorEvenWhenOtherMetricsAnswer()
         {
             var game = new FakeProcess(101, "game") { Cpu = TimeSpan.Zero, Gpu = null };
 
             var watch = Watch(Info(minGPU: TenMilliseconds, minCPU: TenMilliseconds), game);
 
-            watch.Inspect(TimeSpan.FromSeconds(2));
-
-            // the unmeasurable attribute degrades the watch to what the others still measure
-            Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(2)));
+            Assert.Throws<InvalidOperationException>(() => watch.Inspect(TimeSpan.FromSeconds(2)).ToArray());
         }
 
         [Fact]
         public void PartiallyAnsweredThreshold_DoesNotFailOpen()
         {
-            // fail-open is for "nobody can answer"; one process answering makes the measurement
+            // One process answering is enough to make the group measurement available.
             // real, and a real measurement below the threshold is idle
             var mute = new FakeProcess(101, "game") { Gpu = null };
             var quiet = new FakeProcess(102, "game") { Gpu = TimeSpan.Zero };
@@ -180,6 +182,21 @@ namespace MadWizard.Desomnia.Processes.Tests
         }
 
         [Fact]
+        public void ClockSteppingBackwards_EstablishesANewBaseline()
+        {
+            var game = new FakeProcess(101, "game") { Gpu = TimeSpan.FromSeconds(10) };
+            var watch = Watch(Info(minGPU: TenMilliseconds), game);
+
+            watch.Inspect(TimeSpan.FromSeconds(2));
+
+            game.Gpu = TimeSpan.Zero;
+            Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(2)));
+
+            game.Gpu = TimeSpan.FromMilliseconds(20);
+            Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
+        }
+
+        [Fact]
         public void ProcessJoiningTheGroup_DoesNotCountItsPastAsWork()
         {
             var game = new FakeProcess(101, "game") { Gpu = TimeSpan.Zero };
@@ -196,51 +213,47 @@ namespace MadWizard.Desomnia.Processes.Tests
         }
 
         [Fact]
-        public void ProcessesSharingAClock_CountItOnce()
+        public void EqualGraphicsValues_CountOnce()
         {
-            // macOS bills graphics time to a coalition, so an app and the helper it spawned read
-            // the same counter: summed per process, one interval of work would count twice and a
-            // group would cross a threshold it never reached
-            const ulong coalition = 22290;
+            var app = new FakeProcess(101, "game") { Gpu = TimeSpan.Zero };
+            var helper = new FakeProcess(102, "game") { Gpu = TimeSpan.Zero };
+            var info = Info(minGPU: new ProcessingThreshold(TimeSpan.FromMilliseconds(12)));
 
-            var app = new FakeProcess(101, "game") { Gpu = TimeSpan.Zero, Scope = coalition };
-            var helper = new FakeProcess(102, "game") { Gpu = TimeSpan.Zero, Scope = coalition };
-
-            var watch = Watch(Info(minGPU: TenMilliseconds), app, helper);
+            var watch = Watch(info, ProcessMetric.Graphics, app, helper);
 
             watch.Inspect(TimeSpan.FromSeconds(2));
 
-            // the one shared ledger advanced by 8ms, which is below the threshold – doubled it
-            // would be 16ms and would read as demand
             app.Gpu = helper.Gpu = TimeSpan.FromMilliseconds(8);
 
-            Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
+            Thread.Sleep(20);
+
+            // One normalized 8ms clock is below 12ms; counting the duplicate would exceed it.
+            Assert.Empty(watch.Inspect(System.Diagnostics.Stopwatch.GetElapsedTime(started)));
             Assert.Equal(3, app.GpuSamples);
-            Assert.Equal(0, helper.GpuSamples);
+            Assert.Equal(3, helper.GpuSamples);
         }
 
         [Fact]
-        public void ProcessJoiningASharedClock_DoesNotResetItsBaseline()
+        public void RemovingAProcessWithTheSameValue_KeepsTheOtherBaseline()
         {
-            const ulong coalition = 22290;
-
-            var app = new FakeProcess(101, "game") { Gpu = TimeSpan.Zero, Scope = coalition };
-            var source = new FakeProcessSource(app);
+            var app = new FakeProcess(101, "game") { Gpu = TimeSpan.Zero };
+            var helper = new FakeProcess(102, "game") { Gpu = TimeSpan.Zero };
+            var source = new FakeProcessSource(app, helper);
             var watch = ProcessWatchTests.Watch(Info(minGPU: TenMilliseconds), source);
 
-            Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(10)));
+            Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(2)));
 
-            var helper = new FakeProcess(102, "game") { Gpu = TimeSpan.Zero, Scope = coalition };
-            source.Start(helper);
+            source.Stop(app);
+            helper.Gpu = TimeSpan.FromMilliseconds(500);
 
-            Assert.Equal(0, helper.GpuSamples); // the coalition already has a current baseline
+            Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
         }
 
         [Fact]
         public void ProcessesWithTheirOwnClocks_StillAddUp()
         {
-            // the counterpart: where a platform accounts per process, every process is its own
-            // scope and the group total is the sum it always was
+            // Different values represent distinct GPU clocks and are both included.
             var one = new FakeProcess(101, "game") { Gpu = TimeSpan.Zero };
             var two = new FakeProcess(102, "game") { Gpu = TimeSpan.Zero };
 
@@ -248,11 +261,12 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             watch.Inspect(TimeSpan.FromSeconds(2));
 
-            one.Gpu = two.Gpu = TimeSpan.FromMilliseconds(8); // 16ms between them
+            one.Gpu = TimeSpan.FromMilliseconds(8);
+            two.Gpu = TimeSpan.FromMilliseconds(9);
 
             var token = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
 
-            Assert.True(token.Metrics().GraphicsProcessor?.Time >= TimeSpan.FromMilliseconds(16));
+            Assert.True(token.Metrics().GraphicsProcessor?.Time >= TimeSpan.FromMilliseconds(17));
             Assert.Equal(3, one.GpuSamples);
             Assert.Equal(3, two.GpuSamples);
         }
@@ -260,7 +274,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         [Fact]
         public void EmptyRoster_YieldsNothingDespiteFailOpen()
         {
-            // an empty group must not ride the fail-open path into a phantom demand token
+            // A user-facing process resource still requires at least one matching process.
             var watch = Watch(Info(minGPU: TenMilliseconds));
 
             Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(2)));

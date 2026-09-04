@@ -23,4 +23,4 @@ The formats match ``minIO``:
 
 A number without a binary unit is rejected, as for ``minIO``.
 
-If several thresholds are configured, **all** of them have to be met for the group to count as active — unless ``min="or"`` is set, where any single one is enough.
+Use the ``watch`` expression to combine this result with other configured metrics.

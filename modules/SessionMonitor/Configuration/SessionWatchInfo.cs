@@ -8,21 +8,23 @@ namespace MadWizard.Desomnia.Session.Configuration
     {
         public SessionWatchInfo()
         {
-            Watch = WatchOperator.OR;
+            Watch = WatchExpression.DefaultOR;
         }
-
-        public TimeSpan? MaxLastInputTime { get; set; }
 
         #region Session :: WatchInputOptions
         protected bool? WatchInput { get; set; }
         protected bool? WatchInputRemote { get; set; }
         protected bool? WatchInputDisconnected { get; set; }
 
+        protected internal TimeSpan? MaxLastInputTime { get; set; }
+
         public virtual WatchInputOptions? MakeWatchInputOptions(SessionMonitorConfig config) =>
             this.WatchInput ?? config.WatchInput ? new()
             {
                 Remote = this.WatchInputRemote ?? config.WatchInputRemote,
                 Disconnected = this.WatchInputDisconnected ?? config.WatchInputDisconnected,
+
+                MaxLastInputTime = this.MaxLastInputTime ?? config.MaxLastInputTime
             } : null;
         #endregion
 

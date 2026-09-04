@@ -11,9 +11,9 @@ namespace MadWizard.Desomnia.Processes.Tests
         /// that it carries metrics at all: a watch with thresholds that yields a bare token has
         /// lost the measurement its demand was decided on.
         /// </summary>
-        internal static ProcessUsageMetrics Metrics(this UsageToken token)
+        internal static ProcessMetricsUsage Metrics(this UsageToken token)
         {
-            return Assert.IsType<ProcessUsageMetrics>(Assert.IsType<ProcessUsage>(token).Metrics);
+            return Assert.IsType<ProcessMetricsUsage>(Assert.IsType<ProcessUsage>(token).Metrics);
         }
     }
 
@@ -51,11 +51,6 @@ namespace MadWizard.Desomnia.Processes.Tests
 
         /// <summary>The graphics time to report; null is a platform without a graphics clock.</summary>
         public TimeSpan? Gpu { get; set; }
-
-        /// <summary>Whose clock <see cref="Gpu"/> is – set the same value on two processes to share one.</summary>
-        public object? Scope { get; set; }
-
-        public object GraphicsProcessorScope => Scope ?? this;
 
         /// <summary>How often the graphics clock was asked — proof a cycle did (not) sample.</summary>
         public int GpuSamples { get; private set; }
@@ -110,12 +105,13 @@ namespace MadWizard.Desomnia.Processes.Tests
     /// A platform that keeps every counter, which is what the measurement tests are about. One
     /// that keeps fewer is stated per test — see <see cref="ProcessMetricValidationTests"/>.
     /// </summary>
-    internal sealed class FakeMetricSupport(ProcessMetric measurable) : IProcessMetricSupport
+    internal sealed class FakeMetricSupport(ProcessMetric measurable, ProcessMetric shared = ProcessMetric.None) : IProcessMetricSupport
     {
         internal static readonly FakeMetricSupport Everything =
             new(ProcessMetric.Processor | ProcessMetric.Graphics | ProcessMetric.Storage | ProcessMetric.Traffic);
 
         public ProcessMetric SupportedMetrics => measurable;
+        public ProcessMetric SharedMetrics => shared;
     }
 
     /// <summary>A fixed roster of processes instead of a live OS enumeration.</summary>

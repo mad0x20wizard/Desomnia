@@ -32,18 +32,19 @@ namespace MadWizard.Desomnia.Processes.Tests
         /// The container as the module builds it: the platform's counters, the watch registrations,
         /// and the hook that puts the validation on every one of them.
         /// </summary>
-        private static IContainer Container(ProcessMetric supported)
+        private static IContainer Container(ProcessMetric supported, ProcessMetric shared = ProcessMetric.None,
+            IProcessManager? manager = null)
         {
             var builder = new ContainerBuilder();
 
-            builder.RegisterInstance(new FakeMetricSupport(supported)).As<IProcessMetricSupport>();
-            builder.RegisterInstance(new FakeProcessSource()).As<IProcessManager>();
+            builder.RegisterInstance(new FakeMetricSupport(supported, shared)).As<IProcessMetricSupport>();
+            builder.RegisterInstance(manager ?? new FakeProcessSource()).As<IProcessManager>();
 
             builder.ComponentRegistryBuilder.Registered += (sender, args) =>
             {
                 if (args.ComponentRegistration.IsLimitedTo<ProcessWatch>())
                     args.ComponentRegistration.PipelineBuilding += (_, pipeline) =>
-                        pipeline.Use(new ProcessMetricValidation());
+                        pipeline.Use(new ProcessMetricWatchBuilder());
             };
 
             builder.RegisterType<PatternProcessWatch>().PropertiesAutowired().AsSelf();
@@ -95,6 +96,41 @@ namespace MadWizard.Desomnia.Processes.Tests
         }
 
         [Fact]
+        public void SharedMetrics_AreSuppliedToTheResolvedMetricsWatch()
+        {
+            var app = new FakeProcess(101, "game") { Gpu = TimeSpan.Zero };
+            var helper = new FakeProcess(102, "game") { Gpu = TimeSpan.Zero };
+            var source = new FakeProcessSource(app, helper);
+            var info = Info(minGPU: TenMilliseconds);
+            using var container = Container(ProcessMetric.Graphics, ProcessMetric.Graphics, source);
+
+            var watch = Resolve(container, info);
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
+
+            Thread.Sleep(20);
+            app.Gpu = helper.Gpu = TimeSpan.FromMilliseconds(8);
+
+            // One shared 8ms clock is below 10ms; without the supplied shared flag the two
+            // processes would be summed to 16ms and incorrectly satisfy the threshold.
+            Assert.Empty(watch.Inspect(System.Diagnostics.Stopwatch.GetElapsedTime(started)));
+            Assert.Equal(2, app.GpuSamples);
+            Assert.Equal(2, helper.GpuSamples);
+        }
+
+        [Fact]
+        public void Composite_CombinesSupportedAndSharedMetricsIndependently()
+        {
+            IProcessMetricSupport combined = new ProcessMetricSupportCollector([
+                new FakeMetricSupport(ProcessMetric.Processor),
+                new FakeMetricSupport(ProcessMetric.Graphics, ProcessMetric.Graphics),
+                new FakeMetricSupport(ProcessMetric.Traffic),
+            ]);
+
+            Assert.Equal(ProcessMetric.Processor | ProcessMetric.Graphics | ProcessMetric.Traffic, combined.SupportedMetrics);
+            Assert.Equal(ProcessMetric.Graphics, combined.SharedMetrics);
+        }
+
+        [Fact]
         public void OneUnsupportedAttributeAmongSupportedOnes_StillRefuses()
         {
             // refused whole: honouring the measurable half would leave the other silently out of a
@@ -116,6 +152,19 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             Assert.IsType<FormatException>(Cause(Assert.ThrowsAny<Exception>(() => Resolve(container, Info(minIO: bare)))));
             Assert.IsType<FormatException>(Cause(Assert.ThrowsAny<Exception>(() => Resolve(container, Info(minTraffic: bare)))));
+        }
+
+        [Fact]
+        public void UnitlessZeroThreshold_IsConfiguredButNeedsNoUnit()
+        {
+            var zero = new TransmissionThreshold { Amount = 0 };
+
+            using var supported = Container(ProcessMetric.Storage | ProcessMetric.Traffic);
+            Assert.NotNull(Resolve(supported, Info(minIO: zero, minTraffic: zero)));
+
+            using var unsupported = Container(ProcessMetric.None);
+            Assert.IsType<PlatformNotSupportedException>(
+                Cause(Assert.ThrowsAny<Exception>(() => Resolve(unsupported, Info(minIO: zero)))));
         }
 
         [Fact]
@@ -159,8 +208,10 @@ namespace MadWizard.Desomnia.Processes.Tests
         }
 
         /// <summary>Stands in for AnySessionProcessWatch: registered per session, not by the module.</summary>
-        private sealed class ChildScopeProcessWatch(ProcessWatchMetrics metrics) : ProcessWatch(metrics, "child")
+        private sealed class ChildScopeProcessWatch : ProcessWatch
         {
+            public ChildScopeProcessWatch(ProcessWatchMetrics metrics) : base("child") { }
+
             protected override bool ShouldWatchProcess(IProcess process) => true;
         }
 

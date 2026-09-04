@@ -9,7 +9,7 @@ namespace MadWizard.Desomnia.Processes.Tests
     /// <summary>
     /// The byte-counter thresholds: minIO and minTraffic delta the same kind of monotonic counter
     /// the CPU threshold does, chain with it by 'and', and — where a platform cannot answer at
-    /// all — fail open rather than report a working group idle.
+    /// all; a configured counter that no process can supply is an inspection error.
     /// </summary>
     public class ProcessWatchIOTests
     {
@@ -69,6 +69,19 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             Thread.Sleep(20);
             Assert.Empty(watch.Inspect(TimeSpan.FromMilliseconds(1)));
+        }
+
+        [Fact]
+        public void UnitlessZeroThreshold_AlwaysMatchesTheMeasuredMetric()
+        {
+            var chrome = new FakeProcess(101, "chrome") { Disk = new ProcessInputOutput(0, 0) };
+            var watch = Watch(Info(minIO: new TransmissionThreshold { Amount = 0 }), chrome);
+
+            var usage = Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2))).Metrics();
+
+            Assert.Equal(0, usage.Storage?.Bytes);
+            Assert.True(usage["IO"]);
+            Assert.Equal(2, chrome.DiskSamples);
         }
 
         [Fact]
@@ -172,7 +185,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         [Fact]
         public void PartiallyAnsweredThreshold_DoesNotFailOpen()
         {
-            // fail-open is for "nobody can answer"; one process answering makes the measurement
+            // One process answering is enough to make the group measurement available.
             // real, and a real measurement below the threshold is idle
             var mute = new FakeProcess(101, "chrome") { Disk = null };
             var quiet = new FakeProcess(102, "chrome") { Disk = new ProcessInputOutput(0, 0) };
@@ -187,14 +200,14 @@ namespace MadWizard.Desomnia.Processes.Tests
         [Fact]
         public void EmptyRoster_YieldsNothingDespiteFailOpen()
         {
-            // an empty group must not ride the fail-open path into a phantom demand token
+            // A user-facing process resource still requires at least one matching process.
             var watch = Watch(Info(minTraffic: OneMegabyte));
 
             Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(2)));
         }
 
         [Fact]
-        public void UnansweredThreshold_FailsOpen()
+        public void UnansweredThreshold_IsAnError()
         {
             // a platform with no meter answers null for every process; failing closed would let
             // that measurement gap report the group idle – and onIdle can be 'stop'
@@ -202,11 +215,11 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var watch = Watch(Info(minTraffic: OneMegabyte), chrome);
 
-            Assert.Single(watch.Inspect(TimeSpan.FromSeconds(2)));
+            Assert.Throws<InvalidOperationException>(() => watch.Inspect(TimeSpan.FromSeconds(2)).ToArray());
         }
 
         [Fact]
-        public void UnansweredThreshold_StillVetoedByTheOthers()
+        public void UnansweredThreshold_IsAnErrorEvenWhenOtherMetricsAnswer()
         {
             var chrome = new FakeProcess(101, "chrome") { Cpu = TimeSpan.Zero, Net = null };
 
@@ -214,10 +227,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             var watch = Watch(info, chrome);
 
-            watch.Inspect(TimeSpan.FromSeconds(2));
-
-            // the unmeasurable attribute degrades the watch to what the others still measure
-            Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(2)));
+            Assert.Throws<InvalidOperationException>(() => watch.Inspect(TimeSpan.FromSeconds(2)).ToArray());
         }
 
         [Fact]

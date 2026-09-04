@@ -10,8 +10,8 @@ namespace MadWizard.Desomnia.Processes.Tests
         [Fact]
         public void NullLeftOperand_ReturnsRightOperand()
         {
-            ProcessUsageMetrics? left = null;
-            var right = new ProcessUsageMetrics(SampleDuration)
+            ProcessMetricsUsage? left = null;
+            var right = new ProcessMetricsUsage(SampleDuration)
             {
                 Processor = new(TimeSpan.FromSeconds(5), SampleDuration, ProcessingMetricFormat.Percentage),
             };
@@ -27,8 +27,8 @@ namespace MadWizard.Desomnia.Processes.Tests
             var storage = new TransferMetric(3, TransferMetricFormat.Bytes);
             var traffic = new TransferMetric(4, TransferMetricFormat.BitsPerSecond);
 
-            var left = new ProcessUsageMetrics(SampleDuration) { Processor = processor, Storage = storage };
-            var right = new ProcessUsageMetrics(SampleDuration) { GraphicsProcessor = graphics, Traffic = traffic };
+            var left = new ProcessMetricsUsage(SampleDuration) { Processor = processor, Storage = storage };
+            var right = new ProcessMetricsUsage(SampleDuration) { GraphicsProcessor = graphics, Traffic = traffic };
 
             var result = left | right;
 
@@ -42,14 +42,14 @@ namespace MadWizard.Desomnia.Processes.Tests
         [Fact]
         public void OverlappingValues_KeepTheWholeGreatestMeasurement()
         {
-            var left = new ProcessUsageMetrics(SampleDuration)
+            var left = new ProcessMetricsUsage(SampleDuration)
             {
                 Processor = new(TimeSpan.FromSeconds(7), SampleDuration, ProcessingMetricFormat.Percentage),
                 GraphicsProcessor = new(TimeSpan.FromSeconds(1), SampleDuration, ProcessingMetricFormat.Time),
                 Storage = new(100, TransferMetricFormat.Bytes),
                 Traffic = new(700, TransferMetricFormat.Bytes),
             };
-            var right = new ProcessUsageMetrics(SampleDuration)
+            var right = new ProcessMetricsUsage(SampleDuration)
             {
                 Processor = new(TimeSpan.FromSeconds(2), SampleDuration, ProcessingMetricFormat.Time),
                 GraphicsProcessor = new(TimeSpan.FromSeconds(8), SampleDuration, ProcessingMetricFormat.Percentage),
@@ -68,8 +68,8 @@ namespace MadWizard.Desomnia.Processes.Tests
         [Fact]
         public void DifferentSampleDurations_CannotBeCombined()
         {
-            var left = new ProcessUsageMetrics(TimeSpan.FromSeconds(1));
-            var right = new ProcessUsageMetrics(TimeSpan.FromSeconds(2));
+            var left = new ProcessMetricsUsage(TimeSpan.FromSeconds(1));
+            var right = new ProcessMetricsUsage(TimeSpan.FromSeconds(2));
 
             Assert.Throws<ArgumentException>(() => left | right);
         }

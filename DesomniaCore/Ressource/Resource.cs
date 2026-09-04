@@ -62,16 +62,21 @@ namespace MadWizard.Desomnia
             var tokens = InspectResource(interval).ToArray();
             watch.Stop();
 
-            if (tokens.Length == 0)
+            HandleInspectionResult(watch.Elapsed, tokens);
+
+            return tokens;
+        }
+
+        protected virtual void HandleInspectionResult(TimeSpan duration, IEnumerable<UsageToken> tokens)
+        {
+            if (tokens.Any())
             {
-                TriggerIdle(new InspectionEvent(nameof(Idle)) { Duration = watch.Elapsed, Tokens = tokens });
+                TriggerDemand(new InspectionEvent(nameof(Demand)) { Duration = duration, Tokens = tokens });
             }
             else
             {
-                TriggerDemand(new InspectionEvent(nameof(Demand)) { Duration = watch.Elapsed, Tokens = tokens });
+                TriggerIdle(new InspectionEvent(nameof(Idle)) { Duration = duration, Tokens = tokens });
             }
-
-            return tokens;
         }
 
         protected abstract IEnumerable<UsageToken> InspectResource(TimeSpan interval);
