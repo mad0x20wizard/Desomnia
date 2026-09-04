@@ -54,7 +54,7 @@ namespace MadWizard.Desomnia.Processes
 
         public ProcessWatchMetrics? Metrics => MetricsWatch?.Metrics;
 
-        #region Process Management
+        #region Process management
         protected abstract bool ShouldWatchProcess(IProcess process);
 
         private bool WatchProcess(IProcess process)
