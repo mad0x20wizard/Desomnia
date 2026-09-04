@@ -54,6 +54,7 @@ namespace MadWizard.Desomnia.Processes
 
         public ProcessWatchMetrics? Metrics => MetricsWatch?.Metrics;
 
+        #region Process Management
         protected abstract bool ShouldWatchProcess(IProcess process);
 
         private bool WatchProcess(IProcess process)
@@ -67,6 +68,7 @@ namespace MadWizard.Desomnia.Processes
 
             return false;
         }
+
         private bool UnWatchProcess(IProcess process)
         {
             if (_watchedProcesses.Remove(process.Id, out var watched))
@@ -85,28 +87,6 @@ namespace MadWizard.Desomnia.Processes
             }
 
             return false;
-        }
-
-        #region Inspection
-        protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
-        {
-            ProcessMetricsUsage? metrics = null;
-
-            if (MetricsWatch is not null)
-            {
-                if ((metrics = MetricsWatch.TakeMeasurement(interval)) is null)
-                {
-                    yield break; // the specified metrics weren't satisfied
-                }
-            }
-
-            lock (_watchedProcesses)
-            {
-                if (_watchedProcesses.Count > 0)
-                {
-                    yield return new ProcessUsage(name) { Metrics = metrics };
-                }
-            }
         }
         #endregion
 
@@ -136,25 +116,47 @@ namespace MadWizard.Desomnia.Processes
         }
         #endregion
 
+        #region Inspection
+        protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
+        {
+            ProcessMetricsUsage? metrics = null;
+
+            if (MetricsWatch is not null)
+            {
+                if ((metrics = MetricsWatch.TakeMeasurement(interval)) is null)
+                {
+                    yield break; // the specified metrics weren't satisfied
+                }
+            }
+
+            lock (_watchedProcesses)
+            {
+                if (_watchedProcesses.Count > 0)
+                {
+                    yield return new ProcessUsage(name) { Metrics = metrics };
+                }
+            }
+        }
+        #endregion
+
         #region Action handlers
         [ActionHandler("stop")]
         internal async Task HandleActionStop(TimeSpan timeout = default) // TODO implement passing of timeout
         {
+            IProcess[] TakeSnapshot()
+            {
+                lock (_watchedProcesses)
+                {
+                    return [.. _watchedProcesses.Values];
+                }
+            }
+
             foreach (var process in TakeSnapshot())
             {
                 await process.Stop(timeout);
             }
         }
         #endregion
-
-        /// <summary>The watched processes as they were a moment ago; safe to walk while they change.</summary>
-        private IProcess[] TakeSnapshot()
-        {
-            lock (_watchedProcesses)
-            {
-                return [.. _watchedProcesses.Values];
-            }
-        }
 
         public override void Dispose()
         {
