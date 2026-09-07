@@ -1,4 +1,3 @@
-using MadWizard.Desomnia.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Reflection;
@@ -101,7 +100,7 @@ namespace MadWizard.Desomnia.Events
 
         /// <summary>Veto seam: return false to stop the trigger entirely (nothing else
         /// happens — no cancel enforcement, no handlers, no actions).</summary>
-        protected virtual bool OnEventTriggering(Event @event) => true;
+        protected virtual bool ShouldTriggerEvent(Event @event) => true;
 
         protected virtual void OnEventTriggered(Event @event) { }
 
@@ -171,10 +170,10 @@ namespace MadWizard.Desomnia.Events
                 if (!_events.TryGetValue(name, out var type))
                     throw new KeyNotFoundException($"{GetType().Name} has no event '{name}'");
 
-                if (type is not EventType actionType)
+                if (type is not EventType eventType)
                     throw new InvalidOperationException($"'{name}' is a filter event on {GetType().Name} — filters have no trigger/action surface");
 
-                return actionType;
+                return eventType;
             }
         }
 
@@ -315,11 +314,11 @@ namespace MadWizard.Desomnia.Events
                 return;
             }
 
-            if (!OnEventTriggering(@event))
-                return;                                       // vetoed events cancel nothing (§6.1)
-
             foreach (var name in type.EffectiveCancels)       // lock-free coherent snapshot
                 FindEventType(name)?.CancelActions();
+
+            if (!ShouldTriggerEvent(@event))
+                return;
 
             @event.Source = this;
 

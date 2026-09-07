@@ -1,4 +1,5 @@
 ﻿using MadWizard.Desomnia.Configuration;
+using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network.Demand;
 using PacketDotNet;
 
@@ -26,6 +27,8 @@ namespace MadWizard.Desomnia.Network.Watch
                 _countBytesOut += bytes ?? 0;
                 _countPacketsOut += 1;
             }
+
+            ((IEventSystem)this)[nameof(Idle)].CancelActions();
         }
 
         protected internal virtual void ReportNetworkTraffic(EthernetPacket packet, PacketDirection direction)

@@ -97,7 +97,7 @@ namespace MadWizard.Desomnia.Network.Watch
         }
 
 
-        protected override bool OnEventTriggering(Event @event)
+        protected override bool ShouldTriggerEvent(Event @event)
         {
             if (@event.Type == nameof(Idle) && IsOnline != true)
                 return false; // only trigger "Idle" events if the VM is running
@@ -105,7 +105,7 @@ namespace MadWizard.Desomnia.Network.Watch
             if (@event.Type == nameof(Demand) && (IsOnline == true || @event is InspectionEvent))
                 return false; // only trigger "Demand" events if the VM is NOT running
 
-            return base.OnEventTriggering(@event);
+            return base.ShouldTriggerEvent(@event);
         }
 
         private void VM_StateChanged(object? sender, VirtualMachineStateChangedEventArgs args)

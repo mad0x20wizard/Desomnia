@@ -3,7 +3,7 @@ using MadWizard.Desomnia.Session.Configuration;
 
 namespace MadWizard.Desomnia.Service.Duo.Configuration
 {
-    public class DuoInstanceInfo : SessionWatchInfo
+    public record DuoInstanceInfo : SessionWatchInfo
     {
         public required string Name { get; set; }
 

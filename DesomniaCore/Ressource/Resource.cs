@@ -67,6 +67,8 @@ namespace MadWizard.Desomnia
             return tokens;
         }
 
+        protected abstract IEnumerable<UsageToken> InspectResource(TimeSpan interval);
+
         protected virtual void HandleInspectionResult(TimeSpan duration, IEnumerable<UsageToken> tokens)
         {
             if (tokens.Any())
@@ -78,8 +80,6 @@ namespace MadWizard.Desomnia
                 TriggerIdle(new InspectionEvent(nameof(Idle)) { Duration = duration, Tokens = tokens });
             }
         }
-
-        protected abstract IEnumerable<UsageToken> InspectResource(TimeSpan interval);
 
         protected internal virtual void StopTrackingBy(ResourceMonitor monitor)
         {
