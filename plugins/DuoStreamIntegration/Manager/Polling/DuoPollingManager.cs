@@ -1,80 +1,85 @@
-﻿using MadWizard.Desomnia.Service.Duo.Configuration;
+using MadWizard.Desomnia.Service.Duo.Configuration;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel;
 using System.ServiceProcess;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager
 {
-    internal class DuoPollingManager(DuoSessionMonitorConfig config) : DuoManager(config)
+    internal class DuoPollingManager : DuoManager
     {
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        private readonly DuoSessionMonitorConfig _config;
+
+        public DuoPollingManager(DuoSessionMonitorConfig config) : base(config)
         {
+            _config = config;
+        }
+
+        protected override async Task RunAsync(CancellationToken stoppingToken)
+        {
+            var serviceNotFound = false;
+
             try
             {
-                bool serviceNotFound = false;
-                var status = ServiceControllerStatus.Stopped;
-                while (config != null && !stoppingToken.IsCancellationRequested)
+                while (!stoppingToken.IsCancellationRequested)
                 {
                     try
                     {
                         Service.Refresh();
 
-                        switch (Service.Status)
+                        if (Service.Status == ServiceControllerStatus.Running && Service.PID is uint processId)
                         {
-                            case ServiceControllerStatus.Running when status == ServiceControllerStatus.Stopped:
-                                await TriggerStarted();
-                                Logger.LogDebug("Polling instances every {refresh}", config.PollInterval);
-                                break;
+                            if (ServicePID != processId || IsGenerationInvalidated)
+                            {
+                                if (ServicePID is uint previousProcessId && previousProcessId != processId)
+                                {
+                                    Logger.LogWarning(
+                                        "Duo service PID changed from {previousPID} to {currentPID} between polls.",
+                                        previousProcessId,
+                                        processId);
+                                }
 
-                            case ServiceControllerStatus.Running:
-                                await TriggerRefresh();
-                                break;
-
-                            case ServiceControllerStatus.Stopped when status == ServiceControllerStatus.Running:
-                                TriggerStopped();
-                                break;
-
-                            // ignore these
-                            case ServiceControllerStatus.StartPending:
-                            case ServiceControllerStatus.StopPending:
-                                goto wait;
+                                await TriggerStopped();
+                                await TriggerStarted(processId, stoppingToken);
+                                Logger.LogDebug("Polling instances every {refresh}", _config.PollInterval);
+                            }
+                            else
+                            {
+                                await TriggerRefresh(stoppingToken);
+                            }
                         }
-
-                        status = Service.Status;
+                        else
+                        {
+                            await TriggerStopped();
+                        }
 
                         serviceNotFound = false;
                     }
-                    catch (InvalidOperationException ex) when (ex.InnerException is Win32Exception win && win.NativeErrorCode == 1060)
+                    catch (InvalidOperationException ex) when (
+                        ex.InnerException is Win32Exception { NativeErrorCode: 1060 })
                     {
-                        if (status == ServiceControllerStatus.Running)
-                        {
-                            // uninstalled while running — reset the state
-                            // machine, or a reinstall never re-triggers
-                            TriggerStopped(); 
-                                              
+                        await TriggerStopped();
 
-                            status = ServiceControllerStatus.Stopped;
-                        }
-
-                        if (!serviceNotFound) // log only once
+                        if (!serviceNotFound)
                         {
                             Logger.LogWarning(ex, "Duo service not found.");
-
                             serviceNotFound = true;
                         }
                     }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
                     catch (Exception ex)
                     {
-                        Logger.LogError(ex, "Error checking instances.");
+                        Logger.LogError(ex, "Error checking Duo instances.");
                     }
 
-                wait:  
-                    await Task.Delay(config.PollInterval, stoppingToken);
+                    await Task.Delay(_config.PollInterval, stoppingToken);
                 }
             }
-            catch (TaskCanceledException)
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
-                // we need no more status updates
+                // Normal hosted-service shutdown.
             }
         }
     }

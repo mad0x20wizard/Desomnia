@@ -13,6 +13,8 @@ namespace MadWizard.Desomnia
         public event EventHandler<InspectableEventArgs<T>>? TrackingStarted;
         public event EventHandler<InspectableEventArgs<T>>? TrackingStopped;
 
+        public event EventHandler<TimeSpan>? InspectResources;
+
         // mutated on observer threads (explicit hand-off, §7.2) while the inspection
         // loop enumerates — guarded, with snapshot-on-enumerate
         private readonly HashSet<T> _inspectables = [];
@@ -95,6 +97,8 @@ namespace MadWizard.Desomnia
 
         protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
         {
+            InspectResources?.Invoke(this, interval);
+
             foreach (var inspectable in TakeSnapshot())
                 if (ShouldInspectResource(inspectable))
                 {

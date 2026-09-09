@@ -19,7 +19,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine
                 }
                 else
                 {
-                    instance.Inspected += Instance_Inspected; // delegate inspection event
+                    instance.InspectResources += Instance_Inspected; // delegate inspection event
                 }
 
                 _watches[instance] = watch;
@@ -49,7 +49,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine
             {
                 watch.Demand -= instance.NetworkServiceWatch_Demand;
 
-                instance.Inspected -= Instance_Inspected;
+                instance.InspectResources -= Instance_Inspected;
 
                 instance.StopTracking(watch);
             }

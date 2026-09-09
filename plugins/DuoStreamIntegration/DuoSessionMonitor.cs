@@ -17,19 +17,19 @@ namespace MadWizard.Desomnia.Service.Duo
             manager.Stopped += DuoService_Stopped;
         }
 
-        private void DuoService_Started(object? sender, EventArgs e)
+        private void DuoService_Started(object? sender, DuoLifecycleEventArgs args)
         {
-            foreach (var instance in manager)
+            foreach (var instance in args.Instances)
             {
                 this.StartTracking(instance);
             }
         }
 
-        private void DuoService_Stopped(object? sender, EventArgs e)
+        private void DuoService_Stopped(object? sender, DuoLifecycleEventArgs args)
         {
             Logger.LogInformation($"Service has stopped. Monitoring will be suspended.");
 
-            foreach (var instance in this)
+            foreach (var instance in args.Instances)
             {
                 this.StopTracking(instance);
             }
@@ -39,36 +39,24 @@ namespace MadWizard.Desomnia.Service.Duo
         [ActionHandler("start")]
         internal async Task HandleActionStart(DuoInstance instance)
         {
-            if (await instance.Semaphore.WaitAsync(0))
-            {
-                try
-                {
-                    if (instance.IsRunning == false)
-                        await manager.Start(instance);
-                }
-                finally
-                {
-                    instance.Semaphore.Release();
-                }
-            }
+            if (instance.IsRunning == false)
+                await manager.Start(instance);
         }
 
         [ActionHandler("stop")]
         internal async Task HandleActionStop(DuoInstance instance)
         {
-            if (await instance.Semaphore.WaitAsync(0))
-            {
-                try
-                {
-                    if (instance.IsRunning == true)
-                        await manager.Stop(instance);
-                }
-                finally
-                {
-                    instance.Semaphore.Release();
-                }
-            }
+            if (instance.IsRunning == true)
+                await manager.Stop(instance);
         }
         #endregion
+
+        public override void Dispose()
+        {
+            manager.Started -= DuoService_Started;
+            manager.Stopped -= DuoService_Stopped;
+
+            base.Dispose();
+        }
     }
 }

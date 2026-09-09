@@ -16,73 +16,86 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
 
         private NetworkHostContext LocalHostContext => Context.First(ctx => ctx.Host is LocalHost);
 
-        readonly Dictionary<DuoInstance, SunshineServiceContext> _contexts = [];
+        volatile Dictionary<DuoInstance, SunshineServiceContext>? _contexts;
 
         async Task INetworkService.Startup()
         {
             LocalHostContext.Watch?.InspectionFilter += IsNotSunshineServiceWatch;
 
-            // subscribe first — a Started fired mid-WatchInstances is then
-            // deduplicated by the ContainsKey guard instead of being missed
-            manager.Started += WatchInstances;
-            manager.Stopped += UnWatchInstances;
+            _contexts = [];
 
-            WatchInstances();
+            manager.Started += Manager_Started;
+            manager.Stopped += Manager_Stopped;
+
+            WatchInstances([.. manager]);
         }
 
-        private void WatchInstances(object? sender = null, EventArgs? e = null)
+        private void Manager_Started(object? sender, DuoLifecycleEventArgs args)
         {
-            foreach (var instance in manager) using (Context.Network.Mutex.Lock())
+            WatchInstances(args.Instances);
+        }
+
+        private void WatchInstances(IEnumerable<DuoInstance> instances)
+        {
+            using (Context.Network.Mutex.Lock()) if (_contexts is not null)
             {
-                if (_contexts.ContainsKey(instance))
-                    continue; // Startup() raced manager.Started for the same generation
-
-                try
+                foreach (var instance in instances.Where(i => !_contexts.ContainsKey(i)))
                 {
-                    Logger.LogInformation($"Monitoring {instance}:{instance.Port}" + (instance.IsRunning == true ? " (running)" : ""));
+                    try
+                    {
+                        Logger.LogInformation($"Monitoring {instance.ToString()}:{instance.Port}" + (instance.IsRunning == true ? " (running)" : ""));
 
-                    var context = LocalHostContext.CreateWatchedService<SunshineServiceContext>
-                    (
-                        TypedParameter.From(instance.Service), 
-                        TypedParameter.From(instance.Info.MinStreamTraffic)
-                    );
+                        var context = LocalHostContext.CreateWatchedService<SunshineServiceContext>
+                        (
+                            TypedParameter.From(instance.Service),
+                            TypedParameter.From(instance.Info.MinStreamTraffic)
+                        );
 
-                    RegisterWatch(instance, context.Watch);
+                        RegisterWatch(instance, context.Watch);
 
-                    _contexts.Add(instance, context);
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogError(ex, $"NOT Monitoring {instance}:{instance.Port} -> could not create service context");
+                        _contexts.Add(instance, context);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, $"NOT Monitoring {instance.ToString()}:{instance.Port} -> could not create service context");
+                    }
                 }
             }
         }
 
         private bool IsNotSunshineServiceWatch(NetworkServiceWatch watch) => watch.Service is not SunshineService;
 
-        private void UnWatchInstances(object? sender = null, EventArgs? e = null)
+        private void UnWatchInstances(IEnumerable<DuoInstance> instances)
         {
-            using (Context.Network.Mutex.Lock())
+            using (Context.Network.Mutex.Lock()) if (_contexts is not null)
             {
-                foreach ((var instance, var ctx) in _contexts)
+                foreach (var instance in instances.ToArray())
                 {
-                    UnregisterWatch(instance, ctx.Watch);
+                    if (_contexts.Remove(instance, out var ctx))
+                    {
+                        UnregisterWatch(instance, ctx.Watch);
 
-                    ctx.Dispose();
+                        ctx.Dispose();
+                    }
                 }
-
-                _contexts.Clear();
             }
+        }
+
+        private void Manager_Stopped(object? sender, DuoLifecycleEventArgs args)
+        {
+            UnWatchInstances(args.Instances);
         }
 
         async Task INetworkService.Shutdown(NetworkShutdownReason reason)
         {
+            manager.Stopped -= Manager_Stopped;
+            manager.Started -= Manager_Started;
+
+            UnWatchInstances(_contexts!.Keys);
+
+            _contexts = null;
+
             LocalHostContext.Watch?.InspectionFilter -= IsNotSunshineServiceWatch;
-
-            manager.Stopped -= UnWatchInstances;
-            manager.Started -= WatchInstances;
-
-            UnWatchInstances();
         }
     }
 }

@@ -17,9 +17,9 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
             manager.Stopped += DuoService_Stopped;
         }
 
-        private void DuoService_Started(object? sender, EventArgs e)
+        private void DuoService_Started(object? sender, DuoLifecycleEventArgs args)
         {
-            foreach (var instance in manager)
+            foreach (var instance in args.Instances)
             {
                 if (instance.Info.MinStreamTraffic != null)
                     throw new FormatException("Cannot monitor MinStreamTraffic while in Listener Mode.");
@@ -58,10 +58,13 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
                 listener.WaitForClient();
         }
 
-        private void DuoService_Stopped(object? sender, EventArgs e)
+        private void DuoService_Stopped(object? sender, DuoLifecycleEventArgs args)
         {
-            foreach (var instance in manager)
+            foreach (var instance in args.Instances)
             {
+                instance.Started -= DuoInstance_Started;
+                instance.Stopped -= DuoInstance_Stopped;
+
                 foreach (var listener in instance.OfType<SunshineListener>())
                 {
                     UnregisterWatch(instance, listener);

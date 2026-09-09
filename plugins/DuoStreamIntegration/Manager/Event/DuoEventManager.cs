@@ -1,168 +1,250 @@
-﻿using Autofac;
 using MadWizard.Desomnia.Processes.Manager;
 using MadWizard.Desomnia.Service.Duo.Configuration;
 using Microsoft.Extensions.Logging;
-using Nito.AsyncEx;
 using System.Diagnostics.Eventing.Reader;
 using System.ServiceProcess;
+using System.Threading.Channels;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager
 {
-    internal class DuoEventManager(DuoSessionMonitorConfig config) : DuoManager(config), IStartable, IDisposable
+    internal class DuoEventManager : DuoManager
     {
         internal static readonly Version MinVersion = new(1, 5, 7);
 
-        // serializes the ServicePID lifecycle transitions — the startup probe, the
-        // event-log records and the process-exit callback arrive on three threads
-        readonly AsyncLock LifecycleMutex = new();
-
-        public required IProcessManager ProcessManager { private get; init; }
-
-        static string XPath
+        private readonly DuoSessionMonitorConfig _config;
+        private readonly object _watcherMutex = new();
+        private readonly Channel<byte> _signals = Channel.CreateBounded<byte>(new BoundedChannelOptions(1)
         {
-            get
-            {
-                var eventPaths = string.Join(" or ", Enum.GetValues<DuoEventID>().Select(id => "EventID=" + (int)id));
+            SingleReader = true,
+            SingleWriter = false,
+            FullMode = BoundedChannelFullMode.DropWrite,
+            AllowSynchronousContinuations = false,
+        });
 
-                return $"*[System[Provider[@Name='Duo'] and ({eventPaths})]]";
-            }
-        }
-
-        EventLogWatcher Watcher { get; } = new(new EventLogQuery("Application", PathType.LogName, XPath)
+        private readonly EventLogWatcher _watcher = new(new EventLogQuery("Application", PathType.LogName, XPath)
         {
             TolerateQueryErrors = true,
         });
 
-        void IStartable.Start()
+        private bool _watching;
+        private bool _watcherDisposed;
+
+        public required IProcessManager ProcessManager { private get; init; }
+
+        public DuoEventManager(DuoSessionMonitorConfig config) : base(config)
         {
-            Watcher.EventRecordWritten += EventLogWatcher_EventRecordWritten;
-            Watcher.Enabled = true;
+            _config = config;
         }
 
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        private static string XPath
         {
+            get
+            {
+                var eventPaths = string.Join(" or ", Enum.GetValues<DuoEventID>().Select(id => "EventID=" + (int)id));
+                return $"*[System[Provider[@Name='Duo'] and ({eventPaths})]]";
+            }
+        }
+
+        protected override async Task RunAsync(CancellationToken stoppingToken)
+        {
+            StartWatching();
+            Signal();
+
             try
             {
-                Service.Refresh();
-
-                if (Service.Status == ServiceControllerStatus.Running && Service.PID is uint pid)
+                while (!stoppingToken.IsCancellationRequested)
                 {
-                    await TriggerStarted(pid);
+                    using var wakeup = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                    wakeup.CancelAfter(_config.PollInterval);
+
+                    try
+                    {
+                        if (!await _signals.Reader.WaitToReadAsync(wakeup.Token))
+                            break;
+
+                        while (_signals.Reader.TryRead(out _)) { }
+                    }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Periodic reconciliation recovers missed events and transient failures.
+                    }
+
+                    try
+                    {
+                        await Reconcile(stoppingToken);
+                    }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // The observed service process ended while its state was being read.
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "Could not update Duo service state");
+                    }
                 }
             }
-            catch (Exception ex)
+            finally
             {
-                Logger.LogError(ex, "Could not determine initial Duo service state. Waiting for service events...");
+                StopWatching();
             }
         }
 
-        protected async Task TriggerStarted(uint servicePID)
+        private async Task Reconcile(CancellationToken stoppingToken)
         {
-            using (await LifecycleMutex.LockAsync())
+            Service.Refresh();
+            var status = Service.Status;
+
+            if (status == ServiceControllerStatus.Running)
             {
-                if (ServicePID == servicePID)
-                    return;
-
-                if (ServicePID is uint stalePID)
+                if (Service.PID is not uint processId)
                 {
-                    // a stale ServiceStarted record (its PID was read before waiting on the
-                    // mutex) must never tear down a healthy generation — only a PID the SCM
-                    // currently reports may replace the adopted one
-                    Service.Refresh();
+                    Logger.LogWarning("The running Duo service has no process ID.");
 
-                    if (Service.Status != ServiceControllerStatus.Running || Service.PID != servicePID)
-                        return;
+                    if (IsGenerationInvalidated)
+                        await TriggerStopped();
 
-                    Logger.LogWarning("Another Duo service (PID = {NewPID}) started, before the current service (PID = {CurrentPID}) stopped.",
-                        servicePID, stalePID);
-
-                    TriggerStopped(); // tear down the stale generation, then adopt the new service
+                    return;
                 }
 
-                var process = ProcessManager[(int)servicePID];
+                if (ServicePID != processId || IsGenerationInvalidated)
+                {
+                    if (ServicePID is uint previousProcessId && previousProcessId != processId)
+                    {
+                        Logger.LogWarning(
+                            "Duo service PID changed from {previousPID} to {currentPID} without an observed stop.",
+                            previousProcessId,
+                            processId);
+                    }
 
-                void stopHandler(object? sender, EventArgs args) => TriggerStopped(servicePID);
+                    await TriggerStopped();
+                    await Adopt(processId, stoppingToken);
+                }
+                else
+                {
+                    await TriggerRefresh(stoppingToken);
+                }
 
-                process.Stopped += stopHandler;
+                return;
+            }
+
+            await TriggerStopped();
+        }
+
+        private async Task Adopt(uint processId, CancellationToken stoppingToken)
+        {
+            var process = ProcessManager[(int)processId];
+            var subscription = new DuoProcessSubscription(process, stoppingToken, Signal);
+
+            try
+            {
+                if (process.HasStopped)
+                {
+                    subscription.Dispose();
+                    Signal();
+                    return;
+                }
+
+                await TriggerStarted(processId, subscription.Token, subscription);
+            }
+            catch
+            {
+                subscription.Dispose();
+                throw;
+            }
+        }
+
+        private void EventLogWatcher_EventRecordWritten(object? sender, EventRecordWrittenEventArgs args)
+        {
+            using var record = args.EventRecord;
+
+            try
+            {
+                if (args.EventException is Exception error)
+                    Logger.LogWarning(error, "Could not read a Duo event-log record");
+            }
+            finally
+            {
+                Signal();
+            }
+        }
+
+        private void Signal() => _signals.Writer.TryWrite(0);
+
+        private void StartWatching()
+        {
+            lock (_watcherMutex)
+            {
+                if (_watching || _watcherDisposed)
+                    return;
+
+                _watcher.EventRecordWritten += EventLogWatcher_EventRecordWritten;
 
                 try
                 {
-                    if (process.HasStopped) // the exit may have raced our subscription and never fire it
-                        throw new InvalidOperationException($"Duo service process (PID = {servicePID}) died during adoption.");
-
-                    await base.TriggerStarted(servicePID);
+                    _watcher.Enabled = true;
+                    _watching = true;
                 }
                 catch
                 {
-                    // unsubscribe on ANY failure — a leftover handler would later be invoked
-                    // SYNCHRONOUSLY by the process indexer's stopped-eviction while a
-                    // re-adoption holds LifecycleMutex -> non-reentrant self-deadlock
-                    process.Stopped -= stopHandler;
-
-                    if (ServicePID != null)
-                        TriggerStopped(); // roll back the partial adoption (ServicePID/API are
-                                          // set before the fallible tail), so events can retry
-
+                    _watcher.EventRecordWritten -= EventLogWatcher_EventRecordWritten;
                     throw;
                 }
             }
         }
 
-        private void TriggerStopped(uint servicePID)
+        private void StopWatching()
         {
-            using (LifecycleMutex.Lock())
+            lock (_watcherMutex)
             {
-                if (ServicePID == servicePID) // ignore callbacks of an already replaced generation
-                    TriggerStopped();
-            }
-        }
-
-        private async void EventLogWatcher_EventRecordWritten(object? sender, EventRecordWrittenEventArgs args)
-        {
-            if (args.EventException is null && args.EventRecord is EventRecord record)
-            {
-                var eventId = (DuoEventID)record.Id;
+                if (!_watching)
+                    return;
 
                 try
                 {
-                    Service.Refresh();
-
-                    if (Service.Status == ServiceControllerStatus.Running)
-                    {
-                        switch (eventId)
-                        {
-                            case DuoEventID.ServiceStarted when Service.PID is uint pid:
-                                await TriggerStarted(pid);
-                                break;
-
-                            case DuoEventID.InstanceStarted:
-                            case DuoEventID.InstanceStopped:
-                            case DuoEventID.InstanceError:
-                            case DuoEventID.ProcessStarted:
-                            case DuoEventID.ProcessError:
-                            case DuoEventID.Resuming:
-                                if (ServicePID is null && Service.PID is uint runningPID)
-                                    await TriggerStarted(runningPID); // recover from a rolled-back adoption
-                                else
-                                    await TriggerRefresh();
-                                break;
-                        }
-                    }
+                    _watcher.Enabled = false;
                 }
                 catch (Exception ex)
                 {
-                    Logger.LogError(ex, $"Could not update Duo state ({eventId})");
+                    Logger.LogWarning(ex, "Could not stop the Duo event-log watcher cleanly");
+                }
+                finally
+                {
+                    _watcher.EventRecordWritten -= EventLogWatcher_EventRecordWritten;
+                    _watching = false;
                 }
             }
+        }
+
+        public override async Task StopAsync(CancellationToken cancellationToken)
+        {
+            StopWatching();
+            _signals.Writer.TryComplete();
+            await base.StopAsync(cancellationToken);
         }
 
         public override void Dispose()
         {
-            Watcher.Enabled = false;
-            Watcher.EventRecordWritten -= EventLogWatcher_EventRecordWritten;
-            Watcher.Dispose();
-
+            StopWatching();
+            _signals.Writer.TryComplete();
             base.Dispose();
+
+            lock (_watcherMutex)
+            {
+                if (!_watcherDisposed)
+                {
+                    _watcherDisposed = true;
+                    _watcher.Dispose();
+                }
+            }
         }
+
     }
 }

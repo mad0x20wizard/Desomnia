@@ -1,7 +1,7 @@
+using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Network.Watch;
-using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Service.Duo.Configuration;
 using MadWizard.Desomnia.Service.Duo.Sunshine;
 using MadWizard.Desomnia.Session;
@@ -13,54 +13,52 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 {
     public class DuoInstance : ResourceMonitor<Resource>
     {
-        private readonly RegistryKey Key;
+        private int _runningState = -1;
 
         internal readonly SemaphoreSlim Semaphore = new(1, 1);
         internal readonly AsyncLock RefreshMutex = new();
 
-        public DuoInstance(DuoInstanceInfo info, RegistryKey key)
+        public DuoInstance(DuoInstanceInfo info, InstanceSettings settings, RegistryKey? key = null)
         {
-            Info = info;
+            Key         = key;
+            Info        = info;
+            Watch       = info.Watch;
+            Settings    = settings;
+            Service     = new SunshineService(Name, Port);
 
             GetEvent(nameof(Demand)).AddAction(info.OnDemand);
             GetEvent(nameof(Idle)).AddAction(info.OnIdle);
 
             Started.AddAction(info.OnStart);
             Stopped.AddAction(info.OnStop);
-
-            Key = key;
-
-            Name = Key.Name.Split('\\').Last();
-            Port = Key.GetValue("Port") is int port ? (ushort)port : throw new ArgumentNullException("Port");
-            UserName = Key.GetValue("UserName") is string name ? name : throw new ArgumentNullException("UserName");
-            IsSandboxed = Key.GetValue("Sandboxed") is int sandboxed ? sandboxed == 1 : false;
-
-            Service = new SunshineService(Name, Port);
         }
 
-        internal DuoInstanceInfo Info { get; private init; }
+        private RegistryKey? Key { get; }
 
-        public string Name      { get; private set; }
-        public ushort Port      { get; private set; }
-        public string UserName  { get; private set; }
+        internal DuoInstanceInfo Info { get; }
+        internal WatchExpression Watch { get; set; }
 
-        public bool IsSandboxed { get; private set; }
+        private InstanceSettings Settings { get; }
 
-        public SunshineService Service { get; private set; }
+        public string Name => Settings.Name;
+        public ushort Port => Settings.Port;
+        public string UserName => Settings.UserName;
+        public bool IsSandboxed => Settings.IsSandboxed;
+
+        public SunshineService Service { get; }
 
         public uint? SessionID
         {
             get
             {
-                return (uint?)(Key.GetValue("SessionId") as int?);
+                return Key != null ? (uint?)(Key["SessionId"] as int?) : field;
             }
 
             set
             {
-                if (value != null)
-                    Key.SetValue("SessionId", value);
-                else if (Key.GetValue("SessionId") != null)
-                    try { Key.DeleteValue("SessionId"); } catch (ArgumentException) { /* No value exists with that name. */ }
+                Key?["SessionId"] = value;
+
+                field = value;
             }
         }
 
@@ -68,22 +66,19 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
         public bool? IsRunning
         {
-            get;
+            get => Volatile.Read(ref _runningState) switch
+            {
+                < 0 => null,
+                  0 => false,
+                > 0 => true,
+            };
 
             internal set
             {
-                if (field != value)
+                if (SetRunningState(value) && value is bool running)
                 {
-                    if (field != null)
-                    {
-                        if (value == true)
-                            Started.TriggerEvent();
-                        else if (value == false)
-                            Stopped.TriggerEvent();
-                    }
+                    TriggerRunningStateChangedAsync(running).GetAwaiter().GetResult();
                 }
-
-                field = value;
             }
         }
 
@@ -93,7 +88,29 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
         public event EventInvocation? Started;
         public event EventInvocation? Stopped;
 
-        internal event EventHandler<TimeSpan>? Inspected;
+        internal event Action<bool>? RunningStateChanged;
+
+        internal bool SetRunningState(bool? value)
+        {
+            var state = value switch
+            {
+                null    => -1,
+                false   => 0,
+                true    => 1,
+            };
+            var previous = Interlocked.Exchange(ref _runningState, state);
+
+            if (previous == state || previous < 0 || value is not bool running)
+                return false;
+
+            RunningStateChanged?.Invoke(running);
+            return true;
+        }
+
+        internal Task TriggerRunningStateChangedAsync(bool running)
+        {
+            return running ? Started.TriggerEventAsync() : Stopped.TriggerEventAsync();
+        }
 
         public bool HasInitiated(ISession session)
         {
@@ -108,7 +125,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             }
         }
 
-        protected override bool OnEventTriggering(Event @event)
+        protected override bool ShouldTriggerEvent(Event @event)
         {
             if (@event.Type == nameof(Idle) && IsRunning != true)
                 return false; // only trigger "Idle" events if the instance is running
@@ -116,55 +133,69 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             if (@event.Type == nameof(Demand) && (IsRunning == true || @event is InspectionEvent))
                 return false; // only trigger "Demand" events if the instance is NOT running
 
-            return base.OnEventTriggering(@event);
+            return base.ShouldTriggerEvent(@event);
         }
 
         protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
         {
-            Inspected?.Invoke(this, interval);
-
             var tokens = base.InspectResource(interval).ToArray();
 
-            if (tokens.Length > 0)
+            if (tokens.OfType<SessionUsage>().FirstOrDefault() is { } session)
             {
-                var duo = new DuoSessionUsage(Name, UserName);
+                var duo = new DuoSessionUsage(Name, UserName) { Metrics = session.Metrics };
 
-                foreach (var token in tokens)
+                foreach (var t in session.Tokens)
                 {
-                    switch (token)
+                    duo.Tokens.Add(t);
+                }
+
+                if (this.OfType<NetworkServiceWatch>().Any())
+                {
+                    var network = tokens.OfType<NetworkServiceUsage>().FirstOrDefault();
+
+                    if (network is not null)
                     {
-                        case SessionUsage session:
-                            duo.Metrics = session.Metrics;
-                            duo.LastInputTime = session.LastInputTime;
-                            foreach (var t in session.Tokens)
-                                duo.Tokens.Add(t);
-                            break;
+                        network.Name = "Sunshine";
 
-                        case NetworkServiceUsage network:
-                            network.Name = "Sunshine";
-                            duo.Tokens.Add(network);
-                            break;
+                        duo.Tokens.Add(network);
                     }
+
+                    duo.Metrics.Add("StreamTraffic", network is not null);
                 }
 
-                if (Info.Watch == WatchOperator.AND)
+                if (Watch.Evaluate(duo.Metrics) || session.Tokens.Count > 0)
                 {
-                    if (this.OfType<SessionWatch>().Any() && !tokens.OfType<SessionUsage>().Any())
-                        yield break;
-
-                    if (this.OfType<NetworkServiceWatch>().Any() && !tokens.OfType<NetworkServiceUsage>().Any())
-                        yield break;
+                    yield return duo;
                 }
-
-                yield return duo;
             }
+        }
+
+        protected override void HandleInspectionResult(TimeSpan duration, IEnumerable<UsageToken> tokens)
+        {
+            base.HandleInspectionResult(duration, tokens);
+
+            // sync idle/demand state with SessionWatch
+            this.OfType<SessionWatch>().SingleOrDefault()?.InjectInspectionResult(duration, tokens);
         }
 
         public override void Dispose()
         {
-            Key?.Dispose();
+            try
+            {
+                base.Dispose();
+            }
+            finally
+            {
+                Key?.Dispose();
+            }
+        }
 
-            base.Dispose();
+        public sealed record InstanceSettings
+        {
+            public required string    Name            { get; init; }
+            public required ushort    Port            { get; init; }
+            public required string    UserName        { get; init; }
+            public required bool      IsSandboxed     { get; init; }
         }
 
         public override string ToString()

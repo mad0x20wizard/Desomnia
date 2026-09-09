@@ -2,6 +2,7 @@
 using Autofac.Core;
 using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Events;
+using MadWizard.Desomnia.Network.Middleware;
 using MadWizard.Desomnia.Service.Duo.Configuration;
 using MadWizard.Desomnia.Service.Duo.Configuration.Migration;
 using MadWizard.Desomnia.Service.Duo.Manager;
@@ -92,7 +93,10 @@ namespace MadWizard.Desomnia.Service.Duo
                 // builds them through the auto-generated delegate factory and OWNS
                 // their disposal (container tracking would pin every replaced
                 // generation until application shutdown)
-                builder.RegisterType<DuoInstance>().AsSelf().ExternallyOwned();
+                builder.RegisterType<DuoInstance>()
+                    .ConfigurePipeline(p => p.Use(new RegistryInstanceSettings()))
+                    .AsSelf().ExternallyOwned();
+
 
                 if (config.SessionMonitor is SessionMonitorConfig monitorSession)
                     builder.RegisterType<SessionWatchAdapter>()
