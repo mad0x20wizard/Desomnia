@@ -4,6 +4,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Nito.AsyncEx;
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.NetworkInformation;
 
@@ -32,6 +33,17 @@ namespace MadWizard.Desomnia.Network.Neighborhood
 
         readonly MemoryCache _cacheHostName = new(new MemoryCacheOptions());
 
+        readonly IIndex<PhysicalAddress, NetworkHost> _indexHostByMAC;
+        readonly IIndex<IPAddress, NetworkHost> _indexHostByIP;
+
+        public NetworkSegment()
+        {
+            var index = new NetworkHostIndex(this);
+
+            _indexHostByMAC = index;
+            _indexHostByIP = index;
+        }
+
         public NetworkHost? this[string name, bool byHostName = false]
         {
             get
@@ -49,20 +61,18 @@ namespace MadWizard.Desomnia.Network.Neighborhood
 
         public NetworkHost? this[IPAddress? ip]
         {
-            get => this.FirstOrDefault(h => h.HasAddress(ip: ip));
+            get => ip is not null && _indexHostByIP.TryGetValue(ip, out var host) ? host : null;
         }
 
         public NetworkHost? this[PhysicalAddress? mac]
         {
-            get => this.FirstOrDefault(h => h.HasAddress(mac: mac));
+            get => mac is not null && _indexHostByMAC.TryGetValue(mac, out var host) ? host : null;
         }
 
         public void AddHost(NetworkHost host)
         {
-            if (!_hosts.ContainsKey(host.Name))
+            if (_hosts.TryAdd(host.Name, host))
             {
-                _hosts[host.Name] = host;
-
                 HostAdded?.Invoke(this, new(host));
             }
             else
@@ -142,6 +152,87 @@ namespace MadWizard.Desomnia.Network.Neighborhood
         public IEnumerator<NetworkHost> GetEnumerator()
         {
             return _hosts.Values.GetEnumerator();
+        }
+    }
+
+    file class NetworkHostIndex : IIndex<IPAddress, NetworkHost>, IIndex<PhysicalAddress, NetworkHost>
+    {
+        readonly ConcurrentDictionary<IPAddress, NetworkHost> _hostsByAddress = [];
+        readonly ConcurrentDictionary<PhysicalAddress, NetworkHost> _hostsByPhysicalAddress = [];
+
+        internal NetworkHostIndex(NetworkSegment network)
+        {
+            network.HostAdded += IndexHost;
+            network.HostRemoved += UnindexHost;
+        }
+
+        private void IndexHost(object? sender, NetworkHostEventArgs args)
+        {
+            args.Host.AddressAdded += Host_AddressAdded;
+            args.Host.AddressRemoved += Host_AddressRemoved;
+            args.Host.PhysicalAddressChanged += Host_PhysicalAddressChanged;
+
+            foreach (var ip in args.Host.IPAddresses)
+                _hostsByAddress[ip] = args.Host;
+
+            if (args.Host.PhysicalAddress is PhysicalAddress mac && !mac.Equals(PhysicalAddress.None))
+                _hostsByPhysicalAddress[mac] = args.Host;
+        }
+
+        private void UnindexHost(object? sender, NetworkHostEventArgs args)
+        {
+            args.Host.AddressAdded -= Host_AddressAdded;
+            args.Host.AddressRemoved -= Host_AddressRemoved;
+            args.Host.PhysicalAddressChanged -= Host_PhysicalAddressChanged;
+
+            foreach (var pair in _hostsByAddress)
+                if (ReferenceEquals(pair.Value, args.Host))
+                    _hostsByAddress.TryRemove(pair.Key, out _);
+
+            foreach (var pair in _hostsByPhysicalAddress)
+                if (ReferenceEquals(pair.Value, args.Host))
+                    _hostsByPhysicalAddress.TryRemove(pair.Key, out _);
+        }
+
+        private void Host_AddressAdded(object? sender, AddressEventArgs args)
+        {
+            if (sender is NetworkHost host)
+                _hostsByAddress[args.IPAddress] = host;
+        }
+
+        private void Host_AddressRemoved(object? sender, AddressRemovedEventArgs args)
+        {
+            if (_hostsByAddress.TryGetValue(args.IPAddress, out var host) && ReferenceEquals(host, sender))
+                _hostsByAddress.TryRemove(args.IPAddress, out _);
+        }
+
+        private void Host_PhysicalAddressChanged(object? sender, PhysicalAddressEventArgs args)
+        {
+            if (sender is not NetworkHost host)
+                return;
+
+            // The event deliberately reports only the new address. Physical-address changes are
+            // rare, so removing the host's former entry here keeps packet lookups allocation-free.
+            foreach (var pair in _hostsByPhysicalAddress)
+                if (ReferenceEquals(pair.Value, host))
+                    _hostsByPhysicalAddress.TryRemove(pair.Key, out _);
+
+            if (args.PhysicalAddress is PhysicalAddress mac && !mac.Equals(PhysicalAddress.None))
+                _hostsByPhysicalAddress[mac] = host;
+        }
+
+        NetworkHost IIndex<IPAddress, NetworkHost>.this[IPAddress ip] => _hostsByAddress[ip];
+
+        NetworkHost IIndex<PhysicalAddress, NetworkHost>.this[PhysicalAddress mac] => _hostsByPhysicalAddress[mac];
+
+        bool IIndex<IPAddress, NetworkHost>.TryGetValue(IPAddress ip, [MaybeNullWhen(false)] out NetworkHost host)
+        {
+            return _hostsByAddress.TryGetValue(ip, out host);
+        }
+
+        bool IIndex<PhysicalAddress, NetworkHost>.TryGetValue(PhysicalAddress mac, [MaybeNullWhen(false)] out NetworkHost host)
+        {
+            return _hostsByPhysicalAddress.TryGetValue(mac, out host);
         }
     }
 }

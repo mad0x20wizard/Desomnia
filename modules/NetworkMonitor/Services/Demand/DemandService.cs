@@ -5,7 +5,6 @@ using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Watch;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
-using System.Diagnostics;
 using System.Net;
 using System.Net.NetworkInformation;
 
@@ -17,21 +16,29 @@ namespace MadWizard.Desomnia.Network.Demand
 
         public required NetworkDevice   Device  { private get; init; }
         public required NetworkMonitor  Monitor { private get; init; }
+        public required NetworkSegment  Network { private get; init; }
 
         public required AddressMappingService AddressMapping { private get; init; }
 
         public required IEnumerable<IDemandDetector> Detectors { private get; init; }
 
-        private bool ShouldProcess(EthernetPacket packet)
+        private bool IsWatchedBy<T>(in CaptureSummary packet) where T : NetworkHostWatch
+        {
+            if ((Network[packet.TargetAddress] ?? Network[packet.TargetPhysicalAddress]) is NetworkHost host)
+            {
+                return Monitor[host] is T;
+            }
+
+            return false;
+        }
+
+        private bool ShouldProcess(in CaptureSummary packet)
         {
             switch (Monitor.Options.Mode)
             {
                 default:
-                case WatchMode.None:
-                    return false;
-
                 case WatchMode.Normal:
-                    return Device.HasSentPacket(packet) || Monitor.IsWatchedBy<LocalHostWatch>(packet);
+                    return Device.HasSentPacket(packet.SourcePhysicalAddress) || IsWatchedBy<LocalHostWatch>(packet);
 
                 case WatchMode.Promiscuous:
                     return true;
@@ -40,17 +47,19 @@ namespace MadWizard.Desomnia.Network.Demand
 
         void INetworkService.ProcessPacket(EthernetPacket packet)
         {
-            if (ShouldProcess(packet))
+            var summary = new CaptureSummary(packet);
+
+            if (ShouldProcess(summary))
             {
-                ReportSourceTraffic(packet);
+                ReportSourceTraffic(summary);
 
                 foreach (var detector in Detectors)
                 {
-                    if (detector.Examine(packet) is NetworkHost host)
+                    if (detector.Examine(summary) is NetworkHost host)
                     {
                         if (Monitor[host] is HostDemandWatch watch)
                         {
-                            EvaluateDemand(watch, packet); break;
+                            EvaluateDemand(watch, summary); break;
                         }
                     }
                 }
@@ -64,34 +73,33 @@ namespace MadWizard.Desomnia.Network.Demand
          * destination-keyed, so wake/verify/forward logic never sees a packet from
          * the watched host's own side.
          */
-        private void ReportSourceTraffic(EthernetPacket packet)
+        private void ReportSourceTraffic(in CaptureSummary packet)
         {
-            if (packet.Extract<IPPacket>() is IPPacket ip)
+            if (packet.Extract<IPPacket>() is not null)
             {
-                if (Monitor.Network[ip.SourceAddress] is NetworkHost host)
-                    if (Monitor[host] is NetworkHostWatch watch)
-                        watch.ReportNetworkTraffic(packet, PacketDirection.Outbound);
-            }
-        }
-
-        private void EvaluateDemand(HostDemandWatch watch, EthernetPacket trigger)
-        {
-            using var scope = Logger.BeginHostScope(watch.Host);
-
-            Stopwatch stop = Stopwatch.StartNew();
-
-            if (watch.Evaluate(trigger) is DemandRequest request)
-            {
-                using (ExecutionContext.SuppressFlow()) // we want to establish a new request context
+                if (Network[packet.SourceAddress] is NetworkHost host && Monitor[host] is NetworkHostWatch watch)
                 {
-                    Task.Run(async () => await ExecuteDemandRequest(watch, request, stop.Elapsed));
+                    watch.ReportNetworkTraffic(packet.Ethernet, PacketDirection.Outbound);
                 }
             }
         }
 
-        private async Task ExecuteDemandRequest(HostDemandWatch watch, DemandRequest request, TimeSpan evalutation = default)
+        private void EvaluateDemand(HostDemandWatch watch, in CaptureSummary capture)
         {
-            using var scope = Logger.BeginRequestScope(watch, request, evalutation);
+            if (watch.Evaluate(capture) is DemandRequest request)
+            {
+                using var scope = Logger.BeginHostScope(watch.Host);
+
+                using (ExecutionContext.SuppressFlow()) // we want to establish a new request context
+                {
+                    Task.Run(async () => await ExecuteDemandRequest(watch, request));
+                }
+            }
+        }
+
+        private async Task ExecuteDemandRequest(HostDemandWatch watch, DemandRequest request)
+        {
+            using var scope = Logger.BeginRequestScope(watch, request);
 
             using (request)
             {

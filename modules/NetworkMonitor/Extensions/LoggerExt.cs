@@ -11,7 +11,7 @@ namespace Microsoft.Extensions.Logging
 {
     public static class LoggerExt
     {
-        public static IDisposable? BeginRequestScope(this ILogger logger, HostDemandWatch watch, DemandRequest request, TimeSpan evaluation)
+        public static IDisposable? BeginRequestScope(this ILogger logger, HostDemandWatch watch, DemandRequest request)
         {
             var scope = new CompositeDisposable
             {
@@ -34,7 +34,7 @@ namespace Microsoft.Extensions.Logging
             if (logger.BeginScope(new Dictionary<string, object> { ["Request"] = request }) is IDisposable dRequest)
                 scope.Add(dRequest);
 
-            logger.LogTrace($"BEGIN {request}: '{sourceName}' -> '{request.Host.Name}'; evaluate = {Math.Round(evaluation.TotalMilliseconds)} ms");
+            logger.LogTrace($"BEGIN {request}: '{sourceName}' -> '{request.Host.Name}'");
 
             return scope;
         }

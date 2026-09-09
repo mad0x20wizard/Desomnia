@@ -7,6 +7,8 @@ namespace MadWizard.Desomnia.Network.Watch
 {
     public abstract class NetworkWatch<T> : ResourceMonitor<T> where T : IInspectable
     {
+        private bool _cancelIdleActions;
+
         private long _countBytesIn,  _countPacketsIn;
         private long _countBytesOut, _countPacketsOut;
 
@@ -28,14 +30,19 @@ namespace MadWizard.Desomnia.Network.Watch
                 _countPacketsOut += 1;
             }
 
-            ((IEventSystem)this)[nameof(Idle)].CancelActions();
+            if (_cancelIdleActions)
+            {
+                ((IEventSystem)this)[nameof(Idle)].CancelActions();
+
+                _cancelIdleActions = false;
+            }
         }
 
         protected internal virtual void ReportNetworkTraffic(EthernetPacket packet, PacketDirection direction)
         {
             if (packet.Extract<TransportPacket>() is TransportPacket transport)
             {
-                ReportNetworkTraffic(transport.PayloadData?.Length, direction); // TODO: sometimes PayloadData is null – PayloadPacket is probably set with some data (e.g. DHCP, port 67/68); need further investigation
+                ReportNetworkTraffic(transport.PayloadLength, direction); // TODO: sometimes PayloadData is null – PayloadPacket is probably set with some data (e.g. DHCP, port 67/68); need further investigation
             }
         }
 
@@ -96,6 +103,8 @@ namespace MadWizard.Desomnia.Network.Watch
             {
                 _countBytesIn = _countBytesOut = 0;
                 _countPacketsIn = _countPacketsOut = 0;
+
+                _cancelIdleActions = true;
             }
         }
     }

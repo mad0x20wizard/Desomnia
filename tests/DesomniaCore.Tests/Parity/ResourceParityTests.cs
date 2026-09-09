@@ -1,5 +1,5 @@
-using Xunit;
 using MadWizard.Desomnia.Events;
+using Xunit;
 
 namespace MadWizard.Desomnia.Tests.Parity
 {
@@ -98,9 +98,9 @@ namespace MadWizard.Desomnia.Tests.Parity
 
             protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval) => Tokens;
 
-            protected override bool OnEventTriggering(Event @event)
+            protected override bool ShouldTriggerEvent(Event @event)
             {
-                return !Veto && base.OnEventTriggering(@event);
+                return !Veto && base.ShouldTriggerEvent(@event);
             }
 
             [ActionHandler("mark")]

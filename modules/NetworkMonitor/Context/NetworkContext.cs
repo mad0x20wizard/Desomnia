@@ -1,9 +1,7 @@
 ﻿using Autofac;
-using Autofac.Core;
 using Autofac.Features.Metadata;
 using MadWizard.Desomnia;
 using MadWizard.Desomnia.Events;
-using MadWizard.Desomnia.Network.Bridges;
 using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Context.Parameters;
@@ -22,7 +20,6 @@ using MadWizard.Desomnia.Network.SleepProxy;
 using MadWizard.Desomnia.Network.SleepProxy.Registration;
 using MadWizard.Desomnia.Network.Trace;
 using Microsoft.Extensions.Logging;
-using System.Net.NetworkInformation;
 
 namespace MadWizard.Desomnia.Network.Context
 {
@@ -115,6 +112,10 @@ namespace MadWizard.Desomnia.Network.Context
                     .SingleInstance()
                     .AsSelf();
 
+                builder.RegisterType<DroppedPacketReporter>().AutoActivate()
+                    .WithParameter(TypedParameter.From(TimeSpan.FromSeconds(5)))
+                    .SingleInstance()
+                    .AsSelf();
 
                 // Child Contexts
                 builder.RegisterType<NetworkHostContext>()

@@ -14,7 +14,7 @@ namespace MadWizard.Desomnia.Network.Watch
         public AdvertiseOptions     AdvertiseOptions    { get; init; }
         public KnockOptions?        KnockOptions        { get; init; }
 
-        public bool CanTriggerDemand(EthernetPacket trigger)
+        public bool CanTriggerDemand(Packet trigger)
         {
             return IsIdle && ((IEventSystem)this)[nameof(Demand)].HasHandlers && Service.Accepts(trigger);
         }

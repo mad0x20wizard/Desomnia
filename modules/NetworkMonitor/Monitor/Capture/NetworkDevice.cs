@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using PacketDotNet;
 using SharpPcap;
 using SharpPcap.LibPcap;
-using System.Collections.Concurrent;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -14,6 +13,10 @@ namespace MadWizard.Desomnia.Network
 {
     public class NetworkDevice : IDisposable
     {
+        const int PacketQueueCapacity = 4096; // ~ 6 MB of raw data
+
+        static readonly TimeSpan ProcessingStopTimeout = TimeSpan.FromSeconds(10);
+
         public ILogger<NetworkDevice> Logger { private get; init; }
 
         public  string              Name => Device.Description ?? Device.Name;
@@ -72,10 +75,10 @@ namespace MadWizard.Desomnia.Network
             }
         }
 
-        public event EventHandler<EthernetPacket>? EthernetCaptured;
+        public event EventHandler<EthernetPacket>?  PacketCaptured;
+        public event EventHandler<PacketCapture>?   PacketDropped;
 
-        internal BlockingCollection<RawCapture>? PacketQueue { get; private set; }
-        internal Thread? ProcessingThread { get; private set; }
+        private PacketCaptureContext? _context;
 
         private bool _shouldBeCapturing;
 
@@ -92,30 +95,36 @@ namespace MadWizard.Desomnia.Network
             }
         }
 
-        public bool HasSentPacket(EthernetPacket packet)
-        {
-            return this.PhysicalAddress.Equals(packet.SourceHardwareAddress); // TODO will this work with virtual interfaces? (OpenVPN)
-        }
+        public bool HasSentPacket(EthernetPacket packet) => HasSentPacket(packet.SourceHardwareAddress);
+
+        // TODO will this work with virtual interfaces? (OpenVPN)
+        public bool HasSentPacket(PhysicalAddress? source) => source is not null && PhysicalAddress.Equals(source); 
 
         public void StartCapture()
         {
             if (IsCapturing)
                 return;
 
-            PacketQueue = [];
-
-            ProcessingThread = new Thread(ProcessQueuedPackets)
+            if (!_shouldBeCapturing)
             {
-                Name = $"PacketProcessor:{Name}",
-                IsBackground = true
-            };
-            ProcessingThread.Start();
+                _context = new PacketCaptureContext(Name, PacketQueueCapacity);
+                _context.StartProcessing(ProcessQueuedPackets);
 
-            _shouldBeCapturing = true;
+                _shouldBeCapturing = true;
+            }
 
-            Device.OnPacketArrival += Device_OnPacketArrival;
-            Device.StartCapture();
-            Device.OnCaptureStopped += Device_OnCaptureStopped;
+            try
+            {
+                Device.OnPacketArrival += Device_OnPacketArrival;
+                Device.StartCapture();
+                Device.OnCaptureStopped += Device_OnCaptureStopped;
+            }
+            catch
+            {
+                StopCapture();
+
+                throw;
+            }
 
             List<string> features = [];
             if (IsMaxResponsiveness)
@@ -138,25 +147,23 @@ namespace MadWizard.Desomnia.Network
         /// <summary>
         /// Capture-thread callback. To respect libpcap's single-threaded handle requirement and to
         /// keep draining the kernel buffer, this does the bare minimum on the capture thread: filter
-        /// out our own injected packets, copy the bytes out of the libpcap-owned buffer and hand them
-        /// to the queue. Parsing and dispatch happen later, serially, on the processing thread.
+        /// out our own injected packets, reserve bounded queue capacity, then copy accepted bytes out
+        /// of the libpcap-owned buffer. Parsing and dispatch happen later on the processing thread.
         /// </summary>
         private void Device_OnPacketArrival(object sender, PacketCapture capture)
         {
             try
             {
-                if (!FilterInjectedPacket(capture))
+                if (!FilterInjectedPacket(capture) && _context is not null)
                 {
-                    var raw = capture.GetPacket();
-
                     try
                     {
-                        if (!PacketQueue?.TryAdd(raw) ?? false)
+                        if (!_context.EnqueueCapture(capture))
                         {
-                            Logger.LogWarning("Could not enqueue a captured packet."); // should not happen, since queue is unbounded
+                            PacketDropped?.Invoke(this, capture);
                         }
                     }
-                    catch (InvalidOperationException)
+                    catch (CapturingStoppedException)
                     {
                         // The queue was completed concurrently during shutdown; nothing to do.
                     }
@@ -174,13 +181,6 @@ namespace MadWizard.Desomnia.Network
 
             Device.OnCaptureStopped -= Device_OnCaptureStopped;
             Device.OnPacketArrival -= Device_OnPacketArrival;
-
-            PacketQueue?.CompleteAdding();
-            ProcessingThread?.Join(TimeSpan.FromSeconds(5));
-            PacketQueue?.Dispose();
-            PacketQueue = null;
-
-            ProcessingThread = null;
 
             switch (status)
             {
@@ -204,14 +204,14 @@ namespace MadWizard.Desomnia.Network
 
         /// <summary>
         /// The single consumer: drains the user-space buffer and dispatches each packet in arrival
-        /// order via <see cref="EthernetCaptured"/>. Running off the capture thread means a slow
+        /// order via <see cref="PacketCaptured"/>. Running off the capture thread means a slow
         /// handler no longer stalls capture or overflows the kernel ring buffer.
         /// </summary>
-        private void ProcessQueuedPackets()
+        private void ProcessQueuedPackets(PacketCaptureContext ctx)
         {
             try
             {
-                foreach (var raw in PacketQueue!.GetConsumingEnumerable())
+                foreach (var raw in ctx)
                 {
                     try
                     {
@@ -219,7 +219,7 @@ namespace MadWizard.Desomnia.Network
                         {
                             try
                             {
-                                EthernetCaptured?.Invoke(this, ethernet);
+                                PacketCaptured?.Invoke(this, ethernet);
                             }
                             catch (Exception ex)
                             {
@@ -233,7 +233,7 @@ namespace MadWizard.Desomnia.Network
                     }
                 }
             }
-            catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException)
+            catch (CapturingStoppedException)
             {
                 // Queue was disposed/completed while we were blocked in GetConsumingEnumerable; exit.
             }
@@ -356,12 +356,16 @@ namespace MadWizard.Desomnia.Network
 
         public void StopCapture()
         {
+            _shouldBeCapturing = false;
+
             if (IsCapturing)
             {
-                _shouldBeCapturing = false;
-
                 Device.StopCapture();
             }
+
+            _context?.StopProcessing(ProcessingStopTimeout);
+            _context?.Dispose();
+            _context = null;
         }
 
         private bool TryOpen(ILiveDevice device, ref bool maxResponsiveness, ref bool noCaptureLocal)
@@ -420,95 +424,5 @@ namespace MadWizard.Desomnia.Network
                 Device.Close();
             }
         }
-    }
-
-    internal class ContentionPacketFilter(NetworkDevice device) : IDevicePacketFilter
-    {
-        // User-space buffer between the capture thread (producer) and a single processing thread
-        // (consumer). Decoupling them means a slow packet handler can no longer block capture or
-        // overflow the kernel ring buffer, while packets are still dispatched strictly in order.
-        const int QueueLimit = 4096;
-        const int DropWarningIntervalMs = 5000;
-
-        public required ILogger<ContentionPacketFilter> Logger { private get; init; }
-
-        private DateTime _lastWarning = DateTime.MinValue;
-
-        private int _droppedSinceWarning;
-
-        bool IDevicePacketFilter.FilterIncoming(PacketCapture packet)
-        {
-            if (device.PacketQueue?.Count > QueueLimit)
-            {
-                _droppedSinceWarning++;
-
-                var now = DateTime.UtcNow;
-                if (now - _lastWarning > TimeSpan.FromMilliseconds(DropWarningIntervalMs))
-                {
-                    Logger.LogWarning("Processing queue for \"{Name}\" is saturated; dropped {Count} packet(s) in user space because processing can't keep up.",
-                        device.Name, _droppedSinceWarning);
-
-                    _droppedSinceWarning = 0;
-                    _lastWarning = now;
-                }
-
-                return true;
-            }
-
-            return false;
-        }
-
-        bool IDevicePacketFilter.FilterOutgoing(Packet packet)
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// This Filter prevent packets sent by us, being processed as incoming packets again,
-    /// if the device is cannot do this by itself.
-    /// </summary>
-    /// 
-    /// <param name="device">the monitored network device</param>
-    internal class LocalPacketFilter(NetworkDevice device) : IDevicePacketFilter
-    {
-        private readonly IList<byte[]> _sentPackets = [];
-
-        public bool FilterIncoming(PacketCapture packet)
-        {
-            if (device.IsNoCaptureLocal)
-                return false;
-
-            lock (_sentPackets)
-            {
-                foreach (var bytes in _sentPackets)
-                    if (packet.Data.SequenceEqual(bytes))
-                        return _sentPackets.Remove(bytes);
-            }
-
-            return false;
-        }
-
-        public bool FilterOutgoing(Packet packet)
-        {
-            if (device.IsNoCaptureLocal)
-                return false;
-
-            lock (_sentPackets)
-            {
-                _sentPackets.Add(packet.Bytes);
-            }
-
-            return false;
-        }
-    }
-
-    internal class SimulationPacketFilter : IDevicePacketFilter
-    {
-        public required ILogger<SimulationPacketFilter> Logger { private get; init; }
-
-        public bool FilterIncoming(PacketCapture packet) => false;
-
-        public bool FilterOutgoing(Packet packet) => true;
     }
 }

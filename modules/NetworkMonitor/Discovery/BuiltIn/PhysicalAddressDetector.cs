@@ -46,7 +46,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
                     }
                 }
 
-                Device.EthernetCaptured += Capture;
+                Device.PacketCaptured += Capture;
 
                 try
                 {
@@ -60,7 +60,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
                 }
                 finally
                 {
-                    Device.EthernetCaptured -= Capture;
+                    Device.PacketCaptured -= Capture;
                 }
             }
         }

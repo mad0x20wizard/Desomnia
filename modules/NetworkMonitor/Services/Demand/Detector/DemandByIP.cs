@@ -7,9 +7,9 @@ namespace MadWizard.Desomnia.Network.Demand.Detector
     {
         public required NetworkSegment Network { private get; init; }
 
-        NetworkHost? IDemandDetector.Examine(EthernetPacket packet)
+        NetworkHost? IDemandDetector.Examine(in CaptureSummary capture)
         {
-            if ((packet.Type == EthernetType.IPv4 || packet.Type == EthernetType.IPv6) && packet.PayloadPacket is IPPacket ip)
+            if ((capture.Ethernet.Type == EthernetType.IPv4 || capture.Ethernet.Type == EthernetType.IPv6) && capture.Extract<IPPacket>() is IPPacket ip)
                 if (false
                     || ip.Protocol == ProtocolType.Tcp && ip.PayloadPacket is TcpPacket tcp && !tcp.Reset
                     || ip.Protocol == ProtocolType.Udp && ip.PayloadPacket is UdpPacket // all UDP packets
@@ -21,7 +21,7 @@ namespace MadWizard.Desomnia.Network.Demand.Detector
                     || ip.Protocol == ProtocolType.IcmpV6 && ip.PayloadPacket is IcmpV6Packet icmpv6
                         && icmpv6.Type      == IcmpV6Type.EchoRequest) 
                 {
-                    if (Network[ip.DestinationAddress] is NetworkHost host)
+                    if (Network[capture.TargetAddress] is NetworkHost host)
                     {
                         return host;
                     }

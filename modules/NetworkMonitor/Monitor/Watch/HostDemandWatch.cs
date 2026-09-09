@@ -72,7 +72,7 @@ namespace MadWizard.Desomnia.Network.Watch
             }
         }
 
-        internal protected virtual DemandRequest? Evaluate(EthernetPacket packet)
+        internal virtual DemandRequest? Evaluate(in CaptureSummary packet)
         {
             /**
              * Magic Packets should never start a demand request,
@@ -81,27 +81,34 @@ namespace MadWizard.Desomnia.Network.Watch
              * or responding with an address advertisement in order
              * to signal the presence of the target host.
              */
-            if (packet.IsMagicPacket())
+            if (packet.Ethernet.IsMagicPacket())
             {
-                HandleMagicPacket(packet);
+                HandleMagicPacket(packet.Ethernet);
             }
 
             /**
              * Only packets with a valid source Options address will be processed
              * and can trigger a demand request.
              */
-            else if (packet.FindSourceIPAddress() is IPAddress source)
+            else if (packet.SourceAddress is IPAddress source)
             {
                 // do we already have an ongoing request for that source?
                 if (_ongoingRequests.TryGetValue(DetermineSource(source), out DemandRequest? ongoing))
                 {
-                    ongoing.EnqueuePacket(packet);
+                    ongoing.EnqueuePacket(packet.Ethernet);
+                }
+
+                // An established TCP stream can no longer start a demand request. Account for it
+                // directly, without running host/service filters or walking their rule sets.
+                else if (packet.Extract<TcpPacket>() is { Synchronize: false })
+                {
+                    ReportNetworkTraffic(packet.Ethernet, PacketDirection.Inbound);
                 }
 
                 // can we start a new request for that source Options?
                 else if (MaybeStartRequest(packet) is DemandRequest request)
                 {
-                    request.EnqueuePacket(packet);
+                    request.EnqueuePacket(packet.Ethernet);
 
                     return request;
                 }
@@ -118,13 +125,13 @@ namespace MadWizard.Desomnia.Network.Watch
             });
         }
 
-        private bool CanTriggerDemand(EthernetPacket packet)
+        private bool CanTriggerDemand(in CaptureSummary packet)
         {
             if (packet.Extract<TcpPacket>() is TcpPacket tcp)
             {
                 if (tcp.Synchronize) // ongoing TCP connections never trigger demand requests
                 {
-                    bool hasServiceDemand = this.Any(service => service.CanTriggerDemand(packet));
+                    bool hasServiceDemand = this.Any(service => service.CanTriggerDemand(tcp));
 
                     return !IsOnline || hasServiceDemand;
                 }
@@ -137,16 +144,16 @@ namespace MadWizard.Desomnia.Network.Watch
             return false;
         }
 
-        protected virtual bool ShouldStartRequest(EthernetPacket packet)
+        private protected virtual bool ShouldStartRequest(in CaptureSummary capture)
         {
             try
             {
-                if (Verify(packet))
+                if (Verify(capture.Ethernet))
                 {
-                    if (CanTriggerDemand(packet))
+                    if (CanTriggerDemand(capture))
                         return true;
 
-                    ReportNetworkTraffic(packet, PacketDirection.Inbound);
+                    ReportNetworkTraffic(capture.Ethernet, PacketDirection.Inbound);
 
                     return false;
                 }
@@ -159,7 +166,7 @@ namespace MadWizard.Desomnia.Network.Watch
             }
         }
 
-        private DemandRequest? MaybeStartRequest(EthernetPacket trigger)
+        private DemandRequest? MaybeStartRequest(in CaptureSummary trigger)
         {
             if (ShouldStartRequest(trigger))
             {
@@ -168,7 +175,7 @@ namespace MadWizard.Desomnia.Network.Watch
 
                 ILifetimeScope scope = Scope.BeginLifetimeScope(MatchingScopeLifetimeTags.RequestLifetimeScopeTag);
 
-                var request = scope.Resolve<DemandRequest>(TypedParameter.From(trigger));
+                var request = scope.Resolve<DemandRequest>(TypedParameter.From(trigger.Ethernet));
                 request.Number = _requestNr++;
 
                 scope.CurrentScopeEnding += (sender, args) => EndRequest(request);
@@ -189,7 +196,7 @@ namespace MadWizard.Desomnia.Network.Watch
              * which already account for present service watches and Must-rules (see FilterOptions).
              */
             foreach (var serviceWatch in this.OfType<ServiceFilterWatch>().Where(w => w.Service.Accepts(packet)))
-            {
+                {
                 return !serviceWatch.Filter.Value.ShouldFilter(packet, DefaultFilterOptions);
             }
 
