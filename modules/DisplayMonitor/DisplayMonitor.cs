@@ -34,8 +34,8 @@ namespace MadWizard.Desomnia.Display
         {
             if (config is not null)
             {
-                GetEvent(nameof(Idle)).AddAction(config.OnIdle);
-                GetEvent(nameof(Demand)).AddAction(config.OnDemand);
+                Event(nameof(Idle)).AddAction(config.OnIdle);
+                Event(nameof(Demand)).AddAction(config.OnDemand);
             }
 
             // subscribed BEFORE the initial enumeration: the persistent manager raises its

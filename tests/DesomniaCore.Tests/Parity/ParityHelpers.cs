@@ -40,19 +40,19 @@ namespace MadWizard.Desomnia.Tests.Parity
             if (action == null || action.Command is { } command && command.Function.Trim() == string.Empty)
                 return;                          // the legacy null-before-lookup order (pinned)
 
-            GetEvent(name).AddAction(action);
+            Event(name).AddAction(action);
         }
 
-        public void AddEventHandler(string name, EventInvocation handler) => GetEvent(name).AddHandler(handler);
-        public bool HasEventHandlers(string name) => GetEvent(name).HasHandlers;
-        public void RemoveEventHandler(string name, EventInvocation handler) => GetEvent(name).RemoveHandler(handler);
+        public void AddEventHandler(string name, EventInvocation handler) => Event(name).AddHandler(handler);
+        public bool HasEventHandlers(string name) => Event(name).HasHandlers;
+        public void RemoveEventHandler(string name, EventInvocation handler) => Event(name).RemoveHandler(handler);
 
-        public void DoTrigger(string name) => GetEvent(name).TriggerEvent();
-        public void DoTrigger(string name, Event e) => GetEvent(name).TriggerEvent(e);
-        public Task DoTriggerAsync(string name) => GetEvent(name).TriggerEventAsync();
-        public Task DoTriggerAsync(string name, Event e) => GetEvent(name).TriggerEventAsync(e);
-        public Task DoTriggerAsync(Event e) => GetEvent(e.Type).TriggerEventAsync(e);
-        public void DoCancel(string name) => GetEvent(name).CancelActions();
+        public void DoTrigger(string name) => Event(name).TriggerEvent();
+        public void DoTrigger(string name, Event e) => Event(name).TriggerEvent(e);
+        public Task DoTriggerAsync(string name) => Event(name).TriggerEventAsync();
+        public Task DoTriggerAsync(string name, Event e) => Event(name).TriggerEventAsync(e);
+        public Task DoTriggerAsync(Event e) => Event(e.Type).TriggerEventAsync(e);
+        public void DoCancel(string name) => Event(name).CancelActions();
 
         [ActionHandler("noop")]
         private void HandleNoop(Event e)

@@ -116,7 +116,7 @@ public sealed class DuoManagerTests
             OnStart = (_, _) =>
             {
                 handlersAtAPICall = HandlerCount(instance, nameof(DuoInstance.RunningStateChanged));
-                instance.IsRunning = true;
+                instance.SetRunningState(true);
                 return Task.CompletedTask;
             }
         };
@@ -275,7 +275,7 @@ public sealed class DuoManagerTests
         Assert.Empty(manager);
     }
 
-    private TestDuoManager CreateManager()
+    internal static TestDuoManager CreateManager()
     {
         return new TestDuoManager
         {
@@ -285,7 +285,7 @@ public sealed class DuoManagerTests
         };
     }
 
-    private DuoInstance CreateInstance(string generation, string name)
+    internal static DuoInstance CreateInstance(string generation, string name)
     {
         return new DuoInstance(
             new DuoInstanceInfo { Name = name }, 
@@ -322,7 +322,7 @@ public sealed class DuoManagerTests
 
 internal sealed class TestDuoManager : DuoManager
 {
-    private readonly ConcurrentQueue<IDuoWebManager> _apis = new();
+    private readonly ConcurrentQueue<DuoApiConnection> _apis = new();
     private readonly ConcurrentQueue<List<DuoInstance>> _instances = new();
 
     public TestDuoManager()
@@ -332,7 +332,7 @@ internal sealed class TestDuoManager : DuoManager
 
     public void EnqueueGeneration(IDuoWebManager api, params DuoInstance[] instances)
     {
-        _apis.Enqueue(api);
+        _apis.Enqueue(new DuoApiConnection(api, api as IDisposable));
         _instances.Enqueue([.. instances]);
     }
 
@@ -348,9 +348,12 @@ internal sealed class TestDuoManager : DuoManager
     public Task<bool> StopGeneration(uint? expectedProcessId = null)
         => TriggerStopped(expectedProcessId);
 
+    public Task ReconcileService(uint? processId)
+        => Reconcile(processId, CancellationToken.None);
+
     internal override DuoApiConnection CreateAPI()
         => _apis.TryDequeue(out var api)
-            ? new DuoApiConnection(api)
+            ? api
             : throw new InvalidOperationException("No API was queued for this generation.");
 
     internal override (string Path, Version Version) GetServiceInfo()
@@ -365,11 +368,12 @@ internal sealed class TestDuoManager : DuoManager
         => Task.CompletedTask;
 }
 
-internal sealed class ControlledDuoAPI : IDuoWebManager
+internal sealed class ControlledDuoAPI : IDuoWebManager, IDisposable
 {
     private int _queryCallCount;
     private int _startCallCount;
     private int _stopCallCount;
+    private int _disposeCallCount;
 
     public Func<string, CancellationToken, Task<bool>> OnQuery { get; init; }
         = (_, _) => Task.FromResult(false);
@@ -383,6 +387,7 @@ internal sealed class ControlledDuoAPI : IDuoWebManager
     public int QueryCallCount => Volatile.Read(ref _queryCallCount);
     public int StartCallCount => Volatile.Read(ref _startCallCount);
     public int StopCallCount => Volatile.Read(ref _stopCallCount);
+    public int DisposeCallCount => Volatile.Read(ref _disposeCallCount);
 
     public async Task<bool> QueryInstance(string name, CancellationToken cancellationToken)
     {
@@ -401,6 +406,8 @@ internal sealed class ControlledDuoAPI : IDuoWebManager
         Interlocked.Increment(ref _stopCallCount);
         await OnStop(name, cancellationToken);
     }
+
+    public void Dispose() => Interlocked.Increment(ref _disposeCallCount);
 }
 
 internal sealed class EmptySessionManager : ISessionManager

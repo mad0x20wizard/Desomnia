@@ -69,7 +69,7 @@ namespace MadWizard.Desomnia.Session
 
             WatchInput &= info.MakeWatchInputOptions(config);
 
-            GetEvent(nameof(Idle)).AddAction(info.OnIdle);
+            Event(nameof(Idle)).AddAction(info.OnIdle);
 
             Login.AddAction(info.OnLogin);
             RemoteLogin.AddAction(info.OnRemoteLogin);

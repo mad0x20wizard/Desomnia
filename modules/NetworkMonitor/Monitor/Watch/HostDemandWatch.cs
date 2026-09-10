@@ -119,7 +119,7 @@ namespace MadWizard.Desomnia.Network.Watch
 
         protected virtual void HandleMagicPacket(EthernetPacket packet)
         {
-            _ = GetEvent(nameof(MagicPacket)).TriggerEventAsync(new DemandEvent(Host, packets: [packet])
+            _ = Event(nameof(MagicPacket)).TriggerEventAsync(new DemandEvent(Host, packets: [packet])
             {
                 // TODO: is something missing?
             });

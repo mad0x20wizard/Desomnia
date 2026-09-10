@@ -29,21 +29,12 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
         {
             lock (_sessionSubscriptionMutex)
             {
-                if (_sessionsSubscribed)
+                if (_sessionsSubscribed || Volatile.Read(ref _disposed) != 0)
                     return;
 
                 SessionManager.UserLogon += SessionManager_UserLogon;
-
-                try
-                {
-                    SessionManager.UserLogoff += SessionManager_UserLogoff;
-                    _sessionsSubscribed = true;
-                }
-                catch
-                {
-                    SessionManager.UserLogon -= SessionManager_UserLogon;
-                    throw;
-                }
+                SessionManager.UserLogoff += SessionManager_UserLogoff;
+                _sessionsSubscribed = true;
             }
         }
 
@@ -85,11 +76,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
             UnsubscribeSessionEvents();
 
-            if (Volatile.Read(ref _generation) is DuoGeneration generation)
-            {
-                InvalidateSafely(generation);
-                ReleaseLifetimeSafely(generation);
-            }
+            _ = Volatile.Read(ref _generation)?.CancelAsync();
 
             var worker = ExecuteTask;
             base.Dispose();
@@ -109,7 +96,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             }
             catch (Exception ex)
             {
-                LogSafely(ex, "Duo manager worker failed while shutting down");
+                DuoGeneration.LogCleanupError(Logger, ex, "Duo manager worker failed while shutting down");
             }
 
             try
@@ -118,11 +105,12 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             }
             catch (Exception ex)
             {
-                LogSafely(ex, "Could not finish Duo manager cleanup");
+                DuoGeneration.LogCleanupError(Logger, ex, "Could not finish Duo manager cleanup");
             }
             finally
             {
-                DisposeSafely(_service, "Duo service controller");
+                if (_service != null)
+                    DuoGeneration.DisposeResources(Logger, [_service]);
             }
         }
     }

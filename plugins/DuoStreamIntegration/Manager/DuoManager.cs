@@ -16,6 +16,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
         private const ushort DEFAULT_PORT = 38299;
         private static readonly TimeSpan REFRESH_TIMEOUT = TimeSpan.FromSeconds(5);
 
+        // Lifecycle transitions and refreshes are sequential. Commands never acquire
+        // this mutex: refresh must remain free to confirm their requested state.
         private readonly AsyncLock _lifecycleMutex = new();
         private readonly object _sessionSubscriptionMutex = new();
         private DuoGeneration? _generation;
@@ -30,6 +32,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
         public required Func<DuoInstanceInfo, RegistryKey, DuoInstance> CreateInstance { private get; init; }
 
         protected ServiceController Service => _service ??= new(config.ServiceName);
+
+        protected TimeSpan PollInterval => config.PollInterval;
 
         protected uint? ServicePID => Volatile.Read(ref _generation)?.ProcessId;
 
@@ -79,94 +83,109 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
         protected abstract Task RunAsync(CancellationToken stoppingToken);
 
+        protected async Task Reconcile(uint? processId, CancellationToken stoppingToken)
+        {
+            if (processId is not uint runningProcessId)
+            {
+                await TriggerStopped();
+            }
+            else if (ServicePID == runningProcessId && !IsGenerationInvalidated)
+            {
+                await TriggerRefresh(stoppingToken);
+            }
+            else
+            {
+                if (ServicePID is uint previousProcessId && previousProcessId != runningProcessId)
+                {
+                    Logger.LogWarning(
+                        "Duo service PID changed from {previousPID} to {currentPID} without an observed stop.",
+                        previousProcessId, runningProcessId);
+                }
+
+                await TriggerStopped();
+                await Adopt(runningProcessId, stoppingToken);
+            }
+        }
+
+        protected virtual async Task Adopt(uint processId, CancellationToken stoppingToken)
+            => await TriggerStarted(processId, stoppingToken);
+
         protected async Task<bool> TriggerStarted(
             uint? servicePID = null,
             CancellationToken lifetimeToken = default,
             IDisposable? lifetimeRegistration = null)
         {
-            var processId = servicePID ?? Service.PID
-                ?? throw new InvalidOperationException("The running Duo service has no process ID.");
-            IDisposable? pendingRegistration = lifetimeRegistration;
-            DuoApiConnection? pendingConnection = null;
-            DuoInstance[]? pendingInstances = null;
             DuoGeneration? candidate = null;
 
             try
             {
-                while (true)
+                using (await _lifecycleMutex.LockAsync(lifetimeToken))
                 {
-                    DuoGeneration? conflict;
-                    DuoGeneration? started = null;
+                    ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+                    lifetimeToken.ThrowIfCancellationRequested();
 
-                    using (await _lifecycleMutex.LockAsync(lifetimeToken))
+                    var processId = servicePID ?? Service.PID
+                        ?? throw new InvalidOperationException("The running Duo service has no process ID.");
+
+                    if (_generation is { IsInvalidated: false } current && current.ProcessId == processId)
+                        return false;
+
+                    await RetireGeneration(notify: true);
+
+                    var (servicePath, serviceVersion) = GetServiceInfo();
+                    candidate = CreateGeneration(processId, lifetimeToken, lifetimeRegistration);
+                    lifetimeRegistration = null; // now owned by the generation
+
+                    await RefreshGeneration(candidate, candidate.Token, []);
+                    candidate.Token.ThrowIfCancellationRequested();
+                    ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+
+                    Logger.LogInformation(
+                        "Service is running at: '{path}' ({version}) -> PID {pid}",
+                        servicePath, serviceVersion, processId);
+
+                    var started = candidate;
+                    Volatile.Write(ref _generation, started);
+                    candidate = null;
+
+                    if (started.IsInvalidated)
                     {
-                        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-                        lifetimeToken.ThrowIfCancellationRequested();
-
-                        var current = Volatile.Read(ref _generation);
-
-                        if (current is { IsInvalidated: false } && current.ProcessId == processId)
-                            return false;
-
-                        conflict = current;
-
-                        if (conflict == null)
-                        {
-                            var (servicePath, serviceVersion) = GetServiceInfo();
-                            pendingInstances = LoadInstances().ToArray();
-                            pendingConnection = CreateAPI();
-
-                            candidate = new DuoGeneration(
-                                processId,
-                                pendingConnection,
-                                pendingInstances,
-                                lifetimeToken,
-                                pendingRegistration);
-                            pendingConnection = null;
-                            pendingInstances = null;
-                            pendingRegistration = null;
-
-                            await RefreshGeneration(candidate, candidate.Token, requireCurrent: false, []);
-                            candidate.Token.ThrowIfCancellationRequested();
-
-                            Logger.LogInformation(
-                                "Service is running at: '{path}' ({version}) -> PID {pid}",
-                                servicePath,
-                                serviceVersion,
-                                processId);
-
-                            started = candidate;
-                            Volatile.Write(ref _generation, started);
-                            candidate = null;
-                        }
-                    }
-
-                    if (conflict != null)
-                    {
-                        await RetireGeneration(conflict, notify: true);
-                        continue;
-                    }
-
-                    if (started!.IsInvalidated)
-                    {
-                        await RetireGeneration(started, notify: false);
+                        await RetireGeneration(notify: false);
                         return false;
                     }
 
+                    // Lifecycle notifications share the transition ordering. Their consumers
+                    // may issue commands, which do not acquire the lifecycle mutex.
                     Notify(Started, "started", started);
                     return true;
                 }
             }
             finally
             {
-                DisposeSafely(pendingRegistration, "Duo generation lifetime registration");
-                DisposeSafely(pendingConnection, "Duo API connection");
+                if (lifetimeRegistration != null)
+                    DuoGeneration.DisposeResources(Logger, [lifetimeRegistration]);
 
                 if (candidate != null)
-                    await DestroyGeneration(candidate);
+                    await candidate.DisposeAsync();
+            }
+        }
 
-                if (pendingInstances != null)
-                    DisposeInstances(pendingInstances);
+        private DuoGeneration CreateGeneration(uint processId, CancellationToken token, IDisposable? registration)
+        {
+            var instances = LoadInstances().ToArray();
+            DuoApiConnection? connection = null;
+
+            try
+            {
+                connection = CreateAPI();
+                return new DuoGeneration(processId, connection, instances, token, registration, Logger);
+            }
+            catch
+            {
+                DuoGeneration.DisposeResources(Logger, instances);
+                if (connection != null)
+                    DuoGeneration.DisposeResources(Logger, [connection]);
+                throw;
             }
         }
 
@@ -192,7 +211,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                     if (!ReferenceEquals(Volatile.Read(ref _generation), generation) || generation.IsInvalidated)
                         return;
 
-                    await RefreshGeneration(generation, operation.Token, requireCurrent: true, changes);
+                    await RefreshGeneration(generation, operation.Token, changes);
                 }
             }
             finally
@@ -201,107 +220,92 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             }
         }
 
-        protected Task<bool> TriggerStopped(uint? expectedProcessId = null)
-        {
-            var generation = Volatile.Read(ref _generation);
-
-            if (generation == null || expectedProcessId is uint expected && generation.ProcessId != expected)
-                return Task.FromResult(false);
-
-            return RetireGeneration(generation, notify: true);
-        }
-
-        private Task<bool> TriggerStopped(bool notify)
-        {
-            var generation = Volatile.Read(ref _generation);
-            return generation == null ? Task.FromResult(false) : RetireGeneration(generation, notify);
-        }
-
-        private async Task<bool> RetireGeneration(DuoGeneration generation, bool notify)
+        protected async Task<bool> TriggerStopped(uint? expectedProcessId = null, bool notify = true)
         {
             using (await _lifecycleMutex.LockAsync())
             {
-                if (!ReferenceEquals(Volatile.Read(ref _generation), generation))
+                if (_generation == null || expectedProcessId is uint expected && _generation.ProcessId != expected)
                     return false;
 
-                Volatile.Write(ref _generation, null);
-                InvalidateSafely(generation);
-                ReleaseLifetimeSafely(generation);
+                await RetireGeneration(notify);
+                return true;
             }
+        }
+
+        // Called only while holding the lifecycle mutex, including the drain. A successor
+        // cannot publish its instances until the old generation has finished detaching.
+        private async Task RetireGeneration(bool notify)
+        {
+            var generation = _generation;
+            if (generation == null)
+                return;
+
+            Volatile.Write(ref _generation, null);
+            await generation.CancelAsync();
 
             if (notify)
                 Notify(Stopped, "stopped", generation);
 
-            await DestroyGeneration(generation);
-            return true;
+            await generation.DisposeAsync();
         }
 
         private async Task RefreshGeneration(
             DuoGeneration generation,
             CancellationToken cancellationToken,
-            bool requireCurrent,
             List<StateChange> changes)
         {
             foreach (var instance in generation.Instances)
             {
-                using (await instance.RefreshMutex.LockAsync(cancellationToken))
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (instance.IsDisposed)
+                    continue;
+
+                var isReportedRunning = await QueryRunningState(generation, instance, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (instance.IsDisposed)
+                    continue;
+
+                var wasRunning = instance.IsRunning;
+                bool isRunning;
+
+                if (isReportedRunning)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    if (requireCurrent && !ReferenceEquals(Volatile.Read(ref _generation), generation))
-                        throw new OperationCanceledException("The Duo service generation changed.", cancellationToken);
-
-                    if (instance.IsDisposed)
-                        continue;
-
-                    bool isReportedRunning;
-                    using (var timeout = new CancellationTokenSource(REFRESH_TIMEOUT))
-                    using (var query = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token))
-                    {
-                        try
-                        {
-                            isReportedRunning = await generation.API.QueryInstance(instance.Name, query.Token);
-                        }
-                        catch (OperationCanceledException ex) when (
-                            timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-                        {
-                            throw new System.TimeoutException($"Timed out while refreshing {instance}.", ex);
-                        }
-                    }
-
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    if (requireCurrent && !ReferenceEquals(Volatile.Read(ref _generation), generation))
-                        throw new OperationCanceledException("The Duo service generation changed.", cancellationToken);
-
-                    if (instance.IsDisposed)
-                        continue;
-
-                    var wasRunning = instance.IsRunning;
-                    bool isRunning;
-
-                    if (isReportedRunning)
-                    {
-                        isRunning = instance.IsSandboxed || instance.SessionID != null;
-                    }
-                    else
-                    {
-                        instance.SessionID = null;
-                        isRunning = false;
-                    }
-
-                    if (instance.SetRunningState(isRunning))
-                        changes.Add(new StateChange(instance, isRunning));
-
-                    if (wasRunning != null && wasRunning != isRunning)
-                    {
-                        Logger.LogInformation(
-                            "{instance} is now {state} {source}",
-                            instance.ToString(),
-                            isRunning ? "running" : "stopped",
-                            instance.IsBusy ? "" : "(manually)");
-                    }
+                    isRunning = instance.IsSandboxed || instance.SessionID != null;
                 }
+                else
+                {
+                    instance.SessionID = null;
+                    isRunning = false;
+                }
+
+                if (instance.SetRunningState(isRunning))
+                    changes.Add(new StateChange(instance, isRunning));
+
+                if (wasRunning != null && wasRunning != isRunning)
+                {
+                    Logger.LogInformation(
+                        "{instance} is now {state} {source}",
+                        instance.ToString(),
+                        isRunning ? "running" : "stopped",
+                        instance.IsBusy ? "" : "(manually)");
+                }
+            }
+        }
+
+        private async Task<bool> QueryRunningState(DuoGeneration generation, DuoInstance instance, CancellationToken token)
+        {
+            using var query = CancellationTokenSource.CreateLinkedTokenSource(token);
+            query.CancelAfter(REFRESH_TIMEOUT);
+
+            try
+            {
+                return await generation.API.QueryInstance(instance.Name, query.Token);
+            }
+            catch (OperationCanceledException ex) when (query.IsCancellationRequested && !token.IsCancellationRequested)
+            {
+                throw new System.TimeoutException($"Timed out while refreshing {instance}.", ex);
             }
         }
 
@@ -309,112 +313,24 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
         {
             foreach (var change in changes)
             {
-                if (!Owns(generation, change.Instance) || change.Instance.IsRunning != change.Running)
-                    continue;
-
-                var generationOperation = generation.TryBeginOperation();
-
-                if (generationOperation == null)
-                    continue;
-
-                Task notification;
-
-                try
-                {
-                    notification = change.Instance.TriggerRunningStateChangedAsync(change.Running);
-                }
-                catch (Exception ex)
-                {
-                    generationOperation.Dispose();
-                    LogSafely(ex, "Could not publish the state change for {instance}", change.Instance);
-                    continue;
-                }
-
-                _ = ObserveStateChange(notification, generationOperation, change.Instance);
+                // Actions can await commands whose completion needs a later refresh.
+                _ = PublishStateChange(generation, change);
             }
         }
 
-        private async Task ObserveStateChange(Task notification, IDisposable generationOperation, DuoInstance instance)
+        private async Task PublishStateChange(DuoGeneration generation, StateChange change)
         {
-            try
-            {
-                await notification;
-            }
-            catch (Exception ex)
-            {
-                LogSafely(ex, "Could not publish the state change for {instance}", instance);
-            }
-            finally
-            {
-                generationOperation.Dispose();
-            }
-        }
-
-        private async Task DestroyGeneration(DuoGeneration generation)
-        {
-            InvalidateSafely(generation);
-            ReleaseLifetimeSafely(generation);
-            await generation.WhenIdle;
-
-            DisposeInstances(generation.Instances);
-            DisposeSafely(generation.Connection, "Duo API connection");
-            DisposeSafely(generation, "Duo generation cancellation source");
-        }
-
-        private void DisposeInstances(IEnumerable<DuoInstance> instances)
-        {
-            foreach (var instance in instances)
-                DisposeSafely(instance, instance.ToString());
-        }
-
-        private void InvalidateSafely(DuoGeneration generation)
-        {
-            try
-            {
-                generation.Invalidate();
-            }
-            catch (Exception ex)
-            {
-                LogSafely(ex, "Could not cancel Duo generation {pid}", generation.ProcessId);
-            }
-        }
-
-        private void ReleaseLifetimeSafely(DuoGeneration generation)
-        {
-            try
-            {
-                generation.ReleaseLifetimeRegistration();
-            }
-            catch (Exception ex)
-            {
-                LogSafely(ex, "Could not release Duo generation {pid}", generation.ProcessId);
-            }
-        }
-
-        private void DisposeSafely(IDisposable? resource, string description)
-        {
-            if (resource == null)
+            using var operation = generation.TryBeginOperation();
+            if (operation == null || change.Instance.IsDisposed || change.Instance.IsRunning != change.Running)
                 return;
 
             try
             {
-                resource.Dispose();
+                await change.Instance.TriggerRunningStateChangedAsync(change.Running);
             }
             catch (Exception ex)
             {
-                LogSafely(ex, "Could not dispose {resource}", description);
-            }
-        }
-
-        private void LogSafely(Exception exception, string message, params object?[] args)
-        {
-            try
-            {
-                Logger.LogError(exception, message, args);
-            }
-            catch
-            {
-                // Cleanup must continue even if the logging pipeline is already gone.
+                DuoGeneration.LogCleanupError(Logger, ex, "Could not publish the state change for {instance}", change.Instance);
             }
         }
 
@@ -438,7 +354,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                 }
                 catch (Exception ex)
                 {
-                    LogSafely(ex, "Duo service {transition} subscriber failed", transition);
+                    DuoGeneration.LogCleanupError(Logger, ex, "Duo service {transition} subscriber failed", transition);
                 }
             }
         }
@@ -469,7 +385,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             }
             catch
             {
-                DisposeInstances(instances);
+                DuoGeneration.DisposeResources(Logger, instances);
                 throw;
             }
 

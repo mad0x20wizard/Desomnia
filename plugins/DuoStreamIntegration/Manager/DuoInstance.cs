@@ -7,7 +7,6 @@ using MadWizard.Desomnia.Service.Duo.Sunshine;
 using MadWizard.Desomnia.Session;
 using MadWizard.Desomnia.Session.Manager;
 using Microsoft.Win32;
-using Nito.AsyncEx;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager
 {
@@ -15,8 +14,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
     {
         private int _runningState = -1;
 
-        internal readonly SemaphoreSlim Semaphore = new(1, 1);
-        internal readonly AsyncLock RefreshMutex = new();
+        internal readonly SemaphoreSlim CommandSemaphore = new(1, 1);
 
         public DuoInstance(DuoInstanceInfo info, InstanceSettings settings, RegistryKey? key = null)
         {
@@ -26,8 +24,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             Settings    = settings;
             Service     = new SunshineService(Name, Port);
 
-            GetEvent(nameof(Demand)).AddAction(info.OnDemand);
-            GetEvent(nameof(Idle)).AddAction(info.OnIdle);
+            Event(nameof(Demand)).AddAction(info.OnDemand);
+            Event(nameof(Idle)).AddAction(info.OnIdle);
 
             Started.AddAction(info.OnStart);
             Stopped.AddAction(info.OnStop);
@@ -62,25 +60,14 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             }
         }
 
-        public bool IsBusy => Semaphore.CurrentCount == 0;
+        public bool IsBusy => CommandSemaphore.CurrentCount == 0;
 
-        public bool? IsRunning
+        public bool? IsRunning => Volatile.Read(ref _runningState) switch
         {
-            get => Volatile.Read(ref _runningState) switch
-            {
-                < 0 => null,
-                  0 => false,
-                > 0 => true,
-            };
-
-            internal set
-            {
-                if (SetRunningState(value) && value is bool running)
-                {
-                    TriggerRunningStateChangedAsync(running).GetAwaiter().GetResult();
-                }
-            }
-        }
+            < 0 => null,
+              0 => false,
+            > 0 => true,
+        };
 
         [EventContext]
         public ISession? Session { get; internal set; }
@@ -110,6 +97,36 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
         internal Task TriggerRunningStateChangedAsync(bool running)
         {
             return running ? Started.TriggerEventAsync() : Stopped.TriggerEventAsync();
+        }
+
+        internal StateObservation ObserveState(bool running) => new(this, running);
+
+        internal sealed class StateObservation : IDisposable
+        {
+            private readonly DuoInstance _instance;
+            private readonly bool _running;
+            private readonly TaskCompletionSource _changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public StateObservation(DuoInstance instance, bool running)
+            {
+                _instance = instance;
+                _running = running;
+
+                // Subscribe before reading: a transition during subscription must not be lost.
+                instance.RunningStateChanged += StateChanged;
+                if (instance.IsRunning is bool state)
+                    StateChanged(state);
+            }
+
+            public Task WaitAsync(CancellationToken token) => _changed.Task.WaitAsync(token);
+
+            private void StateChanged(bool running)
+            {
+                if (running == _running)
+                    _changed.TrySetResult();
+            }
+
+            public void Dispose() => _instance.RunningStateChanged -= StateChanged;
         }
 
         public bool HasInitiated(ISession session)

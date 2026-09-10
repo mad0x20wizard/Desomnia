@@ -5,15 +5,8 @@ using System.ServiceProcess;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager
 {
-    internal class DuoPollingManager : DuoManager
+    internal class DuoPollingManager(DuoSessionMonitorConfig config) : DuoManager(config)
     {
-        private readonly DuoSessionMonitorConfig _config;
-
-        public DuoPollingManager(DuoSessionMonitorConfig config) : base(config)
-        {
-            _config = config;
-        }
-
         protected override async Task RunAsync(CancellationToken stoppingToken)
         {
             var serviceNotFound = false;
@@ -26,31 +19,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                     {
                         Service.Refresh();
 
-                        if (Service.Status == ServiceControllerStatus.Running && Service.PID is uint processId)
-                        {
-                            if (ServicePID != processId || IsGenerationInvalidated)
-                            {
-                                if (ServicePID is uint previousProcessId && previousProcessId != processId)
-                                {
-                                    Logger.LogWarning(
-                                        "Duo service PID changed from {previousPID} to {currentPID} between polls.",
-                                        previousProcessId,
-                                        processId);
-                                }
-
-                                await TriggerStopped();
-                                await TriggerStarted(processId, stoppingToken);
-                                Logger.LogDebug("Polling instances every {refresh}", _config.PollInterval);
-                            }
-                            else
-                            {
-                                await TriggerRefresh(stoppingToken);
-                            }
-                        }
-                        else
-                        {
-                            await TriggerStopped();
-                        }
+                        await Reconcile(Service.Status == ServiceControllerStatus.Running ? Service.PID : null, stoppingToken);
 
                         serviceNotFound = false;
                     }
@@ -74,13 +43,19 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                         Logger.LogError(ex, "Error checking Duo instances.");
                     }
 
-                    await Task.Delay(_config.PollInterval, stoppingToken);
+                    await Task.Delay(PollInterval, stoppingToken);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
                 // Normal hosted-service shutdown.
             }
+        }
+
+        protected override async Task Adopt(uint processId, CancellationToken stoppingToken)
+        {
+            await base.Adopt(processId, stoppingToken);
+            Logger.LogDebug("Polling instances every {refresh}", PollInterval);
         }
     }
 }

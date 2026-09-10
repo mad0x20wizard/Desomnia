@@ -432,7 +432,7 @@ namespace MadWizard.Desomnia.Events
         /// <summary>The string-keyed handle for events INHERITED from a base class —
         /// C# lets a field-like event be used as a delegate only inside its declaring
         /// class, so derived code writes <c>GetEvent(nameof(Idle)).AddAction(...)</c>.</summary>
-        protected EventType GetEvent(string eventName) => GetEventType(eventName);
+        protected EventType Event(string eventName) => GetEventType(eventName);
 
         /// <summary>
         /// Offers a foreign event's action to this object, resolving through the FULL

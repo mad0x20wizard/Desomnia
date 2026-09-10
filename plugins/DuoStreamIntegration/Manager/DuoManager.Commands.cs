@@ -34,7 +34,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
             using var generationOperation = generation!.TryBeginOperation();
 
-            if (generationOperation == null || !Owns(generation, instance))
+            if (generationOperation == null)
                 return;
 
             using var timeoutSource = new CancellationTokenSource();
@@ -43,34 +43,23 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                 cancellationToken,
                 generation.Token,
                 timeoutSource.Token);
-            var semaphoreEntered = false;
 
             try
             {
-                await instance.Semaphore.WaitAsync(operation.Token);
-                semaphoreEntered = true;
-
-                if (!Owns(generation, instance) || instance.IsRunning == running)
-                    return;
-
-                Logger.LogInformation(
-                    "{operation} {instance}...",
-                    running ? "Starting" : "Stopping",
-                    instance.ToString());
-
-                var changed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-                void InstanceChanged(bool state)
-                {
-                    if (state == running)
-                        changed.TrySetResult(true);
-                }
-
-                instance.RunningStateChanged += InstanceChanged;
-
+                await instance.CommandSemaphore.WaitAsync(operation.Token);
                 try
                 {
-                    if (instance.IsRunning == running || !Owns(generation, instance))
+                    operation.Token.ThrowIfCancellationRequested();
+                    if (instance.IsRunning == running)
+                        return;
+
+                    Logger.LogInformation(
+                        "{operation} {instance}...",
+                        running ? "Starting" : "Stopping",
+                        instance.ToString());
+
+                    using var changed = instance.ObserveState(running);
+                    if (instance.IsRunning == running)
                         return;
 
                     if (running)
@@ -78,17 +67,12 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                     else
                         await generation.API.StopInstance(instance.Name, operation.Token);
 
-                    if (instance.IsRunning != running)
-                        await changed.Task.WaitAsync(operation.Token);
-
+                    await changed.WaitAsync(operation.Token);
                     operation.Token.ThrowIfCancellationRequested();
-
-                    if (!Owns(generation, instance))
-                        throw new OperationCanceledException("The Duo service generation changed.", generation.Token);
                 }
                 finally
                 {
-                    instance.RunningStateChanged -= InstanceChanged;
+                    instance.CommandSemaphore.Release();
                 }
             }
             catch (OperationCanceledException ex) when (
@@ -108,11 +92,6 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                     "Aborted {operation} for {instance} because its Duo service generation ended.",
                     running ? "start" : "stop",
                     instance);
-            }
-            finally
-            {
-                if (semaphoreEntered)
-                    instance.Semaphore.Release();
             }
         }
 

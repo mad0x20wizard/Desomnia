@@ -7,11 +7,10 @@ using System.Threading.Channels;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager
 {
-    internal class DuoEventManager : DuoManager
+    internal class DuoEventManager(DuoSessionMonitorConfig config) : DuoManager(config)
     {
         internal static readonly Version MinVersion = new(1, 5, 7);
 
-        private readonly DuoSessionMonitorConfig _config;
         private readonly object _watcherMutex = new();
         private readonly Channel<byte> _signals = Channel.CreateBounded<byte>(new BoundedChannelOptions(1)
         {
@@ -30,11 +29,6 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
         private bool _watcherDisposed;
 
         public required IProcessManager ProcessManager { private get; init; }
-
-        public DuoEventManager(DuoSessionMonitorConfig config) : base(config)
-        {
-            _config = config;
-        }
 
         private static string XPath
         {
@@ -55,7 +49,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                 while (!stoppingToken.IsCancellationRequested)
                 {
                     using var wakeup = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-                    wakeup.CancelAfter(_config.PollInterval);
+                    wakeup.CancelAfter(PollInterval);
 
                     try
                     {
@@ -75,7 +69,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
                     try
                     {
-                        await Reconcile(stoppingToken);
+                        await ReconcileService(stoppingToken);
                     }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                     {
@@ -97,48 +91,24 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             }
         }
 
-        private async Task Reconcile(CancellationToken stoppingToken)
+        private async Task ReconcileService(CancellationToken stoppingToken)
         {
             Service.Refresh();
-            var status = Service.Status;
+            var processId = Service.Status == ServiceControllerStatus.Running ? Service.PID : null;
 
-            if (status == ServiceControllerStatus.Running)
+            if (Service.Status == ServiceControllerStatus.Running && processId == null)
             {
-                if (Service.PID is not uint processId)
-                {
-                    Logger.LogWarning("The running Duo service has no process ID.");
+                Logger.LogWarning("The running Duo service has no process ID.");
 
-                    if (IsGenerationInvalidated)
-                        await TriggerStopped();
-
-                    return;
-                }
-
-                if (ServicePID != processId || IsGenerationInvalidated)
-                {
-                    if (ServicePID is uint previousProcessId && previousProcessId != processId)
-                    {
-                        Logger.LogWarning(
-                            "Duo service PID changed from {previousPID} to {currentPID} without an observed stop.",
-                            previousProcessId,
-                            processId);
-                    }
-
+                if (IsGenerationInvalidated)
                     await TriggerStopped();
-                    await Adopt(processId, stoppingToken);
-                }
-                else
-                {
-                    await TriggerRefresh(stoppingToken);
-                }
-
                 return;
             }
 
-            await TriggerStopped();
+            await Reconcile(processId, stoppingToken);
         }
 
-        private async Task Adopt(uint processId, CancellationToken stoppingToken)
+        protected override async Task Adopt(uint processId, CancellationToken stoppingToken)
         {
             var process = ProcessManager[(int)processId];
             var subscription = new DuoProcessSubscription(process, stoppingToken, Signal);

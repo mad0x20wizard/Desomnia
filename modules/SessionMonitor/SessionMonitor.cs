@@ -32,8 +32,8 @@ namespace MadWizard.Desomnia.Session
 
         async Task IHostedService.StartAsync(CancellationToken cancellationToken)
         {
-            GetEvent(nameof(Idle)).AddAction(config.OnIdle);
-            GetEvent(nameof(Demand)).AddAction(config.OnDemand);
+            Event(nameof(Idle)).AddAction(config.OnIdle);
+            Event(nameof(Demand)).AddAction(config.OnDemand);
 
             foreach (ISession session in manager)
                 TrackSession(session);

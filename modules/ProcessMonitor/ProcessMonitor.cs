@@ -14,8 +14,8 @@ namespace MadWizard.Desomnia.Processes
 
         void IStartable.Start()
         {
-            GetEvent(nameof(Idle)).AddAction(config.OnIdle);
-            GetEvent(nameof(Demand)).AddAction(config.OnDemand);
+            Event(nameof(Idle)).AddAction(config.OnIdle);
+            Event(nameof(Demand)).AddAction(config.OnDemand);
 
             if (config.HasThresholds)
             {

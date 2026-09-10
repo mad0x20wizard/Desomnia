@@ -69,8 +69,8 @@ namespace MadWizard.Desomnia
             if (config.OnSuspendTimeout is DelayedActionInfo delayed && !delayed.HasDelay)
                 throw new ArgumentException("onSuspendTimeout must have a delay set", nameof(config.OnSuspendTimeout));
 
-            GetEvent(nameof(Idle)).AddAction(config.OnIdle);      // inherited from Resource —
-            GetEvent(nameof(Demand)).AddAction(config.OnDemand);  // string-keyed by necessity
+            Event(nameof(Idle)).AddAction(config.OnIdle);      // inherited from Resource —
+            Event(nameof(Demand)).AddAction(config.OnDemand);  // string-keyed by necessity
 
             Suspend.AddAction(config.OnSuspend);
             SuspendTimeout.AddAction(config.OnSuspendTimeout);
@@ -84,8 +84,8 @@ namespace MadWizard.Desomnia
 
         private void PowerManager_Suspended(object? sender, EventArgs e)
         {
-            GetEvent(nameof(Idle)).CancelActions();            // imperative by design: an OS callback,
-            GetEvent(nameof(SuspendTimeout)).CancelActions();  // not a trigger-time relation (§6.5)
+            Event(nameof(Idle)).CancelActions();            // imperative by design: an OS callback,
+            Event(nameof(SuspendTimeout)).CancelActions();  // not a trigger-time relation (§6.5)
         }
 
         private void PowerManager_ResumeSuspended(object? sender, EventArgs e)
