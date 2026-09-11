@@ -23,8 +23,8 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
 
         public bool WatchStreamTraffic { get; set; } = true;
 
-        public IList<DuoInstanceInfo> Instance { get; private set; } = [];
+        public IList<DuoInstanceWatchInfo> Instance { get; private set; } = [];
 
-        internal DuoInstanceInfo? this[string name] => Instance.FirstOrDefault(i => i.Name == name);
+        internal DuoInstanceWatchInfo? this[string name] => Instance.FirstOrDefault(i => i.Name == name);
     }
 }

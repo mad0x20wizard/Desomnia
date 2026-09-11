@@ -6,7 +6,7 @@ using MadWizard.Desomnia.Service.Duo.Configuration;
 using MadWizard.Desomnia.Service.Duo.Sunshine;
 using MadWizard.Desomnia.Session;
 using MadWizard.Desomnia.Session.Manager;
-using Microsoft.Win32;
+using Nito.AsyncEx;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager
 {
@@ -14,15 +14,14 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
     {
         private int _runningState = -1;
 
-        internal readonly SemaphoreSlim CommandSemaphore = new(1, 1);
+        internal AsyncLock Mutex { get; } = new();
 
-        public DuoInstance(DuoInstanceInfo info, InstanceSettings settings, RegistryKey? key = null)
+        public DuoInstance(string name, InstanceSettings settings, DuoInstanceWatchInfo info)
         {
-            Key         = key;
-            Info        = info;
-            Watch       = info.Watch;
+            Name        = name;
             Settings    = settings;
-            Service     = new SunshineService(Name, Port);
+            Service     = new SunshineService(Name, Settings.Port);
+            Info        = info;
 
             Event(nameof(Demand)).AddAction(info.OnDemand);
             Event(nameof(Idle)).AddAction(info.OnIdle);
@@ -31,109 +30,46 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             Stopped.AddAction(info.OnStop);
         }
 
-        private RegistryKey? Key { get; }
+        public string Name { get; }
 
-        internal DuoInstanceInfo Info { get; }
-        internal WatchExpression Watch { get; set; }
+        internal InstanceSettings Settings { get; }
+        internal SunshineService Service { get; }
 
-        private InstanceSettings Settings { get; }
+        internal DuoInstanceWatchInfo Info { get; }
+        internal WatchExpression? Watch { get; set; }
 
-        public string Name => Settings.Name;
-        public ushort Port => Settings.Port;
-        public string UserName => Settings.UserName;
-        public bool IsSandboxed => Settings.IsSandboxed;
-
-        public SunshineService Service { get; }
-
-        public uint? SessionID
+        public bool? IsRunning
         {
             get
             {
-                return Key != null ? (uint?)(Key["SessionId"] as int?) : field;
+                return Volatile.Read(ref _runningState) switch
+                {
+                    < 0 => false,
+                      0 => null,
+                    > 0 => true,
+                };
             }
 
-            set
+            internal set
             {
-                Key?["SessionId"] = value;
+                var state = value switch
+                {
+                    false   => -1,
+                    null    =>  0,
+                    true    => +1,
+                };
 
-                field = value;
+                Interlocked.Exchange(ref _runningState, state);
             }
         }
 
-        public bool IsBusy => CommandSemaphore.CurrentCount == 0;
-
-        public bool? IsRunning => Volatile.Read(ref _runningState) switch
-        {
-            < 0 => null,
-              0 => false,
-            > 0 => true,
-        };
-
         [EventContext]
-        public ISession? Session { get; internal set; }
+        public ISession? Session => this.OfType<SessionWatch>().FirstOrDefault()?.Session;
 
         public event EventInvocation? Started;
         public event EventInvocation? Stopped;
 
-        internal event Action<bool>? RunningStateChanged;
-
-        internal bool SetRunningState(bool? value)
-        {
-            var state = value switch
-            {
-                null    => -1,
-                false   => 0,
-                true    => 1,
-            };
-            var previous = Interlocked.Exchange(ref _runningState, state);
-
-            if (previous == state || previous < 0 || value is not bool running)
-                return false;
-
-            RunningStateChanged?.Invoke(running);
-            return true;
-        }
-
-        internal Task TriggerRunningStateChangedAsync(bool running)
-        {
-            return running ? Started.TriggerEventAsync() : Stopped.TriggerEventAsync();
-        }
-
-        internal StateObservation ObserveState(bool running) => new(this, running);
-
-        internal sealed class StateObservation : IDisposable
-        {
-            private readonly DuoInstance _instance;
-            private readonly bool _running;
-            private readonly TaskCompletionSource _changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            public StateObservation(DuoInstance instance, bool running)
-            {
-                _instance = instance;
-                _running = running;
-
-                // Subscribe before reading: a transition during subscription must not be lost.
-                instance.RunningStateChanged += StateChanged;
-                if (instance.IsRunning is bool state)
-                    StateChanged(state);
-            }
-
-            public Task WaitAsync(CancellationToken token) => _changed.Task.WaitAsync(token);
-
-            private void StateChanged(bool running)
-            {
-                if (running == _running)
-                    _changed.TrySetResult();
-            }
-
-            public void Dispose() => _instance.RunningStateChanged -= StateChanged;
-        }
-
-        public bool HasInitiated(ISession session)
-        {
-            return this.Name == session.ClientName && this.UserName == session.UserName;
-        }
-
+        #region Idle / Demand detection
         internal async Task NetworkServiceWatch_Demand(Event @event)
         {
             if (@event is not InspectionEvent) // don't trigger for inspection events
@@ -159,7 +95,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
             if (tokens.OfType<SessionUsage>().FirstOrDefault() is { } session)
             {
-                var duo = new DuoSessionUsage(Name, UserName) { Metrics = session.Metrics };
+                var duo = new DuoSessionUsage(Name, session.UserName) { Metrics = session.Metrics };
 
                 foreach (var t in session.Tokens)
                 {
@@ -180,7 +116,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                     duo.Metrics.Add("StreamTraffic", network is not null);
                 }
 
-                if (Watch.Evaluate(duo.Metrics) || session.Tokens.Count > 0)
+                if (Watch?.Evaluate(duo.Metrics) ?? false || session.Tokens.Count > 0)
                 {
                     yield return duo;
                 }
@@ -194,25 +130,11 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             // sync idle/demand state with SessionWatch
             this.OfType<SessionWatch>().SingleOrDefault()?.InjectInspectionResult(duration, tokens);
         }
+        #endregion
 
         public override void Dispose()
         {
-            try
-            {
-                base.Dispose();
-            }
-            finally
-            {
-                Key?.Dispose();
-            }
-        }
-
-        public sealed record InstanceSettings
-        {
-            public required string    Name            { get; init; }
-            public required ushort    Port            { get; init; }
-            public required string    UserName        { get; init; }
-            public required bool      IsSandboxed     { get; init; }
+            base.Dispose();
         }
 
         public override string ToString()

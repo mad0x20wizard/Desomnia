@@ -4,36 +4,46 @@ using MadWizard.Desomnia.Ressource.Events;
 using MadWizard.Desomnia.Service.Duo.Manager;
 using MadWizard.Desomnia.Session;
 using MadWizard.Desomnia.Session.Configuration;
+using MadWizard.Desomnia.Session.Manager;
 
 namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
 {
-    internal class SessionWatchAdapter(SessionMonitorConfig config, SessionMonitor monitor, DuoManager manager) : IStartable, IDisposable
+    internal class SessionWatchAdapter(SessionMonitorConfig config) : IStartable, IDisposable
     {
-        void IStartable.Start()
-        {
-            monitor.TrackingStarted += Monitor_TrackingStarted;
-            monitor.InspectionFilter += Monitor_InspectionFilter;
-            monitor.TrackingStopped += Monitor_TrackingStopped;
+        public required DuoSessionMonitor   DuoSessionMonitor   { private get; init; }
+        public required SessionMonitor      SessionMonitor      { private get; init; }
 
-            manager.Started += Manager_Started;
+        static bool IsConnectedTo(DuoInstance instance, ISession session)
+        {
+            return instance.Name == session.ClientName && instance.Settings.UserName == session.UserName;
         }
 
-        private void Manager_Started(object? sender, DuoLifecycleEventArgs args)
+        void IStartable.Start()
         {
-            foreach (var watch in monitor)
+            SessionMonitor.TrackingStarted += SessionMonitor_TrackingStarted;
+            SessionMonitor.InspectionFilter += SessionMonitor_InspectionFilter;
+            SessionMonitor.TrackingStopped += SessionMonitor_TrackingStopped;
+
+            DuoSessionMonitor.TrackingStarted += DuoSessionMonitor_TrackingStarted;
+            DuoSessionMonitor.TrackingStopped += DuoSessionMonitor_TrackingStopped;
+        }
+
+        private void DuoSessionMonitor_TrackingStarted(object? sender, InspectableEventArgs<DuoInstance> args)
+        {
+            foreach (var watch in SessionMonitor)
             {
-                ClaimWatch(watch, args.Instances);
+                MaybeClaimWatch(watch, [args.Inspectable]);
             }
         }
 
-        private void Monitor_TrackingStarted(object? sender, InspectableEventArgs<SessionWatch> args)
+        private void SessionMonitor_TrackingStarted(object? sender, InspectableEventArgs<SessionWatch> args)
         {
-            ClaimWatch(args.Inspectable, manager);
+            MaybeClaimWatch(args.Inspectable, DuoSessionMonitor);
         }
 
-        private void ClaimWatch(SessionWatch watch, IEnumerable<DuoInstance> instances)
+        private void MaybeClaimWatch(SessionWatch watch, IEnumerable<DuoInstance> instances)
         {
-            foreach (var instance in instances.Where(i => i.HasInitiated(watch.Session)))
+            foreach (var instance in instances.Where(instance => IsConnectedTo(instance, watch.Session)))
             {
                 if (!instance.Contains(watch))
                 {
@@ -59,9 +69,9 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
         /// </summary>
         ///
         /// <returns>false = no inspection</returns>
-        private bool Monitor_InspectionFilter(SessionWatch watch)
+        private bool SessionMonitor_InspectionFilter(SessionWatch watch)
         {
-            foreach (var instance in manager)
+            foreach (var instance in DuoSessionMonitor)
             {
                 if (instance.Contains(watch))
                 {
@@ -72,11 +82,21 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
             return true;
         }
 
-        private void Monitor_TrackingStopped(object? sender, InspectableEventArgs<SessionWatch> args)
+        private void SessionMonitor_TrackingStopped(object? sender, InspectableEventArgs<SessionWatch> args)
         {
             var watch = args.Inspectable;
 
-            foreach (var instance in manager.Where(i => i.Contains(watch)))
+            foreach (var instance in DuoSessionMonitor.Where(i => i.Contains(watch)))
+            {
+                instance.StopTracking(watch);
+            }
+        }
+
+        private void DuoSessionMonitor_TrackingStopped(object? sender, InspectableEventArgs<DuoInstance> args)
+        {
+            var instance = args.Inspectable;
+
+            foreach (var watch in instance.OfType<SessionWatch>())
             {
                 instance.StopTracking(watch);
             }
@@ -84,11 +104,12 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
 
         void IDisposable.Dispose()
         {
-            monitor.TrackingStarted -= Monitor_TrackingStarted;
-            monitor.InspectionFilter -= Monitor_InspectionFilter;
-            monitor.TrackingStopped -= Monitor_TrackingStopped;
+            DuoSessionMonitor.TrackingStarted -= DuoSessionMonitor_TrackingStarted;
+            DuoSessionMonitor.TrackingStopped -= DuoSessionMonitor_TrackingStopped;
 
-            manager.Started -= Manager_Started;
+            SessionMonitor.TrackingStarted -= SessionMonitor_TrackingStarted;
+            SessionMonitor.InspectionFilter -= SessionMonitor_InspectionFilter;
+            SessionMonitor.TrackingStopped -= SessionMonitor_TrackingStopped;
         }
     }
 }

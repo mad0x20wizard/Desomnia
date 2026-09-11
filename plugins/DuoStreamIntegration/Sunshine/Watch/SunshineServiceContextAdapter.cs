@@ -3,12 +3,13 @@ using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Network.Context;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Watch;
+using MadWizard.Desomnia.Ressource.Events;
 using MadWizard.Desomnia.Service.Duo.Manager;
 using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
 {
-    internal class SunshineServiceContextAdapter(DuoManager manager) : SunshineServiceAdapter, INetworkService
+    internal class SunshineServiceContextAdapter(DuoSessionMonitor monitor) : SunshineServiceAdapter, INetworkService
     {
         public required ILogger<SunshineServiceContextAdapter> Logger { get; set; }
 
@@ -24,15 +25,15 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
 
             _contexts = [];
 
-            manager.Started += Manager_Started;
-            manager.Stopped += Manager_Stopped;
+            monitor.TrackingStarted += Monitor_TrackingStarted;
+            monitor.TrackingStopped += Monitor_TrackingStopped;
 
-            WatchInstances([.. manager]);
+            WatchInstances([.. monitor]);
         }
 
-        private void Manager_Started(object? sender, DuoLifecycleEventArgs args)
+        private void Monitor_TrackingStarted(object? sender, InspectableEventArgs<DuoInstance> args)
         {
-            WatchInstances(args.Instances);
+            WatchInstances([args.Inspectable]);
         }
 
         private void WatchInstances(IEnumerable<DuoInstance> instances)
@@ -43,7 +44,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
                 {
                     try
                     {
-                        Logger.LogInformation($"Monitoring {instance.ToString()}:{instance.Port}" + (instance.IsRunning == true ? " (running)" : ""));
+                        Logger.LogInformation($"Monitoring {instance.ToString()}:{instance.Settings.Port}" + (instance.IsRunning == true ? " (running)" : ""));
 
                         var context = LocalHostContext.CreateWatchedService<SunshineServiceContext>
                         (
@@ -57,7 +58,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
                     }
                     catch (Exception ex)
                     {
-                        Logger.LogError(ex, $"NOT Monitoring {instance.ToString()}:{instance.Port} -> could not create service context");
+                        Logger.LogError(ex, $"NOT Monitoring {instance.ToString()}:{instance.Settings.Port} -> could not create service context");
                     }
                 }
             }
@@ -81,15 +82,15 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
             }
         }
 
-        private void Manager_Stopped(object? sender, DuoLifecycleEventArgs args)
+        private void Monitor_TrackingStopped(object? sender, InspectableEventArgs<DuoInstance> args)
         {
-            UnWatchInstances(args.Instances);
+            UnWatchInstances([args.Inspectable]);
         }
 
         async Task INetworkService.Shutdown(NetworkShutdownReason reason)
         {
-            manager.Stopped -= Manager_Stopped;
-            manager.Started -= Manager_Started;
+            monitor.TrackingStarted -= Monitor_TrackingStarted;
+            monitor.TrackingStopped -= Monitor_TrackingStopped;
 
             UnWatchInstances(_contexts!.Keys);
 

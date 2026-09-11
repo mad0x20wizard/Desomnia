@@ -3,7 +3,7 @@ using MadWizard.Desomnia.Session.Configuration;
 
 namespace MadWizard.Desomnia.Service.Duo.Configuration
 {
-    public record DuoInstanceInfo : SessionWatchInfo
+    public record DuoInstanceWatchInfo : SessionWatchInfo
     {
         public required string Name { get; set; }
 
@@ -16,7 +16,7 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
 
         public TransmissionThreshold? MinStreamTraffic { get; set; }
 
-        public DuoInstanceInfo()
+        public DuoInstanceWatchInfo()
         {
             WatchInputRemote = true; // Duo sessions are remote and should be generally checked for input idleness
         }
