@@ -1,6 +1,6 @@
 ﻿namespace Microsoft.Win32
 {
-    internal static class WindowsRegistryExt
+    public static class WindowsRegistryExt
     {
         extension (RegistryKey key)
         {

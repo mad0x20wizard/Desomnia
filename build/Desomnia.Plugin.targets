@@ -1,0 +1,47 @@
+<Project>
+  <PropertyGroup>
+    <_DesomniaRepositoryRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..'))</_DesomniaRepositoryRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Only referenced projects are affected; the wildcard also covers future core modules. -->
+    <DesomniaHostProject Include="$(_DesomniaRepositoryRoot)DesomniaCore/DesomniaCore.csproj;$(_DesomniaRepositoryRoot)DesomniaService/DesomniaService.csproj;$(_DesomniaRepositoryRoot)modules/*/*.csproj" />
+    <DesomniaHostPackage Include="System.ServiceProcess.ServiceController;System.Diagnostics.EventLog">
+      <NuGetPackageId>%(Identity)</NuGetPackageId>
+    </DesomniaHostPackage>
+
+    <!-- Apply before restore so host packages' native assets and build rules do not flow
+         into the plugin. Compile references remain available. -->
+    <ProjectReference Update="@(DesomniaHostProject)">
+      <Private>false</Private>
+      <ExcludeAssets>runtime;native;buildTransitive</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- The SDK adds transitive project references after evaluation. Preserve private
+       references and their metadata while marking the host projects as non-copy-local. -->
+  <Target Name="DesomniaShareTransitiveHostProjects" AfterTargets="IncludeTransitiveProjectReferences">
+    <ItemGroup>
+      <_DesomniaPrivateProjectReference Include="@(ProjectReference)" />
+      <_DesomniaPrivateProjectReference Remove="@(DesomniaHostProject)" MatchOnMetadata="FullPath" MatchOnMetadataOptions="PathLike" />
+      <_DesomniaSharedProjectReference Include="@(ProjectReference)" Exclude="@(_DesomniaPrivateProjectReference)" />
+      <ProjectReference Remove="@(_DesomniaSharedProjectReference)" />
+      <ProjectReference Include="@(_DesomniaSharedProjectReference)">
+        <Private>false</Private>
+        <ExcludeAssets>runtime;native;buildTransitive</ExcludeAssets>
+      </ProjectReference>
+    </ItemGroup>
+  </Target>
+
+  <!-- A plugin's own packages can independently depend on host packages. Filter their
+       resolved runtime assets by package ID, without imposing package versions. Both
+       copy-local processing and SDK deps.json generation consume these item lists. -->
+  <Target Name="DesomniaExcludeHostRuntimeAssets" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <RuntimeCopyLocalItems Remove="@(DesomniaHostPackage)" MatchOnMetadata="NuGetPackageId" MatchOnMetadataOptions="CaseInsensitive" />
+      <RuntimeTargetsCopyLocalItems Remove="@(DesomniaHostPackage)" MatchOnMetadata="NuGetPackageId" MatchOnMetadataOptions="CaseInsensitive" />
+      <NativeCopyLocalItems Remove="@(DesomniaHostPackage)" MatchOnMetadata="NuGetPackageId" MatchOnMetadataOptions="CaseInsensitive" />
+      <ResourceCopyLocalItems Remove="@(DesomniaHostPackage)" MatchOnMetadata="NuGetPackageId" MatchOnMetadataOptions="CaseInsensitive" />
+    </ItemGroup>
+  </Target>
+</Project>

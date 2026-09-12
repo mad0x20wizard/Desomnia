@@ -40,7 +40,7 @@ namespace MadWizard.Desomnia.Network.Middleware
             {
                 var client = new HttpClient { BaseAddress = new Uri("http://localhost:" + settings.Port) };
 
-                DuoManager manager = ctx.Resolve<DuoWebAPIManager>(TypedParameter.From(client));
+                IDuoManager manager = ctx.Resolve<DuoWebAPIManager>(TypedParameter.From(client));
 
                 IEnumerable<DuoInstance> instances = [.. CreateInstances(settings.Instances)];
 

@@ -1,6 +1,6 @@
 ﻿using System.CommandLine;
 
-namespace MadWizard.Desomnia.Application
+namespace MadWizard.Desomnia.Service
 {
     internal class WindowsServiceParameters : RootCommand
     {

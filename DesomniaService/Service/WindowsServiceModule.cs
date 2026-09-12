@@ -2,7 +2,7 @@ using Autofac;
 using Autofac.Core;
 using MadWizard.Desomnia.Session.Manager;
 
-namespace MadWizard.Desomnia.Service.Windows
+namespace MadWizard.Desomnia.Service
 {
     internal class WindowsServiceModule : Desomnia.Module
     {

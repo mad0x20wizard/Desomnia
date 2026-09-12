@@ -19,6 +19,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             {
                 bool status = await Manager.QueryRunningState(instance, token);
 
+                token.ThrowIfCancellationRequested();
+
                 NotifyInstanceStatus(instance, status);
             }
         }

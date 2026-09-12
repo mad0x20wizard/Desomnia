@@ -8,6 +8,7 @@
 	<RootNamespace>MadWizard.Desomnia.Service.Duo</RootNamespace>
 	<SupportedOSPlatformVersion>8.0</SupportedOSPlatformVersion>
 	<OutputType>Library</OutputType>
+    <IsDesomniaPlugin>true</IsDesomniaPlugin>
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,36 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
-	  <ProjectReference Include="..\..\DesomniaService\DesomniaService.csproj">
-		  <ExcludeAssets>runtime</ExcludeAssets>
-		  <Private>false</Private>
-	  </ProjectReference>
-
-	  <ProjectReference Include="..\..\DesomniaCore\DesomniaCore.csproj">
-		  <Private>false</Private>
-		  <ExcludeAssets>runtime</ExcludeAssets>
-	  </ProjectReference>
-
-	  <ProjectReference Include="..\..\modules\ProcessMonitor\ProcessMonitor.csproj">
-		  <Private>false</Private>
-		  <ExcludeAssets>all</ExcludeAssets>
-	  </ProjectReference>
-	  <ProjectReference Include="..\..\modules\PowerRequestMonitor\PowerRequestMonitor.csproj">
-		  <Private>false</Private>
-		  <ExcludeAssets>all</ExcludeAssets>
-	  </ProjectReference>
-	  <ProjectReference Include="..\..\modules\NetworkMonitor\NetworkMonitor.csproj">
-		  <Private>false</Private>
-		  <ExcludeAssets>all</ExcludeAssets>
-	  </ProjectReference>
-	  <ProjectReference Include="..\..\modules\NetworkSessionMonitor\NetworkSessionMonitor.csproj">
-		  <Private>false</Private>
-		  <ExcludeAssets>all</ExcludeAssets>
-	  </ProjectReference>
-	  <ProjectReference Include="..\..\modules\SessionMonitor\SessionMonitor.csproj">
-		  <Private>false</Private>
-		  <ExcludeAssets>all</ExcludeAssets>
-	  </ProjectReference>
+    <ProjectReference Include="..\..\DesomniaService\DesomniaService.csproj" />
   </ItemGroup>
 
   <ItemGroup>

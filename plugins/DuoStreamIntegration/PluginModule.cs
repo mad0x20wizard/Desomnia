@@ -75,7 +75,7 @@ namespace MadWizard.Desomnia.Service.Duo
 
                         if (service.Version >= EventWatcher.MinVersion)
                         {
-                            builder.RegisterType<EventWatcher>().As<Watcher>()
+                            builder.RegisterType<EventWatcher>().As<IDuoInstanceWatcher>()
                                 .InstancePerOwned<DuoServiceContext>();
 
                             goto skipPolling;
@@ -94,7 +94,7 @@ namespace MadWizard.Desomnia.Service.Duo
                     }
                 }
 
-                builder.RegisterType<PollingWatcher>().As<Watcher>()
+                builder.RegisterType<PollingWatcher>().As<IDuoInstanceWatcher>()
                     .WithParameter(TypedParameter.From(duo.PollInterval))
                     .InstancePerOwned<DuoServiceContext>();
 

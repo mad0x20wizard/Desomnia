@@ -1,7 +1,7 @@
 using Autofac;
 using MadWizard.Desomnia;
 using MadWizard.Desomnia.Application;
-using MadWizard.Desomnia.Service.Windows;
+using MadWizard.Desomnia.Service;
 using System.Diagnostics;
 using System.Reflection;
 
