@@ -5,6 +5,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 {
     internal class DuoWebAPIManager : IDuoManager, IDisposable
     {
+        private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(5);
+
         public required ILogger<DuoWebAPIManager> Logger { private get; init; }
 
         private IDuoWebManager API { get; init; }
@@ -18,7 +20,9 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
         public async Task<bool> QueryRunningState(DuoInstance instance, CancellationToken token)
         {
-            return await API.QueryInstance(instance.Name, token);
+            using var cancellation = token.WithTimeout(QueryTimeout);
+
+            return await API.QueryInstance(instance.Name, cancellation.Token);
         }
 
         public async Task ChangeState(DuoInstance instance, bool running, CancellationToken token)

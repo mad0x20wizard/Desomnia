@@ -8,9 +8,9 @@ namespace MadWizard.Desomnia.Service.Duo
 {
     internal class DuoSessionMonitor(DuoService service) : ResourceMonitor<DuoInstance>
     {
-        private static readonly TimeSpan QueryTimeout   = TimeSpan.FromSeconds(5);
-        private static readonly TimeSpan UpdateTimeout  = TimeSpan.FromSeconds(20);
-        private static readonly TimeSpan RetryDelay     = TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan StartupTimeout  = TimeSpan.FromSeconds(5); // how long we wait to startup the context
+        private static readonly TimeSpan ActionTimeout  = TimeSpan.FromSeconds(20); // how long we wait for start/stop actions
+        private static readonly TimeSpan RetryDelay     = TimeSpan.FromSeconds(10); // delay between StartWatching attempts
 
         public required ILogger<DuoSessionMonitor> Logger { get; set; }
 
@@ -110,7 +110,7 @@ namespace MadWizard.Desomnia.Service.Duo
                 _context?.Dispose(); // make sure to dispose any leftovers
 
                 _context = CreateContext(settings);
-                _context.Value.StartWatching(QueryTimeout);
+                _context.Value.StartWatching(StartupTimeout);
 
                 foreach (var instance in _context.Value.Instances)
                 {
@@ -143,7 +143,7 @@ namespace MadWizard.Desomnia.Service.Duo
         {
             if (_context?.Value is DuoServiceContext ctx)
             {
-                await ctx.Start(instance, UpdateTimeout);
+                await ctx.Start(instance, ActionTimeout);
             }
         }
 
@@ -152,7 +152,7 @@ namespace MadWizard.Desomnia.Service.Duo
         {
             if (_context?.Value is DuoServiceContext ctx)
             {
-                await ctx.Stop(instance, UpdateTimeout);
+                await ctx.Stop(instance, ActionTimeout);
             }
         }
         #endregion
