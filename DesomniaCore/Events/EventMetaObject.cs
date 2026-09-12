@@ -538,16 +538,25 @@ namespace MadWizard.Desomnia.Events
 
             visited.Add(this);
 
-            if (await DispatchActionCoreAsync(@event, action))
-                return true;
+            @event.ParentContext.Push(this);
 
-            foreach (var parent in Parents)
+            try
             {
-                if (await parent.DispatchThroughTreeAsync(@event, action, visited))
+                if (await DispatchActionCoreAsync(@event, action))
                     return true;
-            }
 
-            return false;
+                foreach (var parent in Parents)
+                {
+                    if (await parent.DispatchThroughTreeAsync(@event, action, visited))
+                        return true;
+                }
+
+                return false;
+            }
+            finally
+            {
+                @event.ParentContext.Pop();
+            }
         }
 
         private static IEventSystemRoot? ResolveRootVia(List<EventMetaObject> visited)
