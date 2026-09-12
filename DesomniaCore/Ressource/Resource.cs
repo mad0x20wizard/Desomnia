@@ -16,6 +16,8 @@ namespace MadWizard.Desomnia
         /// parent edges (ServiceFilterWatch aggregates filter rules through it).</summary>
         protected IEnumerable<ResourceMonitor> Monitors => Parents.OfType<ResourceMonitor>();
 
+        public bool IsMonitoredBy<T>() where T : ResourceMonitor => Parents.OfType<T>().Any();
+
         public bool IsIdle { get; private set; } = true;
 
         [EventOpposite(nameof(Demand))] // symmetric: either side's trigger aborts the other's pending action

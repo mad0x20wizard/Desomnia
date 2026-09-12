@@ -7,11 +7,12 @@ using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Processes.Manager;
 using MadWizard.Desomnia.Service.Duo;
 using MadWizard.Desomnia.Service.Duo.Configuration;
-using MadWizard.Desomnia.Service.Duo.Manager;
 using MadWizard.Desomnia.Service.Duo.Sunshine;
+using MadWizard.Desomnia.Service.Duo.Sunshine.Watch;
 using MadWizard.Desomnia.Session;
 using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Collections;
 using System.Diagnostics;
 using Xunit;
@@ -20,6 +21,36 @@ namespace DuoStreamIntegration.Tests;
 
 public sealed class WatchExpressionIntegrationTests
 {
+    [Fact]
+    public void Attaching_instance_tolerates_a_session_added_while_existing_sessions_are_claimed()
+    {
+        using var instance = Instance("Input");
+        using var first = Session(new TestSession());
+        using var second = Session(new TestSession());
+        using var sessions = new SessionMonitor(new SessionMonitorConfig(), null!)
+        {
+            Logger = NullLogger<SessionMonitor>.Instance,
+            Scope = null! // Only managed tracking events are exercised here.
+        };
+        using var duo = DuoTestSupport.Monitor(new FakeDuoService(), _ => throw new InvalidOperationException());
+        using var adapter = new SessionWatchAdapter(new SessionMonitorConfig())
+        {
+            DuoSessionMonitor = duo,
+            SessionMonitor = sessions
+        };
+        adapter.Attach();
+        sessions.StartTracking(first);
+        // Force a session arrival between iterations of the adapter's existing-session
+        // scan. StartTracking deduplicates the second arrival during nested callbacks.
+        instance.TrackingStarted += (_, _) => sessions.StartTracking(second);
+
+        var error = Record.Exception(() => duo.StartTracking(instance));
+
+        Assert.Null(error);
+        Assert.Contains(first, instance);
+        Assert.Contains(second, instance);
+    }
+
     [Fact]
     public void StreamTrafficIsSuppliedOnlyByAChildNetworkServiceWatch()
     {
@@ -45,7 +76,7 @@ public sealed class WatchExpressionIntegrationTests
     {
         var session = new TestSession { CurrentIdleTime = TimeSpan.Zero };
         var watch = Session(session);
-        watch.ApplyConfiguration(new SessionMonitorConfig(), new DuoInstanceInfo
+        watch.ApplyConfiguration(new SessionMonitorConfig(), new DuoInstanceWatchInfo
         {
             Name = "Player",
             Watch = WatchExpression.Yield,
@@ -91,13 +122,13 @@ public sealed class WatchExpressionIntegrationTests
             //MaxLastInputTime = TimeSpan.FromMinutes(5),
         });
 
-        var duoConfig = new DuoInstanceInfo
+        var duoConfig = new DuoInstanceWatchInfo
         {
             Name = "Player",
             Watch = new WatchExpression("and StreamTraffic"),
             WatchStreamTraffic = false,
         };
-        var instance = new DuoInstance(duoConfig, DuoManagerTests.CreateSettings("Player", userName: "player"));
+        var instance = new DuoInstance("Player", DuoTestSupport.Settings(), duoConfig);
         instance.Watch = watch.Watch << instance.Info.Watch;
         watch.ApplyConfiguration(sessionConfig, duoConfig with { Watch = WatchExpression.Yield, OnIdle = null });
         instance.StartTracking(watch);
@@ -144,14 +175,16 @@ public sealed class WatchExpressionIntegrationTests
         Assert.Equal(TimeSpan.Zero, usage.Metrics?.Processor?.Time);
     }
 
-    private static DuoInstance Instance(string expression) => new(
-        new DuoInstanceInfo
+    private static DuoInstance Instance(string expression)
+    {
+        var info = new DuoInstanceWatchInfo
         {
             Name = "Player",
             Watch = new WatchExpression(expression),
             WatchStreamTraffic = false,
-        },
-        DuoManagerTests.CreateSettings("Player", userName: "player"));
+        };
+        return new DuoInstance("Player", DuoTestSupport.Settings(), info) { Watch = info.Watch };
+    }
 
     private static void AttachYieldingSession(DuoInstance instance)
     {

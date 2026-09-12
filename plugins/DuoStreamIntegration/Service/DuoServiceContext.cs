@@ -20,9 +20,16 @@ namespace MadWizard.Desomnia.Service.Duo
         {
             using var startup = _lifetime.WithTimeout(timeout);
 
-            foreach (var instance in Instances)
+            try
             {
-                instance.IsRunning = Manager.QueryRunningState(instance, startup.Token).Result;
+                foreach (var instance in Instances)
+                {
+                    instance.IsRunning = Manager.QueryRunningState(instance, startup.Token).GetAwaiter().GetResult();
+                }
+            }
+            catch (OperationCanceledException ex) when (!_lifetime.IsCancellationRequested)
+            {
+                throw new TimeoutException($"Timed out while querying instances.", ex);
             }
 
             _watchTask = Watcher.WatchAsync(Instances, _lifetime.Token);

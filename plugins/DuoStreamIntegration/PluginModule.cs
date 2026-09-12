@@ -11,7 +11,6 @@ using MadWizard.Desomnia.Service.Duo.Sunshine.Listener;
 using MadWizard.Desomnia.Service.Duo.Sunshine.Watch;
 using MadWizard.Desomnia.Session;
 using MadWizard.Desomnia.Session.Configuration;
-using MadWizard.Desomnia.Session.Manager;
 using System.ComponentModel;
 using System.ServiceProcess;
 using System.Xml.Linq;
@@ -44,8 +43,7 @@ namespace MadWizard.Desomnia.Service.Duo
                 // DuoManager requires an ISessionManager (only present in service mode),
                 // so the whole monitor block degrades to inert without one
                 var monitorDuo = builder.RegisterType<DuoSessionMonitor>()
-                    .OnlyIf(reg => reg.IsRegistered(new TypedService(typeof(ISessionManager))))
-                    .WithParameter(TypedParameter.From(duo))
+                    .OnlyIf(reg => reg.IsRegistered(new TypedService(typeof(SessionMonitor))))
                     .AsImplementedInterfaces().AsSelf()
                     .SingleInstance();
 
@@ -104,6 +102,7 @@ namespace MadWizard.Desomnia.Service.Duo
                     builder.RegisterType<SessionWatchAdapter>()
                         .OnlyIf(reg => reg.IsRegistered(new TypedService(typeof(SessionMonitor))))
                         .WithParameter(new TypedParameter(typeof(SessionMonitorConfig), monitorSession))
+                        .OnActivated(ctx => ctx.Instance.Attach()).AutoActivate()
                         .AsImplementedInterfaces()
                         .SingleInstance();
 
@@ -118,6 +117,8 @@ namespace MadWizard.Desomnia.Service.Duo
                         .As<Desomnia.Network.PluginModule>()
                         .SingleInstance();
                 }
+
+                builder.RegisterBuildCallback(container => container.ResolveOptional<DuoSessionMonitor>()?.Startup());
             }
         }
     }
@@ -137,7 +138,7 @@ namespace MadWizard.Desomnia.Service.Duo
 
             builder.RegisterType<SunshineListenerAdapter>()
                 .OnlyIf(reg => reg.IsRegistered(new TypedService(typeof(DuoSessionMonitor))))
-                .AsImplementedInterfaces()
+                .OnActivated(ctx => ctx.Instance.Attach()).AutoActivate()
                 .SingleInstance();
         }
     }

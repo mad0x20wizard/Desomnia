@@ -2,7 +2,7 @@
 
 namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 {
-    internal class PollingWatcher : Watcher
+    internal class PollingWatcher : BaseWatcher
     {
         public required TimeSpan PollInterval { get; set; }
 

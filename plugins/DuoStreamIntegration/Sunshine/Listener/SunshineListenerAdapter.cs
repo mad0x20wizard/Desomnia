@@ -1,18 +1,16 @@
-﻿using Autofac;
-using MadWizard.Desomnia.Events;
+﻿using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Ressource.Events;
-using MadWizard.Desomnia.Service.Duo.Manager;
 using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
 {
-    internal class SunshineListenerAdapter(DuoSessionMonitor monitor) : SunshineServiceAdapter, IStartable, IDisposable
+    internal class SunshineListenerAdapter(DuoSessionMonitor monitor) : SunshineServiceAdapter, IDisposable
     {
         public required ILogger<SunshineListenerAdapter> Logger { get; set; }
 
         public required Func<SunshineService, SunshineListener> CreateSunshineListener { private get; init; }
 
-        void IStartable.Start()
+        internal void Attach()
         {
             monitor.TrackingStarted += Monitor_TrackingStarted;
             monitor.TrackingStopped += Monitor_TrackingStopped;
@@ -71,10 +69,15 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
             }
         }
 
-        void IDisposable.Dispose()
+        private void Detach()
         {
             monitor.TrackingStarted -= Monitor_TrackingStarted;
             monitor.TrackingStopped -= Monitor_TrackingStopped;
+        }
+
+        void IDisposable.Dispose()
+        {
+            Detach();
         }
     }
 }

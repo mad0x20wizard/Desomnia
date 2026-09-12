@@ -18,22 +18,11 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
         public async Task<bool> QueryRunningState(DuoInstance instance, CancellationToken token)
         {
-            token.ThrowIfCancellationRequested();
-
-            try
-            {
-                return await API.QueryInstance(instance.Name, token);
-            }
-            catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
-            {
-                throw new TimeoutException($"Timed out while refreshing {instance}.", ex);
-            }
+            return await API.QueryInstance(instance.Name, token);
         }
 
-        public async Task ChangeState(DuoInstance instance, bool running, CancellationToken token = default)
+        public async Task ChangeState(DuoInstance instance, bool running, CancellationToken token)
         {
-            token.ThrowIfCancellationRequested();
-
             Logger.LogInformation(
                 "{operation} {instance}...",
                 running ? "Starting" : "Stopping",
@@ -48,7 +37,6 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
                 await API.StopInstance(instance.Name, token);
             }
         }
-
 
         void IDisposable.Dispose()
         {

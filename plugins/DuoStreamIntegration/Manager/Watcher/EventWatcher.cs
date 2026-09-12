@@ -1,9 +1,10 @@
 ﻿using Microsoft.Extensions.Logging;
 using System.Diagnostics.Eventing.Reader;
+using System.Threading.Channels;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 {
-    internal class EventWatcher : Watcher, IDisposable
+    internal class EventWatcher : BaseWatcher, IDisposable
     {
         internal static readonly Version MinVersion = new(1, 5, 7);
 
@@ -17,6 +18,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             }
         }
 
+        private Channel<Signal> _channel = Channel.CreateUnbounded<Signal>(new() { SingleReader = true });
+
         private EventLogWatcher Watcher { get; } = new(new EventLogQuery("Application", PathType.LogName, XPath)
         {
             TolerateQueryErrors = true,
@@ -24,7 +27,10 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 
         public override async Task WatchAsync(IEnumerable<DuoInstance> instances, CancellationToken token)
         {
-            var canUseFastPath = !HasAmbiguousNames(instances);
+            if (!HasAmbiguousNames(instances) is bool canUseFastPath && !canUseFastPath)
+            {
+                Logger.LogWarning("Duo instance names and display names are ambiguous; cannot use fast path");
+            }
 
             DuoInstance FindInstance(EventRecord record)
             {
@@ -40,12 +46,18 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
                         }
                     }
 
-                throw new KeyNotFoundException();
+                throw new KeyNotFoundException("Duo event does not identify a known instance.");
             }
 
-            async void EventLogWatcher_EventRecordWritten(object? sender, EventRecordWrittenEventArgs args)
+            Watcher.EventRecordWritten += EventRecordWritten;
+
+            void EventRecordWritten(object? sender, EventRecordWrittenEventArgs args)
             {
-                if (args.EventException is null && args.EventRecord is EventRecord record)
+                if (args.EventException is not null)
+                {
+                    Logger.LogError(args.EventException, "Could not read Duo event log.");
+                }
+                else if (args.EventRecord is EventRecord record)
                 {
                     var eventId = (DuoEventID)record.Id;
 
@@ -55,35 +67,67 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
                         {
                             case DuoEventID.InstanceStarted:
                                 if (!canUseFastPath) goto case DuoEventID.Resuming;
-                                NotifyInstanceStatus(FindInstance(record), true);
+                                _channel.Writer.TryWrite(new() { Instance = FindInstance(record), Running = true });
                                 break;
 
                             case DuoEventID.InstanceError:
                             case DuoEventID.InstanceStopped:
                                 if (!canUseFastPath) goto case DuoEventID.Resuming;
-                                NotifyInstanceStatus(FindInstance(record), false);
+                                _channel.Writer.TryWrite(new() { Instance = FindInstance(record), Running = false});
                                 break;
 
                             case DuoEventID.Resuming:
-                                await base.RefreshInstances(instances, token);
+                                _channel.Writer.TryWrite(new());
                                 break;
                         }
                     }
                     catch (Exception ex)
                     {
-                        Logger.LogError(ex, $"Could not handle Duo event ({eventId}): " + record.Properties);
+                        Logger.LogError(ex, "Could not handle Duo event ({EventId}). ", eventId);
+                    }
+                    finally
+                    {
+                        args.EventRecord?.Dispose();
                     }
                 }
             }
 
-            Watcher.EventRecordWritten += EventLogWatcher_EventRecordWritten;
-            Watcher.Enabled = true;
-
-            token.Register(() =>
+            try
             {
-                Watcher.EventRecordWritten -= EventLogWatcher_EventRecordWritten;
+                Watcher.Enabled = true;
+
+                await foreach (var signal in _channel.Reader.ReadAllAsync(token))
+                {
+                    token.ThrowIfCancellationRequested();
+
+                    try
+                    {
+                        if (signal.Instance is DuoInstance instance)
+                        {
+                            NotifyInstanceStatus(instance, signal.Running);
+                        }
+                        else
+                        {
+                            await base.RefreshInstances(instances, token);
+                        }
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException || !token.IsCancellationRequested)
+                    {
+                        Logger.LogError(ex, "Could not handle event log signal: {Signal}", signal);
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                // Normal shutdown; the event subscription is released by the iterator.
+            }
+            finally
+            {
+                _channel.Writer.TryComplete();
+
+                Watcher.EventRecordWritten -= EventRecordWritten;
                 Watcher.Enabled = false;
-            });
+            }
         }
 
         /**
@@ -95,13 +139,17 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
          * have to discard the contents of the event message entirely, switching to
          * a more brute way of discovering which instance started/stopped.
          */
-        private bool HasAmbiguousNames(IEnumerable<DuoInstance> instances)
+        private static bool HasAmbiguousNames(IEnumerable<DuoInstance> instances)
         {
             foreach (var left in instances)
             {
                 foreach (var right in instances.Where(i => i != left))
                 {
                     if (left.Settings.Name.Contains(right.Settings.Name))
+                        return true;
+                    if (left.Settings.Name.Contains(right.Settings.DisplayName))
+                        return true;
+                    if (left.Settings.DisplayName.Contains(right.Settings.Name))
                         return true;
                     if (left.Settings.DisplayName.Contains(right.Settings.DisplayName))
                         return true;
@@ -114,6 +162,25 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
         void IDisposable.Dispose()
         {
             Watcher.Dispose();
+        }
+
+        private record class Signal
+        {
+            internal DuoInstance? Instance { get; init; }
+
+            internal bool Running { get; init; }
+
+            public override string ToString()
+            {
+                if (Instance is not null)
+                {
+                    return Instance.ToString() + " -> " + Running;
+                }
+                else
+                {
+                    return "Refresh";
+                }
+            }
         }
 
         private enum DuoEventID

@@ -4,7 +4,6 @@ using MadWizard.Desomnia.Network.Context;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Watch;
 using MadWizard.Desomnia.Ressource.Events;
-using MadWizard.Desomnia.Service.Duo.Manager;
 using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
@@ -21,14 +20,19 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
 
         async Task INetworkService.Startup()
         {
-            LocalHostContext.Watch?.InspectionFilter += IsNotSunshineServiceWatch;
+            Attach();
 
             _contexts = [];
 
+            WatchInstances(monitor.TakeSnapshot());
+        }
+
+        private void Attach()
+        {
+            LocalHostContext.Watch?.InspectionFilter += IsNotSunshineServiceWatch;
+
             monitor.TrackingStarted += Monitor_TrackingStarted;
             monitor.TrackingStopped += Monitor_TrackingStopped;
-
-            WatchInstances([.. monitor]);
         }
 
         private void Monitor_TrackingStarted(object? sender, InspectableEventArgs<DuoInstance> args)
@@ -66,7 +70,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
 
         private bool IsNotSunshineServiceWatch(NetworkServiceWatch watch) => watch.Service is not SunshineService;
 
-        private void UnWatchInstances(IEnumerable<DuoInstance> instances)
+        private void UnWatchInstances(IEnumerable<DuoInstance> instances, bool final = false)
         {
             using (Context.Network.Mutex.Lock()) if (_contexts is not null)
             {
@@ -79,6 +83,11 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
                         ctx.Dispose();
                     }
                 }
+
+                if (final)
+                {
+                    _contexts = null; // better to do this inside the lock
+                }
             }
         }
 
@@ -87,16 +96,19 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
             UnWatchInstances([args.Inspectable]);
         }
 
-        async Task INetworkService.Shutdown(NetworkShutdownReason reason)
+        private void Detach()
         {
+            LocalHostContext.Watch?.InspectionFilter -= IsNotSunshineServiceWatch;
+
             monitor.TrackingStarted -= Monitor_TrackingStarted;
             monitor.TrackingStopped -= Monitor_TrackingStopped;
+        }
 
-            UnWatchInstances(_contexts!.Keys);
+        async Task INetworkService.Shutdown(NetworkShutdownReason reason)
+        {
+            UnWatchInstances(_contexts!.Keys, true);
 
-            _contexts = null;
-
-            LocalHostContext.Watch?.InspectionFilter -= IsNotSunshineServiceWatch;
+            Detach();
         }
     }
 }

@@ -1,14 +1,13 @@
 using Autofac;
 using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Ressource.Events;
-using MadWizard.Desomnia.Service.Duo.Manager;
 using MadWizard.Desomnia.Session;
 using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
 
 namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
 {
-    internal class SessionWatchAdapter(SessionMonitorConfig config) : IStartable, IDisposable
+    internal class SessionWatchAdapter(SessionMonitorConfig config) : IDisposable
     {
         public required DuoSessionMonitor   DuoSessionMonitor   { private get; init; }
         public required SessionMonitor      SessionMonitor      { private get; init; }
@@ -18,7 +17,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
             return instance.Name == session.ClientName && instance.Settings.UserName == session.UserName;
         }
 
-        void IStartable.Start()
+        internal void Attach()
         {
             SessionMonitor.TrackingStarted += SessionMonitor_TrackingStarted;
             SessionMonitor.InspectionFilter += SessionMonitor_InspectionFilter;
@@ -30,20 +29,17 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
 
         private void DuoSessionMonitor_TrackingStarted(object? sender, InspectableEventArgs<DuoInstance> args)
         {
-            foreach (var watch in SessionMonitor)
-            {
-                MaybeClaimWatch(watch, [args.Inspectable]);
-            }
+            MaybeClaimWatch(SessionMonitor.TakeSnapshot(), [args.Inspectable]);
         }
 
         private void SessionMonitor_TrackingStarted(object? sender, InspectableEventArgs<SessionWatch> args)
         {
-            MaybeClaimWatch(args.Inspectable, DuoSessionMonitor);
+            MaybeClaimWatch([args.Inspectable], DuoSessionMonitor.TakeSnapshot());
         }
 
-        private void MaybeClaimWatch(SessionWatch watch, IEnumerable<DuoInstance> instances)
+        private void MaybeClaimWatch(IEnumerable<SessionWatch> watches, IEnumerable<DuoInstance> instances)
         {
-            foreach (var instance in instances.Where(instance => IsConnectedTo(instance, watch.Session)))
+            foreach (var watch in watches) foreach (var instance in instances.Where(instance => IsConnectedTo(instance, watch.Session)))
             {
                 if (!instance.Contains(watch))
                 {
@@ -69,24 +65,13 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
         /// </summary>
         ///
         /// <returns>false = no inspection</returns>
-        private bool SessionMonitor_InspectionFilter(SessionWatch watch)
-        {
-            foreach (var instance in DuoSessionMonitor)
-            {
-                if (instance.Contains(watch))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
+        private bool SessionMonitor_InspectionFilter(SessionWatch watch) => !watch.IsMonitoredBy<DuoInstance>();
 
         private void SessionMonitor_TrackingStopped(object? sender, InspectableEventArgs<SessionWatch> args)
         {
             var watch = args.Inspectable;
 
-            foreach (var instance in DuoSessionMonitor.Where(i => i.Contains(watch)))
+            foreach (var instance in DuoSessionMonitor.TakeSnapshot())
             {
                 instance.StopTracking(watch);
             }
@@ -102,7 +87,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
             }
         }
 
-        void IDisposable.Dispose()
+        private void Detach()
         {
             DuoSessionMonitor.TrackingStarted -= DuoSessionMonitor_TrackingStarted;
             DuoSessionMonitor.TrackingStopped -= DuoSessionMonitor_TrackingStopped;
@@ -110,6 +95,11 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
             SessionMonitor.TrackingStarted -= SessionMonitor_TrackingStarted;
             SessionMonitor.InspectionFilter -= SessionMonitor_InspectionFilter;
             SessionMonitor.TrackingStopped -= SessionMonitor_TrackingStopped;
+        }
+
+        void IDisposable.Dispose()
+        {
+            Detach();
         }
     }
 }

@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 {
-    internal abstract class Watcher : IDuoInstanceWatcher
+    internal abstract class BaseWatcher : IDuoInstanceWatcher
     {
         public required ILogger Logger { protected get; init; }
 

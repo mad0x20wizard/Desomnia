@@ -1,5 +1,4 @@
 ﻿using MadWizard.Desomnia.Network.Watch;
-using MadWizard.Desomnia.Service.Duo.Manager;
 
 namespace MadWizard.Desomnia.Service.Duo.Sunshine
 {

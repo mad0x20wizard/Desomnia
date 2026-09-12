@@ -122,7 +122,7 @@ namespace MadWizard.Desomnia
             base.Dispose();
         }
 
-        internal T[] TakeSnapshot()
+        public T[] TakeSnapshot()
         {
             lock (_inspectables)
             {

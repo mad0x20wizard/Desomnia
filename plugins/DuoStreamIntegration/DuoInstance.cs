@@ -8,7 +8,7 @@ using MadWizard.Desomnia.Session;
 using MadWizard.Desomnia.Session.Manager;
 using Nito.AsyncEx;
 
-namespace MadWizard.Desomnia.Service.Duo.Manager
+namespace MadWizard.Desomnia.Service.Duo
 {
     public class DuoInstance : ResourceMonitor<Resource>
     {
