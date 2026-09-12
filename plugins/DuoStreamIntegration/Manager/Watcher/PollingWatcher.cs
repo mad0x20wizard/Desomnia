@@ -12,11 +12,9 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             {
                 while (!stoppingToken.IsCancellationRequested)
                 {
-                    using var timeout = stoppingToken.WithTimeout(PollInterval);
-
                     try
                     {
-                        await RefreshInstances(instances, timeout.Token);
+                        await RefreshInstances(instances, stoppingToken);
                     }
                     catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
                     {

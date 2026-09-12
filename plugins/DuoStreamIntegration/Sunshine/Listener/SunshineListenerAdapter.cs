@@ -28,13 +28,13 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
 
             if (!instance.Settings.IsSandboxed)
             {
-                Logger.LogInformation($"Monitoring {instance}:{instance.Settings.Port} -> using fallback");
+                Logger.LogInformation($"Monitoring {instance}:{instance.Settings.Port} -> using listener");
 
                 RegisterWatch(instance, CreateSunshineListener(instance.Service));
             }
             else
             {
-                Logger.LogWarning($"NOT Monitoring {instance}:{instance.Settings.Port} -> fallback is not available for sandboxed instances");
+                Logger.LogWarning($"NOT Monitoring {instance}:{instance.Settings.Port} -> listener is not available for sandboxed instances");
             }
         }
 
