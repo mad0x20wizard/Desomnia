@@ -57,7 +57,7 @@ namespace MadWizard.Desomnia.Service.Duo
                     .InstancePerDependency();
 
                 builder.RegisterType<DuoServiceContext>().AsSelf()
-                    .ConfigurePipeline(p => p.Use(new ConfigureContext(config.DuoSessionMonitor)))
+                    .ConfigurePipeline(p => p.Use(new ContextConfiguration(config.DuoSessionMonitor)))
                     .InstancePerDependency();
 
                 // the only available DuoManager right now

@@ -1,4 +1,6 @@
+using Autofac.Features.OwnedInstances;
 using MadWizard.Desomnia;
+using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Network.Watch;
@@ -21,6 +23,51 @@ namespace DuoStreamIntegration.Tests;
 
 public sealed class WatchExpressionIntegrationTests
 {
+    [Fact]
+    public async Task Logout_stops_the_associated_instance()
+    {
+        var info = new DuoInstanceWatchInfo
+        {
+            Name = "Player",
+            Watch = new WatchExpression("Input"),
+            WatchStreamTraffic = false,
+            OnLogout = new ScheduledActionInfo("stop", null, TimeSpan.Zero)
+        };
+        using var instance = new DuoInstance("Player", DuoTestSupport.Settings(), info);
+        using var watch = Session(new TestSession());
+        using var sessions = new SessionMonitor(new SessionMonitorConfig(), null!)
+        {
+            Logger = NullLogger<SessionMonitor>.Instance,
+            Scope = null! // Only managed tracking events are exercised here.
+        };
+        var manager = new ControlledManager { OnQuery = (_, _) => Task.FromResult(true) };
+        var watcher = DuoTestSupport.Watcher(manager);
+        manager.OnChange = (target, running, _) =>
+        {
+            watcher.Publish(target, running);
+            return Task.CompletedTask;
+        };
+        var context = DuoTestSupport.Context(manager, watcher, instance);
+        using var duo = DuoTestSupport.Monitor(new FakeDuoService(), _ => new Owned<DuoServiceContext>(context, context));
+        using var adapter = new SessionWatchAdapter(new SessionMonitorConfig())
+        {
+            DuoSessionMonitor = duo,
+            SessionMonitor = sessions
+        };
+        adapter.Attach();
+        duo.Startup();
+        sessions.StartTracking(watch);
+
+        Assert.Contains(watch, instance);
+        Assert.True(instance.IsRunning);
+
+        await ((IEventSystem)watch)[nameof(SessionWatch.Logout)]
+            .TriggerEventAsync().WaitAsync(DuoTestSupport.TestTimeout);
+
+        Assert.Equal(1, manager.Stops);
+        Assert.False(instance.IsRunning);
+    }
+
     [Fact]
     public void Attaching_instance_tolerates_a_session_added_while_existing_sessions_are_claimed()
     {

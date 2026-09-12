@@ -6,7 +6,7 @@ using MadWizard.Desomnia.Service.Duo.Manager;
 
 namespace MadWizard.Desomnia.Network.Middleware
 {
-    public sealed class ConfigureContext(DuoSessionMonitorConfig config) : IResolveMiddleware
+    public sealed class ContextConfiguration(DuoSessionMonitorConfig config) : IResolveMiddleware
     {
         public PipelinePhase Phase => PipelinePhase.ParameterSelection;
 
@@ -19,12 +19,14 @@ namespace MadWizard.Desomnia.Network.Middleware
                     string name = settings.Name;
 
                     var info = config[name] ?? new DuoInstanceWatchInfo { Name = name };
-                    info.OnDemand ??= config.OnInstanceDemand;
-                    info.OnIdle ??= config.OnInstanceIdle;
-                    info.OnLogin ??= config.OnInstanceLogin;
-                    info.OnStart ??= config.OnInstanceStarted;
-                    info.OnStop ??= config.OnInstanceStopped;
-                    info.OnLogout ??= config.OnInstanceLogout;
+
+                    // carry over the global attributes
+                    info.OnDemand   ??= config.OnInstanceDemand;
+                    info.OnIdle     ??= config.OnInstanceIdle;
+                    info.OnLogin    ??= config.OnInstanceLogin;
+                    info.OnStart    ??= config.OnInstanceStarted;
+                    info.OnStop     ??= config.OnInstanceStopped;
+                    info.OnLogout   ??= config.OnInstanceLogout;
 
                     info.WatchStreamTraffic ??= config.WatchStreamTraffic;
 
