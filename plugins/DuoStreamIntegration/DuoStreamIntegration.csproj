@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Refit" Version="13.1.0" />
+    <PackageReference Include="Refit" Version="14.0.1" />
     <PackageReference Include="WindowsFirewallHelper" Version="2.2.0.86" />
   </ItemGroup>
 

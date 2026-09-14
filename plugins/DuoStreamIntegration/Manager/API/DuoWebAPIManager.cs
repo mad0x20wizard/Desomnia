@@ -12,10 +12,24 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
         private IDuoWebManager API { get; init; }
 
         readonly HttpClient _client;
+        readonly RefitSettings _settings;
 
         public DuoWebAPIManager(HttpClient client)
         {
-            API = RestService.For<IDuoWebManager>(_client = client);
+            _settings = new RefitSettings
+            {
+                TransportExceptionFactory = HandleTransportException
+            };
+
+            API = RestService.For<IDuoWebManager>(_client = client, _settings);
+        }
+
+        Exception HandleTransportException(HttpRequestMessage request, Exception exception, CancellationToken token)
+        {
+            if (exception is OperationCanceledException && token.IsCancellationRequested)
+                return exception;
+            
+            return new ApiRequestException(request, request.Method, _settings, exception);
         }
 
         public async Task<bool> QueryRunningState(DuoInstance instance, CancellationToken token)
@@ -27,8 +41,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
         public async Task ChangeState(DuoInstance instance, bool running, CancellationToken token)
         {
-            Logger.LogInformation(
-                "{operation} {instance}...",
+            Logger.LogInformation("{operation} {instance}...",
                 running ? "Starting" : "Stopping",
                 instance.ToString());
 
