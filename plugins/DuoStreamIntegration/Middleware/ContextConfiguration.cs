@@ -28,7 +28,9 @@ namespace MadWizard.Desomnia.Network.Middleware
                     info.OnStop     ??= config.OnInstanceStopped;
                     info.OnLogout   ??= config.OnInstanceLogout;
 
+
                     info.WatchStreamTraffic ??= config.WatchStreamTraffic;
+                    info.MinStreamTraffic   ??= config.MinInstanceStreamTraffic;
 
                     yield return ctx.Resolve<DuoInstance>(
                         TypedParameter.From(name),
