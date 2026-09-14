@@ -109,7 +109,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
 
         async Task INetworkService.Shutdown(NetworkShutdownReason reason)
         {
-            if (reason != NetworkShutdownReason.InterfaceDisconnected)
+            if (reason == NetworkShutdownReason.InterfaceDisconnected)
             {
                 Logger.LogDebug("NetworkMonitor '{Name}' is disconnected, stop watching instances.", Context.Name);
             }
