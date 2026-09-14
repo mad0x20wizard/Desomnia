@@ -6,7 +6,7 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
     {
         public required string ServiceName                      { get; set; } = "DuoService";
 
-        public TimeSpan PollInterval                            { get; set; } = TimeSpan.FromSeconds(1); // deprecated
+        public TimeSpan PollInterval                            { get; set; } = TimeSpan.FromSeconds(2); // deprecated
 
         public bool UseListener                                 { get; set; } = false;
         public bool UsePolling                                  { get; set; } = false;

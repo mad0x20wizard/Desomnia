@@ -8,6 +8,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 
         public override async Task WatchAsync(IEnumerable<DuoInstance> instances, CancellationToken stoppingToken)
         {
+            Logger.LogDebug("Polling Duo instances every {Interval}", PollInterval);
+
             try
             {
                 while (!stoppingToken.IsCancellationRequested)
