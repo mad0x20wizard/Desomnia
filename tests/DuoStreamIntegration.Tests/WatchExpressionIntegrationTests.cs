@@ -111,7 +111,7 @@ public sealed class WatchExpressionIntegrationTests
     }
 
     [Fact]
-    public async Task Logout_stops_the_associated_instance()
+    public async Task Logout_does_not_wait_for_the_instance_stop_action()
     {
         var info = new DuoInstanceWatchInfo
         {
@@ -129,10 +129,15 @@ public sealed class WatchExpressionIntegrationTests
         };
         var manager = new ControlledManager { OnQuery = (_, _) => Task.FromResult(true) };
         var watcher = DuoTestSupport.Watcher(manager);
-        manager.OnChange = (target, running, _) =>
+        var stopEntered = DuoTestSupport.Signal();
+        var releaseStop = DuoTestSupport.Signal();
+        var stateChanged = DuoTestSupport.Signal();
+        manager.OnChange = async (target, running, token) =>
         {
+            stopEntered.TrySetResult();
+            await releaseStop.Task.WaitAsync(token);
             watcher.Publish(target, running);
-            return Task.CompletedTask;
+            stateChanged.TrySetResult();
         };
         var context = DuoTestSupport.Context(manager, watcher, instance);
         using var duo = DuoTestSupport.Monitor(new FakeDuoService(), _ => new Owned<DuoServiceContext>(context, context));
@@ -148,10 +153,23 @@ public sealed class WatchExpressionIntegrationTests
         Assert.Contains(watch, instance);
         Assert.True(instance.IsRunning);
 
-        await ((IEventSystem)watch)[nameof(SessionWatch.Logout)]
-            .TriggerEventAsync().WaitAsync(DuoTestSupport.TestTimeout);
+        var logout = ((IEventSystem)watch)[nameof(SessionWatch.Logout)].TriggerEventAsync();
 
-        Assert.Equal(1, manager.Stops);
+        try
+        {
+            await logout.WaitAsync(DuoTestSupport.TestTimeout);
+            await stopEntered.Task.WaitAsync(DuoTestSupport.TestTimeout);
+
+            Assert.True(instance.IsRunning);
+            Assert.Equal(1, manager.Stops);
+        }
+        finally
+        {
+            releaseStop.TrySetResult();
+        }
+
+        await stateChanged.Task.WaitAsync(DuoTestSupport.TestTimeout);
+
         Assert.False(instance.IsRunning);
     }
 

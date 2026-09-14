@@ -50,7 +50,8 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
                 {
                     try
                     {
-                        Logger.LogInformation($"Monitoring {instance.ToString()}:{instance.Settings.Port}" + (instance.IsRunning == true ? " (running)" : ""));
+                        Logger.LogInformation($"Monitoring {instance.ToString()}:{instance.Settings.Port}" 
+                            + (instance.IsRunning == true ? " (running)" : ""));
 
                         var context = LocalHostContext.CreateWatchedService<SunshineServiceContext>
                         (

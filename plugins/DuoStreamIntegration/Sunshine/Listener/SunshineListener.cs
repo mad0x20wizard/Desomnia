@@ -15,6 +15,8 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
         public required IFirewall       Firewall    { private get; init; }
         private         IFirewallRule?  Rule        { get; set; }
 
+        public new SunshineService Service => service;
+
         CancellationTokenSource? _cancelSource;
 
         private void ConfigureFirewall()

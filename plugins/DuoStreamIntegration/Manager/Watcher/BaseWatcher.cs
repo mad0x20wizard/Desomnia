@@ -49,6 +49,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 
                     if (!running && DeferStopUntilSessionEnd(instance))
                     {
+                        Logger.LogTrace("{Instance} is still connected with session – deferring stop event until disconnect...", instance.ToString());
+
                         return; // publish status change later
                     }
                 }
@@ -57,7 +59,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             }
         }
 
-        #region Deferment of Stop Event 
+        #region Event Deferring 
         /// <summary>
         /// Unfortunately the DuoManager reports an instance as "stopped"
         /// as soon as the shutdown sequence has been started.

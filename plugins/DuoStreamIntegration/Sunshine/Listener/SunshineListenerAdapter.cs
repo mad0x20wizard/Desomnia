@@ -28,7 +28,9 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
 
             if (!instance.Settings.IsSandboxed)
             {
-                Logger.LogInformation($"Monitoring {instance}:{instance.Settings.Port} -> using listener");
+                Logger.LogInformation($"Monitoring {instance}:{instance.Settings.Port}"
+                    + (instance.IsRunning == true ? " (running)" : "")  
+                    + " -> using listener");
 
                 RegisterWatch(instance, CreateSunshineListener(instance.Service));
             }
@@ -43,15 +45,19 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
             var instance = (DuoInstance)@event.Source!;
 
             foreach (var listener in instance.OfType<SunshineListener>())
+            {
                 listener.StopWaiting();
+            }
         }
 
         private async Task DuoInstance_Stopped(Event @event)
         {
             var instance = (DuoInstance)@event.Source!;
 
-            foreach (var listener in instance.OfType<SunshineListener>())
+            foreach (var listener in instance.OfType<SunshineListener>().Where(i => !i.Service.IsWaitingForClient))
+            {
                 listener.WaitForClient();
+            }
         }
 
         private void Monitor_TrackingStopped(object? sender, InspectableEventArgs<DuoInstance> args)
