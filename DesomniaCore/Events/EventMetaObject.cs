@@ -478,6 +478,8 @@ namespace MadWizard.Desomnia.Events
             if (!handler.TryBeginInvocation())
                 return true;                     // non-concurrent handler already running → skip silently
 
+            var releaseHandler = true;
+
             try
             {
                 // PrepareWithContext sits inside the routed region: an argument-conversion
@@ -488,7 +490,15 @@ namespace MadWizard.Desomnia.Events
                     {
                         ResolveLogger()?.LogDebug($"{@event} -> {action}" + (@event.Source != this ? $" @ {GetType().Name}" : ""));
 
-                        await invocation.InvokeAsync();
+                        if (handler.IsDetached)
+                        {
+                            _ = Task.Run(() => RunDetachedActionAsync(handler, invocation, @event, action));
+                            releaseHandler = false;
+                        }
+                        else
+                        {
+                            await invocation.InvokeAsync();
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -506,10 +516,45 @@ namespace MadWizard.Desomnia.Events
             }
             finally
             {
-                handler.EndInvocation();
+                if (releaseHandler)
+                {
+                    handler.EndInvocation();
+                }
             }
 
             return true;
+        }
+
+        private async Task RunDetachedActionAsync(
+            ActionHandler handler,
+            ActionInvocation invocation,
+            Event @event,
+            EventAction action)
+        {
+            // The work runs outside the trigger call. Clear the event-pipeline marker
+            // inherited through ExecutionContext before invoking user code.
+            ExitPipelineFlow();
+
+            try
+            {
+                await invocation.InvokeAsync();
+            }
+            catch (Exception ex)
+            {
+                if (ex is TargetInvocationException { InnerException: Exception inner })
+                    ex = inner;
+
+                var error = new ActionError(@event, action, ex) { Actor = this };
+
+                if (!RouteActionError(error))
+                {
+                    ReportLostActionError(error);
+                }
+            }
+            finally
+            {
+                handler.EndInvocation();
+            }
         }
 
         /// <summary>Action resolution (§6.3): self → parents in order, recursively
@@ -610,7 +655,7 @@ namespace MadWizard.Desomnia.Events
 
         internal void ReportLostActionError(ActionError error)
         {
-            ResolveLogger()?.LogError(error.Exception, $"{error.Event} -> {error.Action}: unhandled on the scheduled path");
+            ResolveLogger()?.LogError(error.Exception, $"{error.Event} -> {error.Action}: unhandled on a detached path");
         }
 
         internal void ReportBypassedInvocation(EventType type, Event @event)

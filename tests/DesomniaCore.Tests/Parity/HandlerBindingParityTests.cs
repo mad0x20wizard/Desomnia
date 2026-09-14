@@ -183,6 +183,43 @@ namespace MadWizard.Desomnia.Tests.Parity
             await Task.WhenAll(first, second);
         }
 
+        private class DetachedActor : TestEvents
+        {
+            public readonly TaskCompletionSource Entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public readonly TaskCompletionSource Release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public readonly TaskCompletionSource Completed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            [ActionHandler("detached", Detached = true)]
+            private void Detached()
+            {
+                Entered.TrySetResult();
+                Release.Task.GetAwaiter().GetResult();
+                Completed.TrySetResult();
+            }
+        }
+
+        [Fact]
+        public async Task DetachedHandlerDoesNotDelayTriggerCompletion()
+        {
+            var actor = new DetachedActor();
+            actor.AddEventAction("Alpha", Actions.Named("detached"));
+
+            var trigger = actor.DoTriggerAsync("Alpha");
+
+            try
+            {
+                await trigger.WaitAsync(TimeSpan.FromSeconds(5));
+                await actor.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.False(actor.Completed.Task.IsCompleted);
+            }
+            finally
+            {
+                actor.Release.TrySetResult();
+            }
+
+            await actor.Completed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+
         private class ErrorActor : TestEvents
         {
             public readonly List<ActionError> Errors = [];
@@ -196,6 +233,9 @@ namespace MadWizard.Desomnia.Tests.Parity
 
             [ActionHandler("boom-task-sync")]
             private Task BoomTaskSync() => throw new InvalidOperationException("boom-sync");
+
+            [ActionHandler("boom-task-detached", Detached = true)]
+            private async Task BoomTaskDetached() { await Task.Yield(); throw new InvalidOperationException("boom-detached"); }
 
             protected override bool OnActionError(ActionError error)
             {
@@ -288,6 +328,21 @@ namespace MadWizard.Desomnia.Tests.Parity
             await Wait.Until(() => actor.Errors.Count == 1);
             Assert.Same(actor, actor.Errors[0].Actor);
             await Wait.Settle();                             // no escape, no crash, no second surface
+            Assert.Single(actor.Errors);
+        }
+
+        [Fact]
+        public async Task DetachedUnswallowedErrorIsRoutedOnceAndNeverEscapesTheTrigger()
+        {
+            var actor = new ErrorActor { Swallow = false };
+            actor.AddEventAction("Alpha", Actions.Named("boom-task-detached"));
+
+            await actor.DoTriggerAsync("Alpha");
+
+            await Wait.Until(() => actor.Errors.Count == 1);
+            Assert.Same(actor, actor.Errors[0].Actor);
+            Assert.IsType<InvalidOperationException>(actor.Errors[0].Exception);
+            await Wait.Settle();
             Assert.Single(actor.Errors);
         }
 
