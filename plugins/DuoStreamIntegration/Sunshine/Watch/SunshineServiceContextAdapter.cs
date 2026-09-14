@@ -20,6 +20,8 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
 
         async Task INetworkService.Startup()
         {
+            Logger.LogDebug("NetworkMonitor '{Name}' is connected, start watching instances:", Context.Name);
+
             Attach();
 
             _contexts = [];
@@ -106,6 +108,11 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
 
         async Task INetworkService.Shutdown(NetworkShutdownReason reason)
         {
+            if (reason != NetworkShutdownReason.InterfaceDisconnected)
+            {
+                Logger.LogDebug("NetworkMonitor '{Name}' is disconnected, stop watching instances.", Context.Name);
+            }
+
             UnWatchInstances(_contexts!.Keys, true);
 
             Detach();
