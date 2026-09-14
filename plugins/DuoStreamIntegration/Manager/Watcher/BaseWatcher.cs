@@ -17,8 +17,11 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 
         readonly Lock _statusLock = new();
 
-        public abstract Task WatchAsync(IEnumerable<DuoInstance> instances, CancellationToken stoppingToken);
+        public abstract Task WatchAsync(IEnumerable<DuoInstance> instances, CancellationToken token);
 
+        /// <summary>
+        /// Helper method to refresh all instances using the Duo manager.
+        /// </summary>
         protected async Task RefreshInstances(IEnumerable<DuoInstance> instances, CancellationToken token)
         {
             foreach (var instance in instances)
@@ -44,7 +47,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 
                     instance.IsRunning = running;
 
-                    if (!running && DelayStopUntilSessionEnd(instance))
+                    if (!running && DeferStopUntilSessionEnd(instance))
                     {
                         return; // publish status change later
                     }
@@ -54,16 +57,17 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             }
         }
 
+        #region Deferment of Stop Event 
         /// <summary>
-        /// Unfortunately the DuoManager describes an instance as "stopped"
-        /// as soon as the shutdown sequence is started.
+        /// Unfortunately the DuoManager reports an instance as "stopped"
+        /// as soon as the shutdown sequence has been started.
         /// 
-        /// To make the workflow more predictable we postpone to notify about
-        /// the stop until the corresponding Windows session actually got terminated.
+        /// To make the workflow more predictable we postpone the stop event
+        /// until the corresponding Windows session actually got terminated.
         /// </summary>
         /// 
-        /// <returns>Did we schedule the stop to the end of the session?</returns>
-        private bool DelayStopUntilSessionEnd(DuoInstance instance)
+        /// <returns>Did we schedule the event for later?</returns>
+        private bool DeferStopUntilSessionEnd(DuoInstance instance)
         {
             _pendingStops.Add(instance);
 
@@ -87,7 +91,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
                 {
                     if (!_pendingStops.Contains(instance) || instance.TakeSnapshot().OfType<SessionWatch>().Any())
                     {
-                        return; // unrelated instance, or session is still running
+                        return; // unrelated instance or session is still running
                     }
 
                     CancelPendingStop(instance);
@@ -104,6 +108,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
                 instance.TrackingStopped -= Instance_TrackingStopped;
             }
         }
+        #endregion
 
         private void PublishStatusChange(DuoInstance instance, bool running)
         {
