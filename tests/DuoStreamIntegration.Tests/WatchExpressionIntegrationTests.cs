@@ -24,6 +24,93 @@ namespace DuoStreamIntegration.Tests;
 public sealed class WatchExpressionIntegrationTests
 {
     [Fact]
+    public void Stop_notification_waits_until_the_associated_session_watch_is_detached()
+    {
+        using var instance = Instance("Input");
+        using var watch = Session(new TestSession());
+        var watcher = DuoTestSupport.Watcher(new ControlledManager());
+        var changes = new List<bool>();
+        ISession? sessionAtNotification = null;
+        var stopped = 0;
+
+        instance.IsRunning = true;
+        instance.StartTracking(watch);
+        watcher.StatusChanged += (_, args) =>
+        {
+            changes.Add(args.Status);
+            sessionAtNotification = args.Instance.Session;
+        };
+        instance.Stopped += _ =>
+        {
+            stopped++;
+            return Task.CompletedTask;
+        };
+
+        watcher.Publish(instance, false);
+
+        Assert.False(instance.IsRunning);
+        Assert.Empty(changes);
+        Assert.Equal(0, stopped);
+
+        instance.StopTracking(watch);
+
+        Assert.Equal(new[] { false }, changes);
+        Assert.Null(sessionAtNotification);
+        Assert.Equal(1, stopped);
+    }
+
+    [Fact]
+    public void Restart_cancels_a_stop_notification_waiting_for_session_detachment()
+    {
+        using var instance = Instance("Input");
+        using var watch = Session(new TestSession());
+        var watcher = DuoTestSupport.Watcher(new ControlledManager());
+        var changes = new List<bool>();
+        var stopped = 0;
+
+        instance.IsRunning = true;
+        instance.StartTracking(watch);
+        watcher.StatusChanged += (_, args) => changes.Add(args.Status);
+        instance.Stopped += _ =>
+        {
+            stopped++;
+            return Task.CompletedTask;
+        };
+
+        watcher.Publish(instance, false);
+        watcher.Publish(instance, true);
+        instance.StopTracking(watch);
+
+        Assert.True(instance.IsRunning);
+        Assert.Equal(new[] { true }, changes);
+        Assert.Equal(0, stopped);
+    }
+
+    [Fact]
+    public void Stop_notification_waits_for_all_attached_session_watches()
+    {
+        using var instance = Instance("Input");
+        using var first = Session(new TestSession());
+        using var second = Session(new TestSession());
+        var watcher = DuoTestSupport.Watcher(new ControlledManager());
+        var changes = new List<bool>();
+
+        instance.IsRunning = true;
+        instance.StartTracking(first);
+        instance.StartTracking(second);
+        watcher.StatusChanged += (_, args) => changes.Add(args.Status);
+
+        watcher.Publish(instance, false);
+        instance.StopTracking(first);
+
+        Assert.Empty(changes);
+
+        instance.StopTracking(second);
+
+        Assert.Equal(new[] { false }, changes);
+    }
+
+    [Fact]
     public async Task Logout_stops_the_associated_instance()
     {
         var info = new DuoInstanceWatchInfo
