@@ -33,8 +33,8 @@ namespace MadWizard.Desomnia.Network.Middleware
 
                     yield return ctx.Resolve<DuoInstance>(
                         TypedParameter.From(name),
-                        TypedParameter.From(info),
-                        TypedParameter.From(settings)
+                        TypedParameter.From(settings),
+                        TypedParameter.From(info)
                     );
                 }
             }
