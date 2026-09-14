@@ -14,23 +14,22 @@ namespace MadWizard.Desomnia.Network.Middleware
         {
             IEnumerable<DuoInstance> CreateInstances(IEnumerable<InstanceSettings> instances)
             {
-                foreach (var settings in instances)
+                foreach ((var name, var settings) in instances.ToDictionary(i => i.Name))
                 {
-                    string name = settings.Name;
-
                     var info = config[name] ?? new DuoInstanceWatchInfo { Name = name };
+                    {
+                        // apply default actions
+                        info.OnDemand   ??= config.OnInstanceDemand;
+                        info.OnIdle     ??= config.OnInstanceIdle;
+                        info.OnLogin    ??= config.OnInstanceLogin;
+                        info.OnStart    ??= config.OnInstanceStarted;
+                        info.OnStop     ??= config.OnInstanceStopped;
+                        info.OnLogout   ??= config.OnInstanceLogout;
 
-                    // carry over the global attributes
-                    info.OnDemand   ??= config.OnInstanceDemand;
-                    info.OnIdle     ??= config.OnInstanceIdle;
-                    info.OnLogin    ??= config.OnInstanceLogin;
-                    info.OnStart    ??= config.OnInstanceStarted;
-                    info.OnStop     ??= config.OnInstanceStopped;
-                    info.OnLogout   ??= config.OnInstanceLogout;
-
-
-                    info.WatchStreamTraffic ??= config.WatchStreamTraffic;
-                    info.MinStreamTraffic   ??= config.MinInstanceStreamTraffic;
+                        // apply default traffic config
+                        info.WatchStreamTraffic ??= config.WatchStreamTraffic;
+                        info.MinStreamTraffic ??= config.MinInstanceStreamTraffic;
+                    }
 
                     yield return ctx.Resolve<DuoInstance>(
                         TypedParameter.From(name),
