@@ -1,4 +1,6 @@
 ﻿using MadWizard.Desomnia.Events;
+using MadWizard.Desomnia.Ressource.Events;
+using MadWizard.Desomnia.Session;
 using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
@@ -10,6 +12,10 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
         public required IDuoManager Manager { protected get; init; }
 
         public event EventHandler<InstanceStatusChangedEventArgs>? StatusChanged;
+
+        readonly HashSet<DuoInstance> _pendingStops = [];
+
+        readonly Lock _statusLock = new();
 
         public abstract Task WatchAsync(IEnumerable<DuoInstance> instances, CancellationToken stoppingToken);
 
@@ -29,18 +35,87 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
         {
             if (instance.IsRunning != running)
             {
-                InstanceStatusChangedEventArgs args = new(instance, running);
+                lock (_statusLock)
+                {
+                    if (running)
+                    {
+                        CancelPendingStop(instance);
+                    }
 
-                instance.IsRunning = running;
+                    instance.IsRunning = running;
 
-                StatusChanged?.Invoke(this, args);
+                    if (!running && DelayStopUntilSessionEnd(instance))
+                    {
+                        return; // publish status change later
+                    }
+                }
 
-                Logger.LogInformation($"{instance} is now {(running ? "running" : "stopped")} " +
-                    $"{(args.Manually ? "(manually)" : "")}");
-
-                ((IEventSystem)instance)[running ? nameof(DuoInstance.Started) : nameof(DuoInstance.Stopped)]
-                    .TriggerEventAsync();
+                PublishStatusChange(instance, running);
             }
+        }
+
+        /// <summary>
+        /// Unfortunately the DuoManager describes an instance as "stopped"
+        /// as soon as the shutdown sequence is started.
+        /// 
+        /// To make the workflow more predictable we postpone to notify about
+        /// the stop until the corresponding Windows session actually got terminated.
+        /// </summary>
+        /// 
+        /// <returns>Did we schedule the stop to the end of the session?</returns>
+        private bool DelayStopUntilSessionEnd(DuoInstance instance)
+        {
+            _pendingStops.Add(instance);
+
+            instance.TrackingStopped += Instance_TrackingStopped;
+
+            if (!instance.TakeSnapshot().OfType<SessionWatch>().Any())
+            {
+                CancelPendingStop(instance);
+
+                return false;
+            }
+
+            return true;
+        }
+
+        private void Instance_TrackingStopped(object? sender, InspectableEventArgs<Resource> args)
+        {
+            if (sender is DuoInstance instance && args.Inspectable is SessionWatch)
+            {
+                lock (_statusLock)
+                {
+                    if (!_pendingStops.Contains(instance) || instance.TakeSnapshot().OfType<SessionWatch>().Any())
+                    {
+                        return; // unrelated instance, or session is still running
+                    }
+
+                    CancelPendingStop(instance);
+                }
+
+                PublishStatusChange(instance, false);
+            }
+        }
+
+        private void CancelPendingStop(DuoInstance instance)
+        {
+            if (_pendingStops.Remove(instance))
+            {
+                instance.TrackingStopped -= Instance_TrackingStopped;
+            }
+        }
+
+        private void PublishStatusChange(DuoInstance instance, bool running)
+        {
+            InstanceStatusChangedEventArgs args = new(instance, running);
+
+            StatusChanged?.Invoke(this, args);
+
+            Logger.LogInformation($"{args.Instance} is now {(args.Status ? "running" : "stopped")} " +
+                $"{(args.Manually ? "(manually)" : "")}");
+
+            ((IEventSystem)args.Instance)[args.Status ? nameof(DuoInstance.Started) : nameof(DuoInstance.Stopped)]
+                .TriggerEventAsync();
         }
     }
 
