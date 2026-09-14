@@ -17,7 +17,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
 
         public new SunshineService Service => service;
 
-        CancellationTokenSource? _cancelSource;
+        CancellationTokenSource? _waiting;
 
         private void ConfigureFirewall()
         {
@@ -49,6 +49,9 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
 
         public async void WaitForClient()
         {
+            if (_waiting != null)
+                return;
+
             using TcpListener listener = new(IPAddress.Any, service.HTTP.Port);
 
             try
@@ -59,13 +62,13 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
 
                 Logger.LogTrace($"Listening for incoming connections on port {service.HTTP.Port}...");
 
-                _cancelSource = new();
+                _waiting = new();
 
-                while (_cancelSource != null)
+                while (_waiting != null)
 
                     try
                     {
-                        using TcpClient client = await listener.AcceptTcpClientAsync(_cancelSource.Token);
+                        using TcpClient client = await listener.AcceptTcpClientAsync(_waiting.Token);
 
                         if (client.Client.RemoteEndPoint is IPEndPoint remote)
                         {
@@ -106,8 +109,8 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
 
         public void StopWaiting()
         {
-            _cancelSource?.Cancel();
-            _cancelSource = null;
+            _waiting?.Cancel();
+            _waiting = null;
         }
 
         protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
