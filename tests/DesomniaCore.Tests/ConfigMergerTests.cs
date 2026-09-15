@@ -37,10 +37,10 @@ namespace MadWizard.Desomnia.Tests
         public void LaterBlockWins_OnConflictingAttributes()
         {
             var result = Merge(
-                Block("a", """<SystemMonitor onDemand="sleepless" timeout="2min" />"""),
-                Block("b", """<SystemMonitor onDemand="wake" />"""));
+                Block("a", """<SystemMonitor onUsage="sleepless" timeout="2min" />"""),
+                Block("b", """<SystemMonitor onUsage="wake" />"""));
 
-            Assert.Equal("wake", Attribute(result, "onDemand"));
+            Assert.Equal("wake", Attribute(result, "onUsage"));
             Assert.Equal("2min", Attribute(result, "timeout")); // untouched
         }
 
@@ -142,17 +142,17 @@ namespace MadWizard.Desomnia.Tests
         {
             // an earlier higher-priority block keeps its value against later blocks
             var result = Merge(
-                Block("a", """<SystemMonitor onDemand="sleepless" />""", priority: 1),
-                Block("b", """<SystemMonitor onDemand="wake" />"""));
+                Block("a", """<SystemMonitor onUsage="sleepless" />""", priority: 1),
+                Block("b", """<SystemMonitor onUsage="wake" />"""));
 
-            Assert.Equal("sleepless", Attribute(result, "onDemand"));
+            Assert.Equal("sleepless", Attribute(result, "onUsage"));
 
             // and a later higher-priority block overrides an earlier one
             result = Merge(
-                Block("a", """<SystemMonitor onDemand="sleepless" />"""),
-                Block("b", """<SystemMonitor onDemand="wake" />""", priority: 1));
+                Block("a", """<SystemMonitor onUsage="sleepless" />"""),
+                Block("b", """<SystemMonitor onUsage="wake" />""", priority: 1));
 
-            Assert.Equal("wake", Attribute(result, "onDemand"));
+            Assert.Equal("wake", Attribute(result, "onUsage"));
         }
 
         [Fact]
@@ -172,38 +172,38 @@ namespace MadWizard.Desomnia.Tests
         public void OnConflictFirst_KeepsTheEarlierValue()
         {
             var result = Merge(ConflictResolution.First,
-                Block("a", """<SystemMonitor onDemand="sleepless" />"""),
-                Block("b", """<SystemMonitor onDemand="wake" />"""));
+                Block("a", """<SystemMonitor onUsage="sleepless" />"""),
+                Block("b", """<SystemMonitor onUsage="wake" />"""));
 
-            Assert.Equal("sleepless", Attribute(result, "onDemand"));
+            Assert.Equal("sleepless", Attribute(result, "onUsage"));
         }
 
         [Fact]
         public void OnConflictError_ThrowsOnEqualPriorityConflicts()
         {
             Assert.Throws<ConfigurationValueException>(() => Merge(ConflictResolution.Error,
-                Block("a", """<SystemMonitor onDemand="sleepless" />"""),
-                Block("b", """<SystemMonitor onDemand="wake" />""")));
+                Block("a", """<SystemMonitor onUsage="sleepless" />"""),
+                Block("b", """<SystemMonitor onUsage="wake" />""")));
         }
 
         [Fact]
         public void OnConflictError_AcceptsConflictsResolvedByPriority()
         {
             var result = Merge(ConflictResolution.Error,
-                Block("a", """<SystemMonitor onDemand="sleepless" />"""),
-                Block("b", """<SystemMonitor onDemand="wake" />""", priority: 1));
+                Block("a", """<SystemMonitor onUsage="sleepless" />"""),
+                Block("b", """<SystemMonitor onUsage="wake" />""", priority: 1));
 
-            Assert.Equal("wake", Attribute(result, "onDemand"));
+            Assert.Equal("wake", Attribute(result, "onUsage"));
         }
 
         [Fact]
         public void OnConflictError_AcceptsIdenticalValues()
         {
             var result = Merge(ConflictResolution.Error,
-                Block("a", """<SystemMonitor onDemand="sleepless" />"""),
-                Block("b", """<SystemMonitor onDemand="sleepless" />"""));
+                Block("a", """<SystemMonitor onUsage="sleepless" />"""),
+                Block("b", """<SystemMonitor onUsage="sleepless" />"""));
 
-            Assert.Equal("sleepless", Attribute(result, "onDemand"));
+            Assert.Equal("sleepless", Attribute(result, "onUsage"));
         }
 
         [Fact]

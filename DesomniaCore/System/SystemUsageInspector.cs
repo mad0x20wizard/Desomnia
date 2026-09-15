@@ -31,7 +31,7 @@ namespace MadWizard.Desomnia
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             system.Idle += LogInspectionResult;
-            system.Demand += LogInspectionResult;
+            system.Usage += LogInspectionResult;
 
             Logger.LogDebug($"Checking resources every {Interval}");
 

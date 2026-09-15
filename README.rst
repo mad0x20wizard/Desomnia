@@ -97,7 +97,7 @@ This configuration could be used to automatically suspend a physical system unle
 .. code:: xml
 
    <?xml version="1.0" encoding="utf-8"?>
-   <SystemMonitor version="2" timeout="2min" onIdle="sleep+20min" onDemand="sleepless">
+   <SystemMonitor version="2" timeout="2min" onIdle="sleep+20min" onUsage="sleepless">
 
      <NetworkMonitor>
        <Service name="SSH" port="22">

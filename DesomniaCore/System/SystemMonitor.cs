@@ -29,7 +29,7 @@ namespace MadWizard.Desomnia
             set => SleeplessUntil = value ? DateTime.MaxValue : null;
         }
 
-        public bool? SleeplessOnDemand
+        public bool? SleeplessOnUsage
         {
             get; set
             {
@@ -37,7 +37,7 @@ namespace MadWizard.Desomnia
 
                 SleeplessChanged?.Invoke(this, EventArgs.Empty);
             }
-        } = config.OnDemand?.Command?.Function == "sleepless";
+        } = config.OnUsage?.Command?.Function == "sleepless";
 
         public DateTime? SleeplessUntil
         {
@@ -70,7 +70,7 @@ namespace MadWizard.Desomnia
                 throw new ArgumentException("onSuspendTimeout must have a delay set", nameof(config.OnSuspendTimeout));
 
             Event(nameof(Idle)).AddAction(config.OnIdle);      // inherited from Resource —
-            Event(nameof(Demand)).AddAction(config.OnDemand);  // string-keyed by necessity
+            Event(nameof(Usage)).AddAction(config.OnUsage);    // string-keyed by necessity
 
             Suspend.AddAction(config.OnSuspend);
             SuspendTimeout.AddAction(config.OnSuspendTimeout);
@@ -139,7 +139,7 @@ namespace MadWizard.Desomnia
                 reason = eventRef.Tokens.Any() ? string.Join(", ", eventRef.Tokens) : "?";
             }
 
-            if (SleeplessOnDemand != false || eventRef.Tokens.OfType<SleeplessToken>().Any())
+            if (SleeplessOnUsage != false || eventRef.Tokens.OfType<SleeplessToken>().Any())
             {
                 Request = await power.CreateRequest(PowerRequestType.System, $"{reason}");
 

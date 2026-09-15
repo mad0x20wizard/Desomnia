@@ -1,14 +1,29 @@
 ﻿using Autofac;
 using Autofac.Core.Resolving.Pipeline;
 using MadWizard.Desomnia.Processes.Configuration;
+using MadWizard.Desomnia.Processes.Configuration.Migration;
+using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Processes.Manager;
 using MadWizard.Desomnia.Processes.Middleware;
 using MadWizard.Desomnia.Processes.Watch;
+using System.Xml.Linq;
 
 namespace MadWizard.Desomnia.Processes
 {
-    public class Module : Desomnia.ConfigurableModule<ModuleConfig>
+    public class Module : Desomnia.ConfigurableModule<ModuleConfig>, IXConfigurationMigration
     {
+        #region Versioning
+        protected override uint MinVersion => 2;
+
+        void IXConfigurationMigration.Run(XDocument configuration, uint version)
+        {
+            switch (version)
+            {
+                case 2: V2.Run(configuration); break;
+            }
+        }
+        #endregion
+
         /**
          * Every platform's process registration gets the parent introduction, wherever that
          * registration was made – the platforms register their concrete processes, and none of

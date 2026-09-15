@@ -4,6 +4,7 @@ using MadWizard.Desomnia.Environments;
 using MadWizard.Desomnia.Network.Address;
 using MadWizard.Desomnia.Network.Bridges;
 using MadWizard.Desomnia.Network.Configuration;
+using MadWizard.Desomnia.Network.Configuration.Migration;
 using MadWizard.Desomnia.Network.Configuration.Interfaces;
 using MadWizard.Desomnia.Network.Context;
 using MadWizard.Desomnia.Network.Context.Bridges;
@@ -21,14 +22,28 @@ using MadWizard.Desomnia.Network.Manager.Guard;
 using MadWizard.Desomnia.Network.Middleware;
 using MadWizard.Desomnia.Network.Reachability;
 using MadWizard.Desomnia.Power.Guard;
+using MadWizard.Desomnia.Configuration.Xml;
 using NLog;
 using NLog.Config;
 using System.ComponentModel;
+using System.Xml.Linq;
 
 namespace MadWizard.Desomnia.Network
 {
-    public class Module : ConfigurableModule<ModuleConfig<NetworkMonitorConfig>>
+    public class Module : ConfigurableModule<ModuleConfig<NetworkMonitorConfig>>, IXConfigurationMigration
     {
+        #region Versioning
+        protected override uint MinVersion => 2;
+
+        void IXConfigurationMigration.Run(XDocument configuration, uint version)
+        {
+            switch (version)
+            {
+                case 2: V2.Run(configuration); break;
+            }
+        }
+        #endregion
+
         protected override void ConfigureLogging(ISetupExtensionsBuilder builder)
         {
             builder.RegisterLayoutRenderer<NetworkHostLayoutRenderer>();

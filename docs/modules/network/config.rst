@@ -67,6 +67,8 @@ Desomnia provides support for monitoring any number of installed network interfa
 
       allowWakeOnLAN="MagicPacket"
 
+      onUsage="..."
+      onIdle="..."
       onConnect="..."
       onDisconnect="...">
 
@@ -240,6 +242,20 @@ Controls which Wake-on-LAN mode Desomnia should ensure is set on the interface. 
 .. include:: definitions/wol.rst
 
 See :doc:`wol` for details on platform support.
+
+onUsage
++++++++
+
+:⚡️ event:
+
+An action configured for this event will be executed on every inspection cycle in which at least one watched network resource reports activity.
+
+onIdle
+++++++
+
+:⚡️ event:
+
+An action configured for this event will be executed when all watched network resources are idle.
 
 onConnect
 +++++++++
@@ -496,7 +512,9 @@ Watched hosts (``<RemoteHost>`` and ``<VirtualHost>``) extend the ``<Host>`` and
     demandParallel="1"
 
     onMagicPacket="wake"
+    onServiceUsage=""
     onServiceDemand="knock"
+    onUsage=""
     onDemand="wake"
     onIdle="suspend"
     onStart=""
@@ -537,6 +555,21 @@ onServiceDemand
 :inherited:
 
 An action configured for this event will be executed when the Network Monitor detects, that a configured service on this host is being accessed.
+
+onServiceUsage
+++++++++++++++
+
+:⚡️ event:
+:inherited:
+
+The default action for a service's ``onUsage`` event when that service does not configure one itself.
+
+onUsage
++++++++
+
+:⚡️ event:
+
+An action configured for this event will be executed on every inspection cycle in which the host reports activity.
 
 onDemand
 ++++++++
@@ -957,6 +990,7 @@ When you configure a ``<Service>`` you can configure all the attributes of a ``<
 
     handoff="true"
 
+    onUsage=""
     onDemand="knock"
     onIdle="?">
 
@@ -990,6 +1024,13 @@ onDemand
 
 An action configured for this event will be executed when the Network Monitor detects, that the service is being accessed.
 
+onUsage
++++++++
+
+:⚡️ event:
+
+An action configured for this event will be executed on every inspection cycle in which the service reports activity.
+
 onIdle
 ++++++
 
@@ -1012,6 +1053,7 @@ When you configure a ``<HTTPService>`` you can configure all the attributes of a
     
     minTraffic="10kb/s"
     
+    onUsage=""
     onDemand="knock"
     onIdle="?">
 

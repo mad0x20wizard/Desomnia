@@ -19,6 +19,7 @@ namespace MadWizard.Desomnia.Network.Middleware
                     var info = config[name] ?? new DuoInstanceWatchInfo { Name = name };
                     {
                         // apply default actions
+                        info.OnUsage    ??= config.OnInstanceUsage;
                         info.OnDemand   ??= config.OnInstanceDemand;
                         info.OnIdle     ??= config.OnInstanceIdle;
                         info.OnLogin    ??= config.OnInstanceLogin;

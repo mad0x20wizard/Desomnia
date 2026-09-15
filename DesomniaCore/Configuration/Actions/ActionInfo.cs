@@ -43,7 +43,7 @@ namespace MadWizard.Desomnia.Configuration
         /// <summary>THE border of the engine (§6.2): a configuration ActionInfo converts
         /// to its engine form here and never travels further. Null and blank-command
         /// infos (unset XML attributes) convert to null — AddAction treats that as a
-        /// no-op, so <c>Demand.AddAction(config.OnDemand)</c> stays a one-liner.</summary>
+        /// no-op, so <c>Usage.AddAction(config.OnUsage)</c> stays a one-liner.</summary>
         public static implicit operator EventAction?(ActionInfo? info) => EventAction.FromConfig(info);
     }
 

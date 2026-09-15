@@ -3,8 +3,8 @@ using Xunit;
 
 namespace MadWizard.Desomnia.Tests.Parity
 {
-    /// <summary>§9.1: Resource semantics — Idle/Demand opposite-cancellation on inspection
-    /// transitions, IsIdle tracking, and action/error bubbling to tracking monitors
+    /// <summary>§9.1: Resource semantics — Idle/Usage opposite-cancellation across inspection
+    /// cycles, external Demand, IsIdle tracking, and action/error bubbling to tracking monitors
     /// (Resource.cs:33-59, 89-113): synchronous, recursive, first-match, self-first.</summary>
     public class ResourceParityTests
     {
@@ -16,10 +16,18 @@ namespace MadWizard.Desomnia.Tests.Parity
 
             protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval) => Tokens;
 
+            public void DemandNow() => TriggerDemand();
+
             public readonly List<string> Log = [];
 
             [ActionHandler("mark")]
             private void Mark() => Log.Add("mark");
+
+            [ActionHandler("usage-action")]
+            private void UsageAction() => Log.Add("usage");
+
+            [ActionHandler("demand-action")]
+            private void DemandAction() => Log.Add("demand");
         }
 
         /// <summary>No InspectResource override — the base enumeration over tracked
@@ -63,31 +71,108 @@ namespace MadWizard.Desomnia.Tests.Parity
         }
 
         [Fact]
-        public async Task DemandCancelsPendingIdleAction()
+        public async Task UsageCancelsPendingIdleAction()
         {
             var resource = new TestResource();
             ((IEventSystem)resource)["Idle"].AddAction(Actions.Delayed("mark", Window));
 
             resource.Inspect(TimeSpan.Zero);                 // idle → arms "mark"
             resource.Tokens = [new TestToken()];
-            resource.Inspect(TimeSpan.Zero);                 // demand → cancels the pending idle action
+            resource.Inspect(TimeSpan.Zero);                 // usage → cancels the pending idle action
 
             await Wait.SettleAfter(Window);
             Assert.Empty(resource.Log);
         }
 
         [Fact]
-        public async Task IdleCancelsPendingDemandAction()
+        public async Task IdleCancelsPendingUsageAction()
         {
             var resource = new TestResource { Tokens = [new TestToken()] };
-            ((IEventSystem)resource)["Demand"].AddAction(Actions.Delayed("mark", Window));
+            ((IEventSystem)resource)["Usage"].AddAction(Actions.Delayed("mark", Window));
 
-            resource.Inspect(TimeSpan.Zero);                 // demand → arms "mark"
+            resource.Inspect(TimeSpan.Zero);                 // usage → arms "mark"
             resource.Tokens = [];
-            resource.Inspect(TimeSpan.Zero);                 // idle → cancels the pending demand action
+            resource.Inspect(TimeSpan.Zero);                 // idle → cancels the pending usage action
 
             await Wait.SettleAfter(Window);
             Assert.Empty(resource.Log);
+        }
+
+        [Fact]
+        public async Task DemandCancelsPendingIdleAction()
+        {
+            var resource = new TestResource();
+            ((IEventSystem)resource)["Idle"].AddAction(Actions.Delayed("mark", Window));
+
+            resource.Inspect(TimeSpan.Zero);
+            resource.DemandNow();
+
+            await Wait.SettleAfter(Window);
+            Assert.Empty(resource.Log);
+            Assert.False(resource.IsIdle);
+        }
+
+        [Fact]
+        public async Task IdleCancelsPendingDemandAction()
+        {
+            var resource = new TestResource();
+            ((IEventSystem)resource)["Demand"].AddAction(Actions.Delayed("mark", Window));
+
+            resource.DemandNow();
+            resource.Inspect(TimeSpan.Zero);
+
+            await Wait.SettleAfter(Window);
+            Assert.Empty(resource.Log);
+        }
+
+        [Fact]
+        public async Task UsageAndDemandDoNotCancelEachOther()
+        {
+            var resource = new TestResource { Tokens = [new TestToken()] };
+            ((IEventSystem)resource)["Usage"].AddAction(Actions.Delayed("usage-action", 150));
+            ((IEventSystem)resource)["Demand"].AddAction(Actions.Delayed("demand-action", 150));
+
+            resource.Inspect(TimeSpan.Zero);
+            resource.DemandNow();
+
+            await Wait.Until(() => resource.Log.Count == 2);
+            Assert.Contains("usage", resource.Log);
+            Assert.Contains("demand", resource.Log);
+        }
+
+        [Fact]
+        public void UsageIsTriggeredOnEveryPositiveInspectionAndNeverAsDemand()
+        {
+            var resource = new TestResource { Tokens = [new TestToken()] };
+            var usages = 0;
+            var demands = 0;
+
+            resource.Usage += _ => { usages++; return Task.CompletedTask; };
+            resource.Demand += _ => { demands++; return Task.CompletedTask; };
+
+            resource.Inspect(TimeSpan.Zero);
+            resource.Inspect(TimeSpan.Zero);
+
+            Assert.Equal(2, usages);
+            Assert.Equal(0, demands);
+            Assert.False(resource.IsIdle);
+        }
+
+        [Fact]
+        public void DemandSetsNonIdleWithoutTriggeringUsage()
+        {
+            var resource = new TestResource();
+            var usages = 0;
+            var demands = 0;
+
+            resource.Usage += _ => { usages++; return Task.CompletedTask; };
+            resource.Demand += _ => { demands++; return Task.CompletedTask; };
+
+            resource.DemandNow();
+
+            Assert.Equal(0, usages);
+            Assert.Equal(1, demands);
+            Assert.False(resource.IsIdle);
         }
 
         private class VetoingResource : Resource
@@ -108,31 +193,29 @@ namespace MadWizard.Desomnia.Tests.Parity
         }
 
         [Fact]
-        public async Task VetoedEventCancelsNothing()
+        public async Task VetoedEventStillCancelsOppositeActions()
         {
-            // flipped quirk (phase 3, §6.1/§9.3): opposite-cancellation is pipeline-
-            // enforced via [EventOpposite] — a vetoed Idle never reaches the pipeline,
-            // so Demand's pending survives and fires (the old hand-coded cancel ran
-            // BEFORE the veto could intervene)
+            // Opposite-cancellation deliberately happens before the resource veto.
             var resource = new VetoingResource { Tokens = [new TestToken()] };
-            ((IEventSystem)resource)["Demand"].AddAction(Actions.Delayed("mark", 150));
+            ((IEventSystem)resource)["Usage"].AddAction(Actions.Delayed("mark", Window));
 
-            resource.Inspect(TimeSpan.Zero);                 // demand → arms "mark"
+            resource.Inspect(TimeSpan.Zero);                 // usage → arms "mark"
 
             resource.Veto = true;
             resource.Tokens = [];
-            resource.Inspect(TimeSpan.Zero);                 // idle VETOED → cancels nothing
+            resource.Inspect(TimeSpan.Zero);                 // idle VETOED → still cancels usage
 
-            await Wait.Until(() => resource.Log.Count == 1); // the pending fires
+            await Wait.SettleAfter(Window);
+            Assert.Empty(resource.Log);
         }
 
         [Fact]
         public async Task VetoControl_UnvetoedIdleStillCancelsThePending()
         {
             var resource = new VetoingResource { Tokens = [new TestToken()] };
-            ((IEventSystem)resource)["Demand"].AddAction(Actions.Delayed("mark", Window));
+            ((IEventSystem)resource)["Usage"].AddAction(Actions.Delayed("mark", Window));
 
-            resource.Inspect(TimeSpan.Zero);                 // demand → arms
+            resource.Inspect(TimeSpan.Zero);                 // usage → arms
 
             resource.Tokens = [];
             resource.Inspect(TimeSpan.Zero);                 // idle NOT vetoed → annotation cancels
@@ -142,7 +225,7 @@ namespace MadWizard.Desomnia.Tests.Parity
         }
 
         [Fact]
-        public async Task PendingIdleActionFiresWhenNoDemandIntervenes()
+        public async Task PendingIdleActionFiresWhenNoUsageIntervenes()
         {
             var resource = new TestResource();
             ((IEventSystem)resource)["Idle"].AddAction(Actions.Delayed("mark", 100));
@@ -161,7 +244,7 @@ namespace MadWizard.Desomnia.Tests.Parity
             var monitor = new CatchAllMonitor();
             monitor.StartTracking(resource);
 
-            ((IEventSystem)resource)["Demand"].AddAction(Actions.Named("bubbled"));   // only the monitor has it
+            ((IEventSystem)resource)["Usage"].AddAction(Actions.Named("bubbled"));   // only the monitor has it
             resource.Tokens = [new TestToken()];
             resource.Inspect(TimeSpan.Zero);
 
@@ -175,7 +258,7 @@ namespace MadWizard.Desomnia.Tests.Parity
             var monitor = new MarkMonitor();
             monitor.StartTracking(resource);
 
-            ((IEventSystem)resource)["Demand"].AddAction(Actions.Named("mark"));      // both declare "mark"
+            ((IEventSystem)resource)["Usage"].AddAction(Actions.Named("mark"));       // both declare "mark"
             resource.Tokens = [new TestToken()];
             resource.Inspect(TimeSpan.Zero);
 
@@ -194,7 +277,7 @@ namespace MadWizard.Desomnia.Tests.Parity
             one.StartTracking(resource);
             two.StartTracking(resource);
 
-            ((IEventSystem)resource)["Demand"].AddAction(Actions.Named("bubbled"));
+            ((IEventSystem)resource)["Usage"].AddAction(Actions.Named("bubbled"));
             resource.Tokens = [new TestToken()];
             resource.Inspect(TimeSpan.Zero);
 
@@ -212,7 +295,7 @@ namespace MadWizard.Desomnia.Tests.Parity
             mid.StartTracking(resource);
             grand.StartTracking(mid);
 
-            ((IEventSystem)resource)["Demand"].AddAction(Actions.Named("bubbled"));
+            ((IEventSystem)resource)["Usage"].AddAction(Actions.Named("bubbled"));
             resource.Tokens = [new TestToken()];
             resource.Inspect(TimeSpan.Zero);
 
@@ -227,7 +310,7 @@ namespace MadWizard.Desomnia.Tests.Parity
             monitor.StartTracking(resource);
             monitor.StopTracking(resource);
 
-            ((IEventSystem)resource)["Demand"].AddAction(Actions.Named("bubbled"));
+            ((IEventSystem)resource)["Usage"].AddAction(Actions.Named("bubbled"));
             resource.Tokens = [new TestToken()];
 
             // nothing handles the action → NotImplementedException through the default
@@ -244,7 +327,7 @@ namespace MadWizard.Desomnia.Tests.Parity
             var monitor = new CatchAllMonitor();
             monitor.StartTracking(resource);
 
-            ((IEventSystem)resource)["Demand"].AddAction(Actions.Named("no-such-action"));
+            ((IEventSystem)resource)["Usage"].AddAction(Actions.Named("no-such-action"));
             resource.Tokens = [new TestToken()];
             resource.Inspect(TimeSpan.Zero);                 // NotImplementedException → monitor swallows
 
@@ -258,7 +341,7 @@ namespace MadWizard.Desomnia.Tests.Parity
             var monitor = new CatchAllMonitor();
             monitor.StartTracking(resource, adopt: false);
 
-            ((IEventSystem)resource)["Demand"].AddAction(Actions.Named("bubbled"));   // monitor-only action
+            ((IEventSystem)resource)["Usage"].AddAction(Actions.Named("bubbled"));    // monitor-only action
             resource.Tokens = [new TestToken()];
 
             // non-adoption observed: the action cannot bubble and fails instead

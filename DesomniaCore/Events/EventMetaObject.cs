@@ -98,8 +98,8 @@ namespace MadWizard.Desomnia.Events
 
         #region Protected virtual hooks — in-place augmentation for the declaring class
 
-        /// <summary>Veto seam: return false to stop the trigger entirely (nothing else
-        /// happens — no cancel enforcement, no handlers, no actions).</summary>
+        /// <summary>Veto seam: return false to stop handler and action dispatch. Event
+        /// cancellation relationships are deliberately enforced before this hook.</summary>
         protected virtual bool ShouldTriggerEvent(Event @event) => true;
 
         protected virtual void OnEventTriggered(Event @event) { }

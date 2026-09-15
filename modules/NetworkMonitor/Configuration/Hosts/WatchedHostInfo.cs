@@ -81,7 +81,9 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
         #endregion
 
         // Events
+        public DelayedActionInfo?   OnServiceUsage          { get; set; }
         public ActionInfo?          OnServiceDemand         { get; set; }
+        public DelayedActionInfo?   OnUsage                 { get; set; }
         public ActionInfo?          OnDemand                { get; set; } = new ActionInfo("wake");
         public DelayedActionInfo?   OnIdle                  { get; set; }
 

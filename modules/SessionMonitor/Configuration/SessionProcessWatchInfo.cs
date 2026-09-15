@@ -8,7 +8,7 @@ namespace MadWizard.Desomnia.Session.Configuration
     public record SessionProcessWatchInfo(string pattern) : ProcessWatchInfo(pattern) // <- XML text content
     {
         public DelayedActionInfo? OnSessionIdle { get; set; }
-        public DelayedActionInfo? OnSessionDemand { get; set; }
+        public DelayedActionInfo? OnSessionUsage { get; set; }
         public DelayedActionInfo? OnSessionConsoleConnect { get; set; }
         public DelayedActionInfo? OnSessionRemoteConnect { get; set; }
         public DelayedActionInfo? OnSessionDisconnect { get; set; }

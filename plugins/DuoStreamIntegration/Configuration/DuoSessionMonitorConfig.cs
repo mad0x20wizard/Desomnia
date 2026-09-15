@@ -11,10 +11,11 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
         public bool UseListener                                 { get; set; } = false;
         public bool UsePolling                                  { get; set; } = false;
 
-        public ActionInfo? OnDemand                             { get; set; }
+        public ActionInfo? OnUsage                              { get; set; }
         public DelayedActionInfo? OnIdle                        { get; set; }
 
         public ActionInfo? OnInstanceDemand                     { get; set; }
+        public DelayedActionInfo? OnInstanceUsage               { get; set; }
         public DelayedActionInfo? OnInstanceIdle                { get; set; }
         public ScheduledActionInfo? OnInstanceLogin             { get; set; }
         public ScheduledActionInfo? OnInstanceStarted           { get; set; }

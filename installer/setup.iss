@@ -140,7 +140,7 @@ Filename: {tmp}\prefs.ini; Section: "config:monitor.xml"; Key: "SHA256"; String:
 Filename: {tmp}\prefs.ini; Section: config; Key: version; String: 2; Check: ShouldConfigureDesomnia
 Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: timeout; String: {code:SystemMonitorPrefs|Timeout}; Check: ShouldConfigureDesomnia
 Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: idle; String: {code:SystemMonitorPrefs|IdleAction}; Check: ShouldConfigureDesomnia
-Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: demand; String: {code:SystemMonitorPrefs|DemandAction}; Check: ShouldConfigureDesomnia
+Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: usage; String: {code:SystemMonitorPrefs|UsageAction}; Check: ShouldConfigureDesomnia
 
 Filename: {tmp}\prefs.ini; Section: DuoSessionMonitor; Key: idle; String: {code:DuoSessionMonitorPrefs|IdleAction}; Check: ShouldConfigureDuoSessionMonitor
 Filename: {tmp}\prefs.ini; Section: DuoSessionMonitor; Key: demand; String: {code:DuoSessionMonitorPrefs|DemandAction}; Check: ShouldConfigureDuoSessionMonitor

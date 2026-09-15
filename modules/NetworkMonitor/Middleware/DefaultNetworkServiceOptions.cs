@@ -38,6 +38,7 @@ namespace MadWizard.Desomnia.Network.Middleware
 
         private static void ApplyDefaultActions(WatchedServiceInfo serviceInfo, WatchedHostInfo config)
         {
+            serviceInfo.OnUsage ??= config.OnServiceUsage;
             serviceInfo.OnDemand ??= config.OnServiceDemand;
         }
 

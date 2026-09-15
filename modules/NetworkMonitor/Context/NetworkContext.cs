@@ -95,7 +95,7 @@ namespace MadWizard.Desomnia.Network.Context
                     .OnActivated(args =>
                     {
                         ((IEventSystem)args.Instance)[nameof(NetworkMonitor.Idle)].AddAction(config.OnIdle);
-                        ((IEventSystem)args.Instance)[nameof(NetworkMonitor.Demand)].AddAction(config.OnDemand);
+                        ((IEventSystem)args.Instance)[nameof(NetworkMonitor.Usage)].AddAction(config.OnUsage);
                         ((IEventSystem)args.Instance)[nameof(NetworkMonitor.Connected)].AddAction(config.OnConnect);
                         ((IEventSystem)args.Instance)[nameof(NetworkMonitor.Disconnected)].AddAction(config.OnDisconnect);
                     })

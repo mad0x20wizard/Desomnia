@@ -95,9 +95,11 @@ Version 2
 :Status: Current
 :Since: 3.3.0
 
-**Duo Stream Integration.** The :doc:`plugin </plugins/duo/plugin>` renamed its element: ``<DuoStreamMonitor>`` became ``<DuoSessionMonitor>`` (a Duo instance is a full session, not just a stream). With it, the ``useFallback`` attribute became ``useListener``, and the demand actions of the element — ``onDemand`` and ``onInstanceDemand`` — run immediately now: they no longer accept a schedule suffix such as ``+5min`` or ``+2x``. The migration renames the element and the attribute wherever they occur (**INFO**) and strips a schedule suffix from the two demand actions (**WARN** — the action's timing changes, so with ``autoMigrate="persistent"`` the file is not rewritten while such a value is present).
+**Usage and demand events.** Periodic activity inspection now triggers ``onUsage`` on every positive inspection cycle. ``onDemand`` is reserved for external requests and is available only on capable resources, currently watched network hosts, network services, and Duo instances. Both events mark a resource as active and cancel pending ``onIdle`` actions.
 
-Version 2 is *only* required when the Duo Stream Integration plugin is loaded: a version 1 file keeps working unchanged on a build without the plugin.
+The version 2 migration renames the former inspection event attributes to ``onUsage`` on ``<SystemMonitor>``, ``<ProcessMonitor>``, ``<Process>``, ``<SessionMonitor>``, session-process ``onSessionDemand``, ``<DisplayMonitor>``, ``<NetworkMonitor>``, and ``<DuoSessionMonitor>``. It deliberately preserves ``onDemand`` on network hosts, network services, and Duo ``<Instance>`` nodes because these nodes retain the external-demand event. Those nodes accept the new ``onUsage`` attribute in addition.
+
+**Duo Stream Integration.** The :doc:`plugin </plugins/duo/plugin>` also renamed its element: ``<DuoStreamMonitor>`` became ``<DuoSessionMonitor>`` (a Duo instance is a full session, not just a stream).
 
 Version 1
 ---------

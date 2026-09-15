@@ -12,7 +12,7 @@ namespace MadWizard.Desomnia.Configuration
         public bool                 KeepDisplayAwake    { get; set; } = false;
 
         public DelayedActionInfo?   OnIdle              { get; set; }
-        public ActionInfo?          OnDemand            { get; set; }
+        public ActionInfo?          OnUsage             { get; set; }
         public ActionInfo?          OnSuspend           { get; set; }
         public DelayedActionInfo?   OnSuspendTimeout    { get; set; }
         public DelayedActionInfo?   OnResume            { get; set; }

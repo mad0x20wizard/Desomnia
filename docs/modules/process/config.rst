@@ -10,7 +10,7 @@ You can configure any number of ``<Process>`` to watch OS processes or groups of
 
   <SystemMonitor>
 
-    <ProcessMonitor>
+    <ProcessMonitor onUsage="" onIdle="">
 
       <Process ... />
       <Process ... />
@@ -23,13 +23,27 @@ You can configure any number of ``<Process>`` to watch OS processes or groups of
   
 See :doc:`performance`.
 
+onUsage
++++++++
+
+:⚡️ event:
+
+This event is triggered on every inspection cycle in which at least one configured process group reports activity.
+
+onIdle
+++++++
+
+:⚡️ event:
+
+This event is triggered when every configured process group is idle.
+
 Process
 -------
 
 .. code:: xml
 
   <Process name="Browser" watchChildren="false" minCPU="1%" watch="CPU"
-    onIdle="stop" onStart="" onStop="">
+    onUsage="" onIdle="stop" onStart="" onStop="">
 
     chrome|edge|firefox
 
@@ -76,6 +90,13 @@ onIdle
 
 This event is triggered when the ``watch`` expression evaluates to false for a running process
 group. With no thresholds, the default catch-all expression keeps a matching process demanded.
+
+onUsage
++++++++
+
+:⚡️ event:
+
+This event is triggered on every inspection cycle in which the ``watch`` expression evaluates to true for the process group.
 
 onStart
 +++++++

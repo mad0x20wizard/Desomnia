@@ -219,7 +219,7 @@ $root = Add-XmlElement $xml "SystemMonitor" $null ([ordered]@{
     version  = $version
     timeout  = $ini["SystemMonitor"]["timeout"] -replace '\s', ''
     onIdle   = $ini["SystemMonitor"]["idle"]    -replace '\s', ''
-    onDemand = $ini["SystemMonitor"]["demand"]  -replace '\s', ''
+    onUsage  = $ini["SystemMonitor"]["usage"]   -replace '\s', ''
 })
 
 

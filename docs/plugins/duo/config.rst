@@ -11,9 +11,10 @@ DuoSessionMonitor
   <SystemMonitor>
 
     <DuoSessionMonitor serviceName="DuoService" refresh="5s"
-      onDemand="sleepless"
+      onUsage="sleepless"
       onIdle=""
 
+      onInstanceUsage=""
       onInstanceDemand="start"
       onInstanceIdle="stop"
 
@@ -48,19 +49,27 @@ refresh
 
 The interval at which the state of the Duo instances is polled from the Duo Manager web interface. Instance start and stop events are currently detected by polling; a future version will use Windows Event Log notifications instead.
 
-onDemand
-++++++++
+onUsage
++++++++
 
 :⚡️ event:
 
-Triggered when any Duo instance receives a connection request and at least one instance transitions from idle to active — that is, when the monitor as a whole goes from fully idle to having at least one running session. You can use this to stop any background activity, the physical system should perform while no streaming client is connected, for example with ``exec``.
+Triggered during every timeout inspection in which at least one Duo instance has an active client connection. You can use this to stop any background activity the physical system should perform while no streaming client is connected, for example with ``exec``.
 
 onIdle
 ++++++
 
 :⚡️ event:
 
-Triggered during the timeout phase when no Duo instance has an active client connection — that is, when all instances have become idle. This is the counterpart to ``onDemand`` and can be used to startup performance intense background tasks.
+Triggered during the timeout phase when no Duo instance has an active client connection — that is, when all instances have become idle. This is the counterpart to ``onUsage`` and can be used to start performance-intensive background tasks.
+
+onInstanceUsage
++++++++++++++++
+
+:⚡️ event:
+:inherited:
+
+.. include:: attributes/usage.rst
 
 onInstanceDemand
 ++++++++++++++++
@@ -118,6 +127,7 @@ If you need to configure individual instances differently from the monitor-level
 .. code:: xml
 
     <Instance name="Thomas Anderson"
+      onUsage=""
       onDemand="start"
       onIdle="stop"
 
@@ -142,6 +152,13 @@ onDemand
 :⚡️ event:
 
 .. include:: attributes/demand.rst
+
+onUsage
++++++++
+
+:⚡️ event:
+
+.. include:: attributes/usage.rst
 
 onIdle
 ++++++

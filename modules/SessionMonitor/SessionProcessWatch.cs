@@ -19,9 +19,9 @@ namespace MadWizard.Desomnia.Session
             }
         }
 
-        [EventOpposite(nameof(SessionDemand))]
+        [EventOpposite(nameof(SessionUsage))]
         public event EventInvocation? SessionIdle;
-        public event EventInvocation? SessionDemand;
+        public event EventInvocation? SessionUsage;
 
         public event EventInvocation? SessionConsoleConnected;
         public event EventInvocation? SessionRemoteConnected;
@@ -32,7 +32,7 @@ namespace MadWizard.Desomnia.Session
         public SessionProcessWatch(SessionProcessWatchInfo info) : base(info)
         {
             SessionIdle.AddAction(info.OnSessionIdle);
-            SessionDemand.AddAction(info.OnSessionDemand);
+            SessionUsage.AddAction(info.OnSessionUsage);
             SessionConsoleConnected.AddAction(info.OnSessionConsoleConnect);
             SessionRemoteConnected.AddAction(info.OnSessionRemoteConnect);
             SessionDisconnected.AddAction(info.OnSessionDisconnect);
@@ -44,7 +44,7 @@ namespace MadWizard.Desomnia.Session
             if (parent is SessionWatch monitor)
             {
                 monitor.Idle += SessionWatch_Idle;
-                monitor.Demand += SessionWatch_Demand;
+                monitor.Usage += SessionWatch_Usage;
             }
         }
 
@@ -53,16 +53,16 @@ namespace MadWizard.Desomnia.Session
             await SessionIdle.TriggerEventAsync();
         }
 
-        private async Task SessionWatch_Demand(Event data)
+        private async Task SessionWatch_Usage(Event data)
         {
-            await SessionDemand.TriggerEventAsync();
+            await SessionUsage.TriggerEventAsync();
         }
 
         protected override void OnDetachedFrom(EventMetaObject parent)
         {
             if (parent is SessionWatch monitor)
             {
-                monitor.Demand -= SessionWatch_Demand;
+                monitor.Usage -= SessionWatch_Usage;
                 monitor.Idle -= SessionWatch_Idle;
             }
         }

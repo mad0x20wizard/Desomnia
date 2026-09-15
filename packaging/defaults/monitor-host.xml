@@ -10,7 +10,7 @@
   Suspending on idle is NOT enabled out of the box. To activate it, add a timeout and the
   onIdle action to the SystemMonitor element, e.g.:
 
-      <SystemMonitor timeout="5min" onIdle="sleep" onDemand="sleepless">
+      <SystemMonitor timeout="5min" onIdle="sleep" onUsage="sleepless">
 
   and declare the demands (services, remote clients, ...) that should keep this host awake.
 -->

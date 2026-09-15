@@ -22,12 +22,12 @@ Resource monitors form a recursive tree. Each can contain other resource monitor
     └── ProcessMonitor              (resource monitor)
         └── Process "notepad"       (resource)
 
-Only resource monitors can have children. Leaf resources report their activity state directly; monitors derive their state by aggregating their children — a monitor is active if at least one child is active. Resource monitors track a persistent idle/active state and expose ``onIdle`` and ``onDemand`` events.
+Only resource monitors can have children. Leaf resources report their activity state directly; monitors derive their state by aggregating their children — a monitor is active if at least one child is active. Resource monitors track a persistent idle/active state and expose ``onIdle`` and ``onUsage`` events. Resources that can also detect an external request may additionally expose ``onDemand``.
 
 Monitors
 ++++++++
 
-Some monitors do not maintain a persistent idle/active state for their resources and do not expose ``onIdle`` or ``onDemand``. They simply report whether relevant activity is currently present:
+Some monitors do not maintain a persistent idle/active state for their resources and do not expose ``onIdle``, ``onUsage``, or ``onDemand``. They simply report whether relevant activity is currently present:
 
 ``NetworkSessionMonitor``
     Tracks open SMB sessions from remote clients. Each check queries the current set of open sessions; there is no persistent per-session state between polls.
@@ -43,7 +43,7 @@ A corresponding configuration, that makes use of all these types, could look lik
 .. code:: xml
 
     <?xml version="1.0" encoding="utf-8"?>
-    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onDemand="sleepless">
+    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onUsage="sleepless">
 
         <SessionMonitor>
             <User name="John">
@@ -88,17 +88,24 @@ Fires when a resource has been idle for a complete timeout cycle.
 .. code:: xml
     <SystemMonitor version="2" timeout="2min" onIdle="sleep">
 
+onUsage
++++++++
+
+:⚡️ event:
+
+Fires on every inspection cycle in which a resource reports activity. An ``onUsage`` event marks the resource as non-idle and cancels any pending ``onIdle`` action.
+
+.. code:: xml
+    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onUsage="sleepless">
+
+With both events configured, Desomnia holds a *sleepless* power request while any monitor is active, and releases it — then puts the system to sleep — once everything goes quiet.
+
 onDemand
 ++++++++
 
 :⚡️ event:
 
-Fires when a resource transitions from idle to active. For resources that can detect activity without polling — such as network connections or incoming service requests — Desomnia fires this event immediately when the activity is observed. For other resources, the transition is detected at the next timeout cycle.
-
-.. code:: xml
-    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onDemand="sleepless">
-
-With both events configured, Desomnia holds a *sleepless* power request while any monitor is active, and releases it — then puts the system to sleep — once everything goes quiet.
+Available only on resources that can detect an external request, such as watched network hosts, services, or Duo instances. It fires immediately when such a request is observed, independently of periodic usage inspection. Like ``onUsage``, it marks the resource as non-idle and cancels any pending ``onIdle`` action.
 
 Delayed actions
 ---------------
@@ -139,7 +146,7 @@ The system is idle only when every monitor is idle, but individual monitors and 
 For example, a user session may go idle while an open SMB connection is still keeping the system busy:
 
 .. code:: xml
-    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onDemand="sleepless">
+    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onUsage="sleepless">
 
         <SessionMonitor>
             <User name="John" onIdle="logout" />
@@ -172,4 +179,4 @@ When John's session goes idle, the script runs — even though ``exec`` is defin
 Resource-specific events
 -------------------------
 
-Some monitors expose additional events beyond ``onIdle`` and ``onDemand``. For example, the ``<User>`` resource supports ``onLogin``, ``onLogout``, ``onDisconnect``, and others. These are documented alongside their respective monitors. The available actions for any event depend on the monitor type and its position in the tree.
+Some monitors expose additional events beyond ``onIdle`` and ``onUsage``. For example, demand-capable resources expose ``onDemand``, while the ``<User>`` resource supports ``onLogin``, ``onLogout``, ``onDisconnect``, and others. These are documented alongside their respective monitors. The available actions for any event depend on the monitor type and its position in the tree.

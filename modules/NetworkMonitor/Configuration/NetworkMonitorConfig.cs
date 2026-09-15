@@ -42,7 +42,7 @@ namespace MadWizard.Desomnia.Network.Configuration
 
         // Actions
         public DelayedActionInfo?   OnIdle          { get; set; }
-        public DelayedActionInfo?   OnDemand        { get; set; }
+        public DelayedActionInfo?   OnUsage         { get; set; }
         public DelayedActionInfo?   OnConnect       { get; set; }
         public ActionInfo?          OnDisconnect    { get; set; }
 

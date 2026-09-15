@@ -20,8 +20,9 @@ namespace MadWizard.Desomnia
 
         public bool IsIdle { get; private set; } = true;
 
-        [EventOpposite(nameof(Demand))] // symmetric: either side's trigger aborts the other's pending action
+        [EventOpposite(nameof(Usage), nameof(Demand))] // either kind of activity aborts pending idle actions
         public event EventInvocation? Idle;
+        public event EventInvocation? Usage;
         public event EventInvocation? Demand;
 
         protected internal virtual void StartTrackingBy(ResourceMonitor monitor, bool adopt)
@@ -36,7 +37,7 @@ namespace MadWizard.Desomnia
         {
             IsIdle = true;
 
-            Idle.TriggerEvent(@event); // opposite-cancel is pipeline-enforced — a VETOED event cancels nothing (§9.3)
+            Idle.TriggerEvent(@event); // opposite-cancellation is pipeline-enforced before event vetoes
         }
 
         protected void TriggerDemand(Event? eventObj = null)
@@ -54,6 +55,13 @@ namespace MadWizard.Desomnia
             IsIdle = false;
 
             await Demand.TriggerEventAsync(@event);
+        }
+
+        private void TriggerUsage(InspectionEvent @event)
+        {
+            IsIdle = false;
+
+            Usage.TriggerEvent(@event);
         }
 
         public virtual IEnumerable<UsageToken> Inspect(TimeSpan interval) // TODO: maybe async?
@@ -75,7 +83,7 @@ namespace MadWizard.Desomnia
         {
             if (tokens.Any())
             {
-                TriggerDemand(new InspectionEvent(nameof(Demand)) { Duration = duration, Tokens = tokens });
+                TriggerUsage(new InspectionEvent(nameof(Usage)) { Duration = duration, Tokens = tokens });
             }
             else
             {

@@ -185,5 +185,21 @@ namespace MadWizard.Desomnia.Network.Tests
             var usage = Assert.IsType<NetworkHostUsage>(Assert.Single(watch.Inspect(TimeSpan.FromSeconds(1))));
             Assert.Equal(4, usage.Bytes);
         }
+
+        [Fact]
+        public void ServiceUsageHandlerDoesNotEnableExternalDemand()
+        {
+            var watch = new NetworkServiceWatch(
+                new TransportNetworkService("SMB", new(IPProtocol.TCP, 445)));
+            var trigger = new TcpPacket(50000, 445) { Synchronize = true };
+
+            watch.Usage += _ => Task.CompletedTask;
+
+            Assert.False(watch.CanTriggerDemand(trigger));
+
+            watch.Demand += _ => Task.CompletedTask;
+
+            Assert.True(watch.CanTriggerDemand(trigger));
+        }
     }
 }

@@ -24,6 +24,7 @@ namespace MadWizard.Desomnia.Service.Duo
             Info        = info;
 
             Event(nameof(Demand)).AddAction(info.OnDemand);
+            Event(nameof(Usage)).AddAction(info.OnUsage);
             Event(nameof(Idle)).AddAction(info.OnIdle);
 
             Started.AddAction(info.OnStart);
@@ -72,10 +73,7 @@ namespace MadWizard.Desomnia.Service.Duo
         #region Idle / Demand detection
         internal async Task NetworkServiceWatch_Demand(Event @event)
         {
-            if (@event is not InspectionEvent) // don't trigger for inspection events
-            {
-                await TriggerDemandAsync();
-            }
+            await TriggerDemandAsync();
         }
 
         protected override bool ShouldTriggerEvent(Event @event)
@@ -83,7 +81,7 @@ namespace MadWizard.Desomnia.Service.Duo
             if (@event.Type == nameof(Idle) && IsRunning != true)
                 return false; // only trigger "Idle" events if the instance is running
 
-            if (@event.Type == nameof(Demand) && (IsRunning == true || @event is InspectionEvent))
+            if (@event.Type == nameof(Demand) && IsRunning == true)
                 return false; // only trigger "Demand" events if the instance is NOT running
 
             return base.ShouldTriggerEvent(@event);

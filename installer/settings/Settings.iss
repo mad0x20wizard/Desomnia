@@ -396,7 +396,7 @@ begin
           Result := Result + '+' + SettingsControls.SleepDelayCombo.Text
       end;
       
-      if Param = 'DemandAction' then
+      if Param = 'UsageAction' then
         Result := 'sleepless';
     end;
   end;

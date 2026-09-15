@@ -20,7 +20,7 @@ namespace MadWizard.Desomnia.Tests
                     <NetworkMonitor interface="en0" />
                   </Environment>
                   <Environment power="ac">
-                    <SystemMonitor onDemand="sleepless" />
+                    <SystemMonitor onUsage="sleepless" />
                   </Environment>
                   <DefaultEnvironment>
                     <ProcessMonitor />
@@ -72,14 +72,14 @@ namespace MadWizard.Desomnia.Tests
         {
             var blocks = Parse("""
                 <EnvironmentMonitor>
-                  <Environment><SystemMonitor onDemand="sleepless" /></Environment>
+                  <Environment><SystemMonitor onUsage="sleepless" /></Environment>
                 </EnvironmentMonitor>
                 """).Blocks;
 
             var attribute = Assert.Single(blocks[0].Content.Children);
 
             Assert.Equal(ConfigNodeKind.Attribute, attribute.Kind);
-            Assert.True(attribute.HasName("onDemand"));
+            Assert.True(attribute.HasName("onUsage"));
             Assert.Equal("sleepless", attribute.Value);
         }
 

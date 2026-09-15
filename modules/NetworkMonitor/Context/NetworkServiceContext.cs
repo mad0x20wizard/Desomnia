@@ -59,6 +59,7 @@ namespace MadWizard.Desomnia.Network.Context
                 {
                     args.Instance.ShouldHandoffToSleepProxy = info.Handoff;
 
+                    ((IEventSystem)args.Instance)[nameof(NetworkServiceWatch.Usage)].AddAction(info.OnUsage);
                     ((IEventSystem)args.Instance)[nameof(NetworkServiceWatch.Demand)].AddAction(info.OnDemand);
                     ((IEventSystem)args.Instance)[nameof(NetworkServiceWatch.Idle)].AddAction(info.OnIdle);
                 });

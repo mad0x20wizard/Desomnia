@@ -50,7 +50,7 @@ namespace MadWizard.Desomnia.Service.Duo
                 monitorDuo.OnActivated(args =>
                 {
                     ((IEventSystem)args.Instance)[nameof(DuoSessionMonitor.Idle)].AddAction(duo.OnIdle);
-                    ((IEventSystem)args.Instance)[nameof(DuoSessionMonitor.Demand)].AddAction(duo.OnDemand);
+                    ((IEventSystem)args.Instance)[nameof(DuoSessionMonitor.Usage)].AddAction(duo.OnUsage);
                 });
 
                 builder.RegisterType<DuoInstance>().AsSelf()

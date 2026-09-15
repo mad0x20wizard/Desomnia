@@ -8,6 +8,8 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
         public required string Name { get; set; }
 
         public ActionInfo? OnDemand { get; set; }
+        public DelayedActionInfo? OnUsage { get; set; }
+
 
         public DelayedActionInfo? OnStart { get; set; }
         public DelayedActionInfo? OnStop { get; set; }

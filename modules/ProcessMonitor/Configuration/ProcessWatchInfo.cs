@@ -15,7 +15,7 @@ namespace MadWizard.Desomnia.Processes.Configuration
 
         #region Actions
         public DelayedActionInfo? OnIdle { get; set; }
-        public DelayedActionInfo? OnDemand { get; set; }
+        public DelayedActionInfo? OnUsage { get; set; }
 
         public DelayedActionInfo? OnStart { get; set; }
         public DelayedActionInfo? OnStop { get; set; }

@@ -10,7 +10,7 @@ namespace MadWizard.Desomnia.Processes.Configuration
     public record ProcessMonitorConfig : ProcessWatchMetrics
     {
         public DelayedActionInfo? OnIdle { get; set; }
-        public DelayedActionInfo? OnDemand { get; set; }
+        public DelayedActionInfo? OnUsage { get; set; }
 
         public IList<ProcessWatchInfo> Process { get; set; } = [];
     }

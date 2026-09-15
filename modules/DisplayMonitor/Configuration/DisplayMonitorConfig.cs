@@ -27,7 +27,7 @@ namespace MadWizard.Desomnia.Display.Configuration
         public bool Disabled { get; set; }
 
         public DelayedActionInfo? OnIdle { get; set; }
-        public DelayedActionInfo? OnDemand { get; set; }
+        public DelayedActionInfo? OnUsage { get; set; }
 
         public IList<DisplayWatchDescriptor> Display { get; set; } = [];
 

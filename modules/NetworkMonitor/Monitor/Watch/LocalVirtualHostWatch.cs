@@ -102,7 +102,7 @@ namespace MadWizard.Desomnia.Network.Watch
             if (@event.Type == nameof(Idle) && IsOnline != true)
                 return false; // only trigger "Idle" events if the VM is running
 
-            if (@event.Type == nameof(Demand) && (IsOnline == true || @event is InspectionEvent))
+            if (@event.Type == nameof(Demand) && IsOnline == true)
                 return false; // only trigger "Demand" events if the VM is NOT running
 
             return base.ShouldTriggerEvent(@event);

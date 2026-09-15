@@ -2,14 +2,29 @@ using Autofac;
 using Autofac.Core;
 using Autofac.Core.Registration;
 using MadWizard.Desomnia.Display.Configuration;
+using MadWizard.Desomnia.Display.Configuration.Migration;
 using MadWizard.Desomnia.Display.Environments;
 using MadWizard.Desomnia.Display.Manager;
 using MadWizard.Desomnia.Environments;
+using MadWizard.Desomnia.Configuration.Xml;
+using System.Xml.Linq;
 
 namespace MadWizard.Desomnia.Display
 {
-    public class Module : Desomnia.ConfigurableModule<ModuleConfig>
+    public class Module : Desomnia.ConfigurableModule<ModuleConfig>, IXConfigurationMigration
     {
+        #region Versioning
+        protected override uint MinVersion => 2;
+
+        void IXConfigurationMigration.Run(XDocument configuration, uint version)
+        {
+            switch (version)
+            {
+                case 2: V2.Run(configuration); break;
+            }
+        }
+        #endregion
+
         static bool HadDisplayMonitor { get; set; } = false;
 
         static bool HasDisplayManager(IComponentRegistryBuilder builder) => builder.IsRegistered(new TypedService(typeof(IDisplayManager)));

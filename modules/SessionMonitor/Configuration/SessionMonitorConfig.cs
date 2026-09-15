@@ -42,7 +42,7 @@ namespace MadWizard.Desomnia.Session.Configuration
     public class SessionMonitorConfig : SessionMonitorConfig<SessionMonitorConfig, SessionWatchDescriptor>
     {
         public DelayedActionInfo? OnIdle { get; set; }
-        public DelayedActionInfo? OnDemand { get; set; }
+        public DelayedActionInfo? OnUsage { get; set; }
 
         internal bool RegisterWithSleepProxy { get; set; } = true;
 

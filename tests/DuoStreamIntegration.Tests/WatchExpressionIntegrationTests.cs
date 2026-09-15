@@ -224,6 +224,23 @@ public sealed class WatchExpressionIntegrationTests
     }
 
     [Fact]
+    public async Task NetworkServiceDemandIsForwardedAsDemandOnly()
+    {
+        using var instance = Instance("Input");
+        var usages = 0;
+        var demands = 0;
+
+        instance.Usage += _ => { usages++; return Task.CompletedTask; };
+        instance.Demand += _ => { demands++; return Task.CompletedTask; };
+
+        await instance.NetworkServiceWatch_Demand(new Event("Demand"));
+
+        Assert.Equal(0, usages);
+        Assert.Equal(1, demands);
+        Assert.False(instance.IsIdle);
+    }
+
+    [Fact]
     public void YieldingSessionIsSynchronizedFromTheFinalDuoResult()
     {
         var session = new TestSession { CurrentIdleTime = TimeSpan.Zero };
@@ -235,14 +252,14 @@ public sealed class WatchExpressionIntegrationTests
             //MaxLastInputTime = TimeSpan.FromMinutes(5),
         });
 
-        var demands = 0;
+        var usages = 0;
         var idles = 0;
-        watch.Demand += _ => { demands++; return Task.CompletedTask; };
+        watch.Usage += _ => { usages++; return Task.CompletedTask; };
         watch.Idle += _ => { idles++; return Task.CompletedTask; };
 
         // Yield produces transport usage, but automatic SessionWatch events are suppressed.
         Assert.Single(watch.Inspect(TimeSpan.FromSeconds(1)));
-        Assert.Equal(0, demands);
+        Assert.Equal(0, usages);
         Assert.Equal(0, idles);
 
         var instance = Instance("Input");
@@ -250,7 +267,7 @@ public sealed class WatchExpressionIntegrationTests
 
         Assert.Single(instance.Inspect(TimeSpan.FromSeconds(1)));
         Assert.False(watch.IsIdle);
-        Assert.Equal(1, demands);
+        Assert.Equal(1, usages);
 
         session.CurrentIdleTime = TimeSpan.FromMinutes(10);
 

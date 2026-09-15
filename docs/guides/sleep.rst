@@ -66,19 +66,19 @@ To put the system to sleep when idle, configure the ``sleep`` action on the ``<S
 
     The ``+10min`` suffix adds a **10-minute delay** to the ``sleep`` action. The action executes only if the system remains idle for the full delay period. If activity resumes beforehand, the delay is cancelled and restarts the next time idle state is reached.
 
-onDemand
-++++++++
+onUsage
++++++++
 
 :⚡️ event:
 
-The ``onDemand`` event fires when a resource transitions from idle to active. The action runs no later than the next timeout check; some monitors also support firing it immediately when activity is detected.
+The ``onUsage`` event fires on every timeout inspection in which a resource reports activity.
 
 The most common use on the ``<SystemMonitor>`` is the ``sleepless`` action, which issues a power request to prevent the system from suspending itself. The request is released automatically when the system returns to idle:
 
 .. code:: xml
 
     <?xml version="1.0" encoding="utf-8"?>
-    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onDemand="sleepless">
+    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onUsage="sleepless">
 
         <!-- ... -->
 
@@ -86,7 +86,7 @@ The most common use on the ``<SystemMonitor>`` is the ``sleepless`` action, whic
 
 .. tip::
 
-    Configuring both ``onIdle`` and ``onDemand`` together is the recommended setup when using Desomnia as a full replacement for the built-in power management.
+    Configuring both ``onIdle`` and ``onUsage`` together is the recommended setup when using Desomnia as a full replacement for the built-in power management.
 
 Start from here
 ---------------
@@ -96,7 +96,7 @@ A good starting point is to configure Desomnia to replicate the behaviour of the
 .. code:: xml
 
     <?xml version="1.0" encoding="utf-8"?>
-    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onDemand="sleepless">
+    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onUsage="sleepless">
 
         <SessionMonitor />
         <NetworkSessionMonitor />

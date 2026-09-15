@@ -42,7 +42,7 @@ namespace MadWizard.Desomnia.Service.Bridge
         internal SessionSelector SessionControl { get; set; } = SessionSelector.None;
         internal bool PowerControl { get; set; } = false;
 
-        public override DateTime? LastInputTime { get => _lastInputTime ?? base.LastInputTime; }
+        //public override DateTime? LastInputTime { get => _lastInputTime ?? base.LastInputTime; }
 
         public override async Task Lock()
         {

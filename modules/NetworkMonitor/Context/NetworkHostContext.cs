@@ -249,6 +249,7 @@ namespace MadWizard.Desomnia.Network.Context
 
             if (watch is HostDemandWatch)
             {
+                ((IEventSystem)watch)[nameof(HostDemandWatch.Usage)].AddAction(config.OnUsage);
                 ((IEventSystem)watch)[nameof(HostDemandWatch.Demand)].AddAction(config.OnDemand);
                 ((IEventSystem)watch)[nameof(HostDemandWatch.Idle)].AddAction(config.OnIdle);
 

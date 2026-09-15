@@ -22,7 +22,7 @@ namespace MadWizard.Desomnia.Processes.Watch
             ShouldWatchChildren = info.WatchChildren;
 
             ((IEventSystem)this)[nameof(Idle)].AddAction(info.OnIdle);
-            ((IEventSystem)this)[nameof(Demand)].AddAction(info.OnDemand);
+            ((IEventSystem)this)[nameof(Usage)].AddAction(info.OnUsage);
 
             ((IEventSystem)this)[nameof(Started)].AddAction(info.OnStart);
             ((IEventSystem)this)[nameof(Stopped)].AddAction(info.OnStop);
