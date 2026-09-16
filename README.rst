@@ -76,7 +76,7 @@ Use this on an always-on device. Any client on the local network that tries to r
 .. code:: xml
 
    <?xml version="1.0" encoding="utf-8"?>
-   <SystemMonitor version="1">
+   <SystemMonitor version="2">
 
      <NetworkMonitor watchMode="promiscuous" autoDetect="IPv4">
        <RemoteHost name="server" MAC="00:1A:2B:3C:4D:5E">
@@ -97,7 +97,7 @@ This configuration could be used to automatically suspend a physical system unle
 .. code:: xml
 
    <?xml version="1.0" encoding="utf-8"?>
-   <SystemMonitor version="1" timeout="2min" onIdle="sleep+20min" onDemand="sleepless">
+   <SystemMonitor version="2" timeout="2min" onIdle="sleep+20min" onUsage="sleepless">
 
      <NetworkMonitor>
        <Service name="SSH" port="22">
@@ -121,7 +121,7 @@ Additional Features
 
 Thanks to its open architecture, Desomnia can be extended with plugins. A variety of optional features are already available:
 
--  **DuoStreamMonitor** – 🪟 *Windows*
+-  **DuoSessionMonitor** – 🪟 *Windows*
 
    If you use `DuoStream <https://github.com/DuoStream>`__ to turn your computer in a multi-seat game streaming host, this plugin makes Desomnia aware of the configured streaming instances, starts them on demand when accessed by a Moonlight client and can stop them when they become idle, reducing GPU load and overall resource footprint
 

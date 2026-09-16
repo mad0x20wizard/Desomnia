@@ -1,5 +1,4 @@
-﻿using Autofac;
-using MadWizard.Desomnia.Network.Configuration.Hosts;
+﻿using MadWizard.Desomnia.Network.Configuration.Hosts;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Context;
 using MadWizard.Desomnia.Network.Neighborhood;
@@ -15,7 +14,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
 
         public required NetworkContext NetworkContext { private get; init; }
 
-        async Task IRouterDiscovery.DiscoverRouters(NetworkSegment network)
+        async Task IRouterDiscovery.DiscoverRouters(NetworkContext ctx)
         {
             var info = new DefaultGatewayInfo(Device.Interface, auto)
             {
@@ -24,7 +23,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
                 AutoDetect = AutoDiscoveryType.Nothing, // don't look for dynamic IPs, because we have no hostname
             };
 
-            if (network.FindHostByIP(info.IPAddresses) is NetworkRouter router)
+            if (ctx.Network.FindHostByIP(info.IPAddresses) is NetworkRouter router)
             {
                 foreach (var additionalIP in info.IPAddresses)
                 {

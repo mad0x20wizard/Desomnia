@@ -1,8 +1,8 @@
 using MadWizard.Desomnia.Processes.Manager;
+using MadWizard.Desomnia.Processes.Middleware;
 using Microsoft.Extensions.Logging.Abstractions;
-using Xunit;
-
 using System.Diagnostics;
+using Xunit;
 
 namespace MadWizard.Desomnia.Processes.Tests
 {
@@ -32,7 +32,7 @@ namespace MadWizard.Desomnia.Processes.Tests
             var started = new List<IProcess>();
             manager.ProcessStarted += (sender, process) => started.Add(process);
 
-            manager.Start();
+            manager.Pump();
 
             Assert.Equal(2, manager.Count());
             Assert.Empty(started); // everything already running at boot must not fire onStart
@@ -43,7 +43,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var manager = Manager((101, "chrome"));
 
-            manager.Start();
+            manager.Pump();
 
             var started = new List<IProcess>();
             manager.ProcessStarted += (sender, process) => started.Add(process);
@@ -59,7 +59,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var manager = Manager((101, "chrome"), (102, "code"));
 
-            manager.Start();
+            manager.Pump();
 
             var stopped = new List<IProcess>();
             manager.ProcessStopped += (sender, process) => stopped.Add(process);
@@ -77,7 +77,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var manager = Manager((101, "chrome"), (102, "code"));
 
-            manager.Start();
+            manager.Pump();
 
             var stopped = new List<IProcess>();
             manager.ProcessStopped += (sender, process) => stopped.Add(process);
@@ -95,7 +95,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var manager = Manager((101, "chrome"), (102, "code"));
 
-            manager.Start();
+            manager.Pump();
 
             var stopped = new List<IProcess>();
             manager.ProcessStopped += (sender, process) => stopped.Add(process);
@@ -113,7 +113,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var manager = Manager((101, "chrome"));
 
-            manager.Start();
+            manager.Pump();
 
             var stopped = new List<IProcess>();
             manager.ProcessStopped += (sender, process) => stopped.Add(process);
@@ -129,7 +129,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var manager = Manager((101, "chrome"));
 
-            manager.Start();
+            manager.Pump();
 
             var process = (ProcessHandle)Assert.Single(manager);
 
@@ -149,7 +149,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var manager = Manager((101, "chrome"), (102, "code"));
 
-            manager.Start();
+            manager.Pump();
             manager.Pump();
             manager.Pump();
 
@@ -162,7 +162,7 @@ namespace MadWizard.Desomnia.Processes.Tests
         {
             var manager = Manager((101, "chrome"));
 
-            manager.Start();
+            manager.Pump();
 
             var process = Assert.Single(manager);
 
@@ -185,7 +185,7 @@ namespace MadWizard.Desomnia.Processes.Tests
             manager.Table[Environment.ProcessId] = new("ignored", 0);
             manager.Undescribable.Add(Environment.ProcessId);
 
-            manager.Start();
+            manager.Pump();
 
             Assert.Empty(manager);
         }
@@ -198,7 +198,7 @@ namespace MadWizard.Desomnia.Processes.Tests
             // what the BCL path hands over: entries that arrive carrying their own identity
             manager.Table[101] = new("chrome", 0) { DescribedByEnumeration = true };
 
-            manager.Start();
+            manager.Pump();
 
             Assert.Equal("chrome", Assert.Single(manager).Name);
             Assert.Empty(manager.Described); // asking again is the whole cost this seam exists to avoid
@@ -210,7 +210,7 @@ namespace MadWizard.Desomnia.Processes.Tests
             var manager = Manager((101, "chrome"));
 
             manager.Undescribable.Add(101);
-            manager.Start();
+            manager.Pump();
 
             manager.Undescribable.Clear(); // it settles down and can be described after all
             manager.Pump();
@@ -225,7 +225,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             manager.Table[Environment.ProcessId] = new("ignored", 0) { DeferToBase = true };
 
-            manager.Start();
+            manager.Pump();
 
             using var self = Process.GetCurrentProcess();
 
@@ -240,7 +240,7 @@ namespace MadWizard.Desomnia.Processes.Tests
             manager.Table[102] = new("node", 101);
             manager.Table[103] = new("esbuild", 102);
 
-            manager.Start();
+            manager.Pump();
 
             var grandchild = manager.Single(process => process.Id == 103);
             var root = manager.Single(process => process.Id == 101);
@@ -258,7 +258,7 @@ namespace MadWizard.Desomnia.Processes.Tests
             manager.Table[101] = new("code", 0) { Listed = false };
             manager.Table[102] = new("node", 101);
 
-            manager.Start();
+            manager.Pump();
 
             Assert.Equal("code", Assert.Single(manager, process => process.Id == 102).Parent?.Name);
         }
@@ -270,7 +270,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             manager.Table[1] = new("launchd", 0); // ppid 0 is the kernel, not a process
 
-            manager.Start();
+            manager.Pump();
 
             Assert.Null(Assert.Single(manager).Parent);
         }
@@ -282,7 +282,7 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             manager.Table[101] = new("liar", 101); // would otherwise recurse until the stack gives out
 
-            manager.Start();
+            manager.Pump();
 
             Assert.Null(Assert.Single(manager).Parent);
             // the depth bound would also end up with a parentless process, sixty-four descriptions
@@ -300,7 +300,7 @@ namespace MadWizard.Desomnia.Processes.Tests
             manager.Table[101] = new("a", 102);
             manager.Table[102] = new("b", 101) { Listed = false };
 
-            manager.Start();
+            manager.Pump();
 
             Assert.NotNull(manager.Single(process => process.Id == 101));
         }
@@ -324,7 +324,7 @@ namespace MadWizard.Desomnia.Processes.Tests
             for (int pid = 1; pid <= chain; pid++)
                 manager.Table[pid] = new($"p{pid}", pid < chain ? pid + 1 : 0) { Listed = pid == 1 };
 
-            manager.Start();
+            manager.Pump();
 
             var depth = 0;
             for (var ancestor = manager.Single(process => process.Id == 1).Parent; ancestor != null; ancestor = ancestor.Parent)
@@ -335,6 +335,60 @@ namespace MadWizard.Desomnia.Processes.Tests
             // unbounded, this manager would be holding all two hundred of them.
             Assert.InRange(depth, 1, 64);
             Assert.Equal(depth + 1, manager.Count());
+        }
+
+        /// <summary>
+        /// A start reported for a process that is already tracked must not build a second one.
+        ///
+        /// Nothing about the duplicate is visible from the outside – the roster is keyed by pid, so it
+        /// simply loses the add and is dropped. What it takes with it is the platform's exit watch,
+        /// armed in its constructor: a kernel handle and a thread-pool wait on Windows, a pidfd on
+        /// Linux, a kqueue registration on macOS, none of it given back until the process it names
+        /// ends. Live, that read as three handles per process where the budget was one.
+        /// </summary>
+        [Fact]
+        public void StartReportedTwice_BuildsOneProcess()
+        {
+            var manager = Manager((101, "chrome"));
+
+            manager.Pump();
+
+            var started = new List<IProcess>();
+            manager.ProcessStarted += (sender, process) => started.Add(process);
+
+            var first = Assert.Single(manager);
+
+            // what a trace event does for a process the enumeration already found
+            manager.Announce(new ProcessInformation(101) { Name = "chrome", SessionId = 0 });
+            manager.Announce(new ProcessInformation(101) { Name = "chrome", SessionId = 0 });
+
+            Assert.Equal(1, manager.Created);            // built once, however often it is announced
+            Assert.Empty(manager.Released);              // and nothing had to be given back
+            Assert.Same(first, Assert.Single(manager));  // still the very same process object
+            Assert.Empty(started);                       // and no second arrival announced
+        }
+
+        /// <summary>
+        /// The same, for the race the check above cannot close: two lanes reporting one process at
+        /// once. Only one can be tracked, and whatever the other built has to be handed back.
+        /// </summary>
+        [Fact]
+        public void ProcessThatLosesTheRace_IsReleased()
+        {
+            var manager = new FakeProcessManager { Logger = NullLogger<ProcessManager>.Instance };
+
+            manager.Table[102] = new("code", 0) { Listed = false };
+            manager.Pump();
+
+            // The window is inside CreateProcess itself, which is the only place another lane can get
+            // in between the check and the add – so that is where the other lane is let in.
+            manager.RaceOnCreate = 102;
+
+            manager.Announce(new ProcessInformation(102) { Name = "code", SessionId = 0 });
+
+            Assert.Equal(2, manager.Created);                                    // both lanes built one
+            Assert.Single(manager);                                              // one of them was kept
+            Assert.Equal([102], manager.Released.Select(process => process.Id)); // the other handed back
         }
 
         /// <summary>
@@ -352,7 +406,60 @@ namespace MadWizard.Desomnia.Processes.Tests
 
             public List<int> Described { get; } = [];
 
+            /// <summary>How many processes this manager was asked to build, kept or not.</summary>
+            public int Created { get; private set; }
+
+            /// <summary>The ones it had to hand back – whatever creating them took out.</summary>
+            public List<IProcess> Released { get; } = [];
+
+            /// <summary>A pid to let another lane adopt while this one is still building its own.</summary>
+            public int? RaceOnCreate { get; set; }
+
+            /**
+             * Creation is a required factory now, so the fake supplies its own – with the same
+             * instrumentation the CreateProcess override used to carry. The release of a race
+             * loser IS its disposal these days, so the handles record themselves when it happens.
+             * The parent introduction rides the container pipeline in production; here the fake
+             * calls the same logic itself, minus the container.
+             */
+            [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]
+            public FakeProcessManager()
+            {
+                Logger = NullLogger<ProcessManager>.Instance;
+
+                CreateProcess = (info) =>
+                {
+                    Created++;
+
+                    if (RaceOnCreate == info.Id)
+                    {
+                        RaceOnCreate = null; // the other lane only gets in once
+
+                        TriggerStart(info);
+                    }
+
+                    var handle = new ReleasableHandle(this, info);
+
+                    ParentProcessResolver.MaybeResolve(this, handle, info);
+
+                    return handle;
+                };
+            }
+
+            private sealed class ReleasableHandle(FakeProcessManager manager, ProcessInformation info) : ProcessHandle(info)
+            {
+                public override void Dispose()
+                {
+                    manager.Released.Add(this);
+
+                    base.Dispose();
+                }
+            }
+
             public void Pump() => RefreshProcessList();
+
+            /// <summary>What a trace event does: report a start, tracked already or not.</summary>
+            public void Announce(ProcessInformation info) => TriggerStart(info);
 
             protected override IEnumerable<ProcessInformation> EnumerateProcesses()
             {

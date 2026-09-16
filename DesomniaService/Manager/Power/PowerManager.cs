@@ -15,12 +15,13 @@ namespace MadWizard.Desomnia.Power.Manager
     {
         public required ILogger<PowerManager> Logger { private get; init; }
 
-        private bool _hasShutdownPrivilege = false;
-
         public event EventHandler? Suspended;
         public event EventHandler? ResumeSuspended;
 
-        #region Power Status lifecycle
+        private bool _hasBeenSuspended = false;
+        private bool _hasShutdownPrivilege = false;
+
+        #region Power Status Events
         void IStartable.Start()
         {
             service?.PowerStatusChanged += PowerStatusChanged;
@@ -33,11 +34,18 @@ namespace MadWizard.Desomnia.Power.Manager
             switch (status)
             {
                 case PowerBroadcastStatus.Suspend:
+                    _hasBeenSuspended = true;
                     Suspended?.Invoke(this, EventArgs.Empty);
                     break;
 
                 case PowerBroadcastStatus.ResumeSuspend:
-                    ResumeSuspended?.Invoke(this, EventArgs.Empty);
+                case PowerBroadcastStatus.ResumeAutomatic:
+                    if (_hasBeenSuspended)
+                    {
+                        _hasBeenSuspended = false;
+
+                        ResumeSuspended?.Invoke(this, EventArgs.Empty);
+                    }
                     break;
             }
         }
@@ -48,6 +56,7 @@ namespace MadWizard.Desomnia.Power.Manager
         }
         #endregion
 
+        #region Power Source
         public override PowerSource Source
         {
             get
@@ -64,7 +73,9 @@ namespace MadWizard.Desomnia.Power.Manager
                 };
             }
         }
+        #endregion
 
+        #region Power Transitions
         async Task IPowerManager.Hibernate()    => await Suspend(true);
         async Task IPowerManager.Suspend()      => await Suspend(false);
 
@@ -102,7 +113,6 @@ namespace MadWizard.Desomnia.Power.Manager
                 throw new Win32Exception();
             }
         }
-
         public async Task Reboot(TimeSpan? timeout = null, string? message = null, bool force = false)
         {
             const string acpi = "S0 (reboot)";
@@ -119,6 +129,36 @@ namespace MadWizard.Desomnia.Power.Manager
             }
         }
 
+        void EnableShutdownPrivilege()
+        {
+            if (!_hasShutdownPrivilege)
+            {
+                Logger.LogDebug("Shutdown privilege needed, trying to adjust...");
+
+                if (!OpenProcessToken(Process.GetCurrentProcess().Handle, TokenAccess.TOKEN_ADJUST_PRIVILEGES | TokenAccess.TOKEN_QUERY, out nint tokenHandle))
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+
+                if (!LookupPrivilegeValue(null, SE_SHUTDOWN_NAME, out LUID luid))
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+
+                TOKEN_PRIVILEGES tp = new()
+                {
+                    Luid = luid,
+                    Attributes = SE_PRIVILEGE_ENABLED,
+                    PrivilegeCount = 1,
+                };
+
+                if (!AdjustTokenPrivileges(tokenHandle, false, ref tp, 0, nint.Zero, nint.Zero))
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+
+                Logger.LogDebug("Shutdown privilege aquired");
+
+                _hasShutdownPrivilege = true;
+            }
+        }
+        #endregion
+
+        #region Power-Requests
         async Task<IPowerRequest> IPowerManager.CreateRequest(PowerRequestType type, string reason)
         {
             return new PowerRequest(type switch
@@ -133,7 +173,7 @@ namespace MadWizard.Desomnia.Power.Manager
         {
             Dictionary<PowerRequestsType, List<PowerRequest>> requestsByType = [];
 
-            using System.Diagnostics.Process process = new()
+            using Process process = new()
             {
                 StartInfo = new()
                 {
@@ -197,34 +237,7 @@ namespace MadWizard.Desomnia.Power.Manager
                 throw new Exception("Failed to run powercfg /requests");
             }
         }
-
-        void EnableShutdownPrivilege()
-        {
-            if (!_hasShutdownPrivilege)
-            {
-                Logger.LogDebug("Shutdown privilege needed, trying to enable...");
-
-                if (!OpenProcessToken(System.Diagnostics.Process.GetCurrentProcess().Handle, TokenAccess.TOKEN_ADJUST_PRIVILEGES | TokenAccess.TOKEN_QUERY, out IntPtr tokenHandle))
-                    throw new Win32Exception(Marshal.GetLastWin32Error());
-
-                if (!LookupPrivilegeValue(null, SE_SHUTDOWN_NAME, out LUID luid))
-                    throw new Win32Exception(Marshal.GetLastWin32Error());
-
-                TOKEN_PRIVILEGES tp = new()
-                {
-                    PrivilegeCount = 1,
-                    Luid = luid,
-                    Attributes = SE_PRIVILEGE_ENABLED
-                };
-
-                if (!AdjustTokenPrivileges(tokenHandle, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero))
-                    throw new Win32Exception(Marshal.GetLastWin32Error());
-
-                Logger.LogDebug("Shutdown privilege enabled");
-
-                _hasShutdownPrivilege = true;
-            }
-        }
+        #endregion
 
         #region API: Token privileges
         const string SE_SHUTDOWN_NAME = "SeShutdownPrivilege";

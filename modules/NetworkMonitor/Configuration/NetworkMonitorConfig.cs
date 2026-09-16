@@ -21,12 +21,16 @@ namespace MadWizard.Desomnia.Network.Configuration
     {
         const long DEFAULT_TIMEOUT_MS = 500;
 
-        internal const string NAMLESS_PREFIX = "NetworkMonitor#";
+        /// <summary>
+        /// The 0-based position of this network in its <see cref="ModuleConfig{T}.NetworkMonitor"/>
+        /// list — the identity that correlates the module's and the plugins' views of the same
+        /// configuration: every view binds the same sections in document order, so the ordinal
+        /// is the same in each (a name may not be written at all). Stamped by the list.
+        /// </summary>
+        internal int Ordinal { get; set; } = -1;
 
         // Network-Identification
-        public required string  Name                { get; init; }
-
-        public string?          Label               { get => !Name.StartsWith(NAMLESS_PREFIX, StringComparison.OrdinalIgnoreCase) ? Name : null; }
+        public string?          Name                { get; set; }
 
         public string?          Interface           { get; set; }
         public IPNetwork?       Network             { get; set; }
@@ -38,7 +42,7 @@ namespace MadWizard.Desomnia.Network.Configuration
 
         // Actions
         public DelayedActionInfo?   OnIdle          { get; set; }
-        public DelayedActionInfo?   OnDemand        { get; set; }
+        public DelayedActionInfo?   OnUsage         { get; set; }
         public DelayedActionInfo?   OnConnect       { get; set; }
         public ActionInfo?          OnDisconnect    { get; set; }
 
@@ -170,6 +174,7 @@ namespace MadWizard.Desomnia.Network.Configuration
          * explicitly; see NetworkRouterInfo.MakeRouterOptions.
          */
         internal bool               RouterAllowWake             { get; set; } = false;
+        internal bool?              RouterAllowWakeByProxy      { get; set; }
         internal bool               RouterAllowWakeOnLAN        { get; set; } = true;
 
         internal TimeSpan           RouterVPNTimeout            { get; set; } = TimeSpan.FromMilliseconds(DEFAULT_TIMEOUT_MS);
@@ -179,10 +184,6 @@ namespace MadWizard.Desomnia.Network.Configuration
         /// <see cref="EveryHostFilterRule"/> is that opt-in. Their presence makes proxy-waking the
         /// sensible default for an otherwise-unconfigured router (zero-config remote access).</summary>
 
-        internal bool?              RouterAllowWakeByProxy
-        {
-            get => field ?? ForeignHostFilterRule != null || EveryHostFilterRule != null; set;
-        }
         #endregion
 
         /// <summary>
@@ -221,6 +222,8 @@ namespace MadWizard.Desomnia.Network.Configuration
         }
 
         #region Host(-Range) enumeration
+        public bool HasCatchAllHostFilterRule => ForeignHostFilterRule != null || EveryHostFilterRule != null;
+
         public IEnumerable<NetworkHostRangeInfo> Ranges => HostRange.Concat(DynamicHostRange)
             .Concat(EveryHostFilterRule?.HostRange ?? []).Concat(EveryHostFilterRule?.DynamicHostRange ?? [])
             .Concat(ForeignHostFilterRule?.HostRange ?? []).Concat(ForeignHostFilterRule?.DynamicHostRange ?? []);

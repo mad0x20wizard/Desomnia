@@ -50,10 +50,12 @@ namespace MadWizard.Desomnia.Network.Neighborhood.Services
             }
         }
 
-        public override bool Accepts(Packet packet)
+        public override bool Accepts(Packet packet, PacketDirection direction)
         {
             if (packet.Extract<TransportPacket>() is TransportPacket transport)
-                return Ports.Any(service => service.Accepts(transport));
+            {
+                return Ports.Any(service => service.Accepts(transport, direction));
+            }
 
             return false;
         }

@@ -1,5 +1,7 @@
 using Autofac;
-using Microsoft.Extensions.Hosting;
+using MadWizard.Desomnia.Application;
+using MadWizard.Desomnia.Application.Shutdown;
+using MadWizard.Desomnia.Configuration.Migration;
 using Xunit;
 
 namespace MadWizard.Desomnia.Tests
@@ -15,7 +17,7 @@ namespace MadWizard.Desomnia.Tests
 
         public ApplicationBuilderPersistenceTests()
         {
-            File.WriteAllText(_configPath, """<SystemMonitor version="6" timeout="00:10:00" />""");
+            File.WriteAllText(_configPath, $"""<?config version="{ConfigurableModule.LATEST_VERSION}"?><SystemMonitor timeout="00:10:00" />""");
         }
 
         public void Dispose() => File.Delete(_configPath);
@@ -68,8 +70,6 @@ namespace MadWizard.Desomnia.Tests
 
         public sealed class TestConfig
         {
-            public int Version { get; set; }
-
             public TimeSpan? Timeout { get; set; }
 
             public string? Marker { get; set; }
@@ -82,36 +82,21 @@ namespace MadWizard.Desomnia.Tests
             protected override void Load(ContainerBuilder builder, TestConfig config) => Received.Add(config);
         }
 
-        // the real builders are platform subclasses (DesomniaWindowsServiceBuilder, ...); the
-        // persistent registration of the builder must resolve as ApplicationBuilder regardless
-        private sealed class SubclassBuilder(string configPath) : ApplicationBuilder(configPath);
-
-        private sealed class FakeFailureHandler : IApplicationFailureHandler
-        {
-            public void OnFatal(Exception exception) { }
-        }
-
-        private sealed class FailureHandlerModule : Module
-        {
-            protected internal override void LoadOnce(ContainerBuilder builder)
-                => builder.RegisterInstance(new FakeFailureHandler()).As<IApplicationFailureHandler>();
-        }
+        // the real builders are platform subclasses (DesomniaWindowsServiceBuilder, ...)
+        private sealed class SubclassBuilder(string configPath) : SystemApplicationBuilder(configPath);
 
         [Fact]
-        public void PersistentHost_BuiltViaAPlatformSubclass_ActivatesItsHostedService()
+        public void PersistentHost_DoesNotExposeTheBuilderAsAService()
         {
-            // regression: RegisterInstance(this).AsSelf() registered the runtime subclass type, so
-            // the loop's ApplicationBuilder dependency was unresolvable when the host started
-            using var builder = new SubclassBuilder(_configPath);
-            builder.RegisterModule(new FailureHandlerModule());
+            // the loop lives in the ApplicationHost wrapper, which receives the builder through
+            // its constructor: nothing resolves the builder from a container anymore, and no
+            // registration may leak it back in (upper layers must not see the framework)
+            var builder = new SubclassBuilder(_configPath);
 
-            using var host = builder.Build();
+            using ApplicationHost host = builder.Build();
 
-            // resolving the hosted services activates ApplicationLoopService, whose constructor
-            // needs the ApplicationBuilder — this threw before the fix
-            var hosted = (IEnumerable<IHostedService>)host.Services.GetService(typeof(IEnumerable<IHostedService>))!;
-
-            Assert.Single(hosted); // the rebuild loop
+            Assert.Null(host.Services.GetService(typeof(ApplicationBuilder)));
+            Assert.Null(host.Services.GetService(typeof(SubclassBuilder)));
         }
 
         [Fact]
@@ -121,11 +106,11 @@ namespace MadWizard.Desomnia.Tests
 
             IPersistentService first, second;
 
-            using (var builder = new ApplicationBuilder(_configPath))
+            var builder = new SystemApplicationBuilder(_configPath);
             {
                 builder.RegisterModule(module);
 
-                builder.Build(); // the persistent host, held by the builder
+                using var host = builder.Build(); // the persistent host, disposed with the block
 
                 using (var app1 = builder.BuildApplication())
                     first = (IPersistentService)app1.Services.GetService(typeof(IPersistentService))!;
@@ -141,14 +126,14 @@ namespace MadWizard.Desomnia.Tests
                 Assert.False(((PersistentService)first).Disposed);
             }
 
-            // disposing the builder disposes the persistent host — and with it the container
+            // disposing the persistent host disposes its container - and with it the instance
             Assert.True(((PersistentService)first).Disposed);
         }
 
         [Fact]
         public void RelationshipTypesUsedInsideThePersistentContainer_DoNotShadowAppRegistrationsOnRebuild()
         {
-            using var builder = new ApplicationBuilder(_configPath);
+            var builder = new SystemApplicationBuilder(_configPath);
 
             builder.RegisterModule(new CollectionPersistentModule());
             builder.RegisterModule(new AppServiceModule());
@@ -204,7 +189,7 @@ namespace MadWizard.Desomnia.Tests
             var envPath = Path.Combine(Path.GetTempPath(), $"desomnia-env-{Guid.NewGuid():N}.xml");
 
             File.WriteAllText(envPath, """
-                <EnvironmentMonitor version="6">
+                <EnvironmentMonitor>
                   <Environment probed="on"><SystemMonitor marker="matched" /></Environment>
                   <DefaultEnvironment onlyIf="else"><SystemMonitor marker="fallback" /></DefaultEnvironment>
                 </EnvironmentMonitor>
@@ -214,7 +199,7 @@ namespace MadWizard.Desomnia.Tests
             {
                 var module = new ConfigurableTestModule();
 
-                using var builder = new ApplicationBuilder(envPath);
+                var builder = new SystemApplicationBuilder(envPath);
 
                 builder.RegisterModule(new ConditionModule());
                 builder.RegisterModule(module);
@@ -238,7 +223,7 @@ namespace MadWizard.Desomnia.Tests
         {
             var module = new ConfigurableTestModule();
 
-            using var builder = new ApplicationBuilder(_configPath);
+            var builder = new SystemApplicationBuilder(_configPath);
 
             builder.RegisterModule(module);
 
@@ -248,12 +233,60 @@ namespace MadWizard.Desomnia.Tests
             using (var app2 = builder.BuildApplication()) { }
 
             Assert.Equal(2, module.Received.Count);
-            Assert.All(module.Received, config =>
-            {
-                Assert.Equal(6, config.Version);
-                Assert.Equal(TimeSpan.FromMinutes(10), config.Timeout);
-            });
+            Assert.All(module.Received, config => Assert.Equal(TimeSpan.FromMinutes(10), config.Timeout));
             Assert.NotSame(module.Received[0], module.Received[1]);
         }
+
+        #region Configuration format
+
+        // a module that last changed its format in a version this build does not know yet
+        private sealed class DemandingModule : ConfigurableModule
+        {
+            protected internal override uint MinVersion => ConfigurableModule.LATEST_VERSION + 1;
+        }
+
+        // a strict plugin that accepts no format at all - the extreme of "limits the format"
+        private sealed class StrictPluginModule : ConfigurableModule
+        {
+            protected internal override uint MaxVersion => 0;
+        }
+
+        // the root file provider wraps a load failure; the cause is the migrator's
+        private static ConfigurationMigrationException MigrationFailure(Action build)
+        {
+            var ex = Assert.ThrowsAny<Exception>(build);
+
+            return ex as ConfigurationMigrationException
+                ?? Assert.IsType<ConfigurationMigrationException>(Assert.IsType<InvalidDataException>(ex).InnerException);
+        }
+
+        [Fact]
+        public void Build_RegistersTheModulesWithTheMigrator_ADemandingModuleIsRefused()
+        {
+            var builder = new SystemApplicationBuilder(_configPath);
+
+            builder.RegisterModule(new DemandingModule());
+
+            var ex = MigrationFailure(() => builder.Build());
+
+            Assert.Contains(nameof(DemandingModule), ex.Message);
+            Assert.Contains($"requires version {ConfigurableModule.LATEST_VERSION + 1}", ex.Message);
+        }
+
+        [Fact]
+        public void Build_RegistersTheModulesWithTheMigrator_AStrictPluginLimitsTheFormat()
+        {
+            var builder = new SystemApplicationBuilder(_configPath);
+
+            builder.RegisterModule(new StrictPluginModule());
+            builder.RegisterModule(new ConfigurableTestModule()); // requires 1 > supported 0
+
+            var ex = MigrationFailure(() => builder.Build());
+
+            Assert.Contains(nameof(StrictPluginModule), ex.Message);
+            Assert.Contains("supports at most version 0", ex.Message);
+        }
+
+        #endregion
     }
 }

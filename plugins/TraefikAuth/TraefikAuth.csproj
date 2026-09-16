@@ -4,19 +4,13 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <IsDesomniaPlugin>true</IsDesomniaPlugin>
     <RootNamespace>MadWizard.Desomnia.Network.Traefik</RootNamespace>
   </PropertyGroup>
 
-	<ItemGroup>
-		<ProjectReference Include="..\..\DesomniaCore\DesomniaCore.csproj">
-			<Private>false</Private>
-			<ExcludeAssets>runtime</ExcludeAssets>
-		</ProjectReference>
-
-		<ProjectReference Include="..\..\modules\NetworkMonitor\NetworkMonitor.csproj">
-			<Private>false</Private>
-			<ExcludeAssets>runtime</ExcludeAssets>
-		</ProjectReference>
-	</ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\DesomniaCore\DesomniaCore.csproj" />
+    <ProjectReference Include="..\..\modules\NetworkMonitor\NetworkMonitor.csproj" />
+  </ItemGroup>
 
 </Project>

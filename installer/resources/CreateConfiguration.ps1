@@ -19,7 +19,7 @@ function Add-XmlElement
 
         [string] $Text,
 
-        [hashtable] $Attributes
+        [System.Collections.IDictionary] $Attributes
     )
 
     $doc = if ($Parent -is [System.Xml.XmlDocument]) { $Parent } else { $Parent.OwnerDocument }
@@ -43,7 +43,7 @@ function Add-XmlAttributes
         [Parameter(Mandatory)]
         [System.Xml.XmlNode] $Node,
 
-        [hashtable] $Attributes
+        [System.Collections.IDictionary] $Attributes
     )
 
     $doc = if ($Node -is [System.Xml.XmlDocument]) { $Node } else { $Node.OwnerDocument }
@@ -55,7 +55,7 @@ function Add-XmlAttributes
                 $attr = $doc.CreateAttribute($key)
                 $attr.Value = $value
 
-                [void]$element.Attributes.Append($attr)
+                [void]$Node.Attributes.Append($attr)
             }
         }
     }
@@ -202,13 +202,25 @@ $xml = New-Object System.Xml.XmlDocument
 
 [void]$xml.AppendChild($xml.CreateXmlDeclaration("1.0", "UTF-8", $null))
 
+# The format version is declared on the root element (see docs/concepts/version.rst);
+# the <?config?> header is only written when the user asks for a non-default migration
+# policy ("transient" is the default and needs no declaration)
+$config      = $ini["config"]
+$version     = if ($config -and $config["version"])     { $config["version"] }     else { "2" }
+$autoMigrate = if ($config -and $config["autoMigrate"]) { $config["autoMigrate"] } else { $null }
+
+if ($autoMigrate)
+{
+    [void]$xml.AppendChild($xml.CreateProcessingInstruction("config", "autoMigrate=""$autoMigrate"""))
+}
+
 # Root element
-$root = Add-XmlElement $xml "SystemMonitor" $null @{
-    version  = $ini["SystemMonitor"]["version"]
+$root = Add-XmlElement $xml "SystemMonitor" $null ([ordered]@{
+    version  = $version
     timeout  = $ini["SystemMonitor"]["timeout"] -replace '\s', ''
     onIdle   = $ini["SystemMonitor"]["idle"]    -replace '\s', ''
-    onDemand = $ini["SystemMonitor"]["demand"]  -replace '\s', ''
-}
+    onUsage  = $ini["SystemMonitor"]["usage"]   -replace '\s', ''
+})
 
 
 # Static monitors
@@ -245,9 +257,9 @@ if ($network = $ini["NetworkMonitor"])
 
 }
 
-if ($duo = $ini["DuoStreamMonitor"])
+if ($duo = $ini["DuoSessionMonitor"])
 {
-    Add-XmlElement $root "DuoStreamMonitor" $null @{
+    Add-XmlElement $root "DuoSessionMonitor" $null @{
         onInstanceDemand = $duo["demand"]   -replace '\s', ''
         onInstanceIdle   = $duo["idle"]     -replace '\s', ''
     }

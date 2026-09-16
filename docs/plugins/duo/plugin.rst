@@ -16,7 +16,7 @@ Since most configuration is optional, a minimal setup looks like this:
   <SystemMonitor timeout="5min">
     <NetworkMonitor ... /> <!-- optional, needs Npcap installed -->
 
-    <DuoStreamMonitor onInstanceDemand="start" onInstanceIdle="stop" />
+    <DuoSessionMonitor onInstanceDemand="start" onInstanceIdle="stop" />
   </SystemMonitor>
 
 .. toctree::

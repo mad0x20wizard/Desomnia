@@ -1,4 +1,3 @@
-using MadWizard.Desomnia.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Reflection;
@@ -99,9 +98,9 @@ namespace MadWizard.Desomnia.Events
 
         #region Protected virtual hooks — in-place augmentation for the declaring class
 
-        /// <summary>Veto seam: return false to stop the trigger entirely (nothing else
-        /// happens — no cancel enforcement, no handlers, no actions).</summary>
-        protected virtual bool OnEventTriggering(Event @event) => true;
+        /// <summary>Veto seam: return false to stop handler and action dispatch. Event
+        /// cancellation relationships are deliberately enforced before this hook.</summary>
+        protected virtual bool ShouldTriggerEvent(Event @event) => true;
 
         protected virtual void OnEventTriggered(Event @event) { }
 
@@ -171,10 +170,10 @@ namespace MadWizard.Desomnia.Events
                 if (!_events.TryGetValue(name, out var type))
                     throw new KeyNotFoundException($"{GetType().Name} has no event '{name}'");
 
-                if (type is not EventType actionType)
+                if (type is not EventType eventType)
                     throw new InvalidOperationException($"'{name}' is a filter event on {GetType().Name} — filters have no trigger/action surface");
 
-                return actionType;
+                return eventType;
             }
         }
 
@@ -315,11 +314,11 @@ namespace MadWizard.Desomnia.Events
                 return;
             }
 
-            if (!OnEventTriggering(@event))
-                return;                                       // vetoed events cancel nothing (§6.1)
-
             foreach (var name in type.EffectiveCancels)       // lock-free coherent snapshot
                 FindEventType(name)?.CancelActions();
+
+            if (!ShouldTriggerEvent(@event))
+                return;
 
             @event.Source = this;
 
@@ -433,7 +432,7 @@ namespace MadWizard.Desomnia.Events
         /// <summary>The string-keyed handle for events INHERITED from a base class —
         /// C# lets a field-like event be used as a delegate only inside its declaring
         /// class, so derived code writes <c>GetEvent(nameof(Idle)).AddAction(...)</c>.</summary>
-        protected EventType GetEvent(string eventName) => GetEventType(eventName);
+        protected EventType Event(string eventName) => GetEventType(eventName);
 
         /// <summary>
         /// Offers a foreign event's action to this object, resolving through the FULL
@@ -479,6 +478,8 @@ namespace MadWizard.Desomnia.Events
             if (!handler.TryBeginInvocation())
                 return true;                     // non-concurrent handler already running → skip silently
 
+            var releaseHandler = true;
+
             try
             {
                 // PrepareWithContext sits inside the routed region: an argument-conversion
@@ -489,7 +490,15 @@ namespace MadWizard.Desomnia.Events
                     {
                         ResolveLogger()?.LogDebug($"{@event} -> {action}" + (@event.Source != this ? $" @ {GetType().Name}" : ""));
 
-                        await invocation.InvokeAsync();
+                        if (handler.IsDetached)
+                        {
+                            _ = Task.Run(() => RunDetachedActionAsync(handler, invocation, @event, action));
+                            releaseHandler = false;
+                        }
+                        else
+                        {
+                            await invocation.InvokeAsync();
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -507,10 +516,45 @@ namespace MadWizard.Desomnia.Events
             }
             finally
             {
-                handler.EndInvocation();
+                if (releaseHandler)
+                {
+                    handler.EndInvocation();
+                }
             }
 
             return true;
+        }
+
+        private async Task RunDetachedActionAsync(
+            ActionHandler handler,
+            ActionInvocation invocation,
+            Event @event,
+            EventAction action)
+        {
+            // The work runs outside the trigger call. Clear the event-pipeline marker
+            // inherited through ExecutionContext before invoking user code.
+            ExitPipelineFlow();
+
+            try
+            {
+                await invocation.InvokeAsync();
+            }
+            catch (Exception ex)
+            {
+                if (ex is TargetInvocationException { InnerException: Exception inner })
+                    ex = inner;
+
+                var error = new ActionError(@event, action, ex) { Actor = this };
+
+                if (!RouteActionError(error))
+                {
+                    ReportLostActionError(error);
+                }
+            }
+            finally
+            {
+                handler.EndInvocation();
+            }
         }
 
         /// <summary>Action resolution (§6.3): self → parents in order, recursively
@@ -539,16 +583,25 @@ namespace MadWizard.Desomnia.Events
 
             visited.Add(this);
 
-            if (await DispatchActionCoreAsync(@event, action))
-                return true;
+            @event.ParentContext.Push(this);
 
-            foreach (var parent in Parents)
+            try
             {
-                if (await parent.DispatchThroughTreeAsync(@event, action, visited))
+                if (await DispatchActionCoreAsync(@event, action))
                     return true;
-            }
 
-            return false;
+                foreach (var parent in Parents)
+                {
+                    if (await parent.DispatchThroughTreeAsync(@event, action, visited))
+                        return true;
+                }
+
+                return false;
+            }
+            finally
+            {
+                @event.ParentContext.Pop();
+            }
         }
 
         private static IEventSystemRoot? ResolveRootVia(List<EventMetaObject> visited)
@@ -602,7 +655,7 @@ namespace MadWizard.Desomnia.Events
 
         internal void ReportLostActionError(ActionError error)
         {
-            ResolveLogger()?.LogError(error.Exception, $"{error.Event} -> {error.Action}: unhandled on the scheduled path");
+            ResolveLogger()?.LogError(error.Exception, $"{error.Event} -> {error.Action}: unhandled on a detached path");
         }
 
         internal void ReportBypassedInvocation(EventType type, Event @event)

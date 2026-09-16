@@ -57,11 +57,11 @@ namespace MadWizard.Desomnia.Network.Watch
 
         public override bool IsOnline => this.HasBeenSeen(PingOptions.Timeout);
 
-        protected override bool ShouldStartRequest(EthernetPacket packet)
+        private protected override bool ShouldStartRequest(in CaptureSummary capture)
         {
             if (!this.HasBeenWokenSince(WakeOptions.Timeout))
             {
-                return base.ShouldStartRequest(packet);
+                return base.ShouldStartRequest(capture);
             }
 
             return false;

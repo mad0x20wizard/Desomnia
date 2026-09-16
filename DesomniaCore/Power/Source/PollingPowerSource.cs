@@ -19,7 +19,7 @@ namespace MadWizard.Desomnia.Power.Source
 
         public abstract PowerSource Source { get; }
 
-        public event EventHandler? PowerSourceChanged
+        public event EventHandler? SourceChanged
         {
             add
             {

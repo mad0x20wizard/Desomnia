@@ -8,9 +8,9 @@ namespace MadWizard.Desomnia.Events
     /// index 0 of every invocation list, EventMetaObject ctor) glues the immutable
     /// delegate to its <see cref="EventType"/> meta object:
     /// <code>
-    /// Demand.Trigger();
-    /// await Demand.TriggerAsync(demandEvent);
-    /// Demand.AddAction(config.OnDemand);
+    /// Usage.TriggerEvent();
+    /// await Demand.TriggerEventAsync(demandEvent);
+    /// Usage.AddAction(config.OnUsage);
     /// bool allowed = AllowSomething.Filter(true, someEvent);
     /// </code>
     /// </summary>

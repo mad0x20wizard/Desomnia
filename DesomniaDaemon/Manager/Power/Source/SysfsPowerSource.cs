@@ -8,13 +8,13 @@ namespace MadWizard.Desomnia.Power.Source
     /// online. Systems without a Mains supply (desktops, VMs) report Unknown.
     /// Shared by the power managers and <see cref="SysfsPowerSourceProbe"/>.
     /// </summary>
-    internal static class SysfsPowerSource
+    internal class SysfsPowerSource : PollingPowerSource
     {
         static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
         const string POWER_SUPPLY_PATH = "/sys/class/power_supply";
 
-        static bool _warned;
+        public override PowerSource Source => Read();
 
         public static PowerSource Read()
         {
@@ -37,12 +37,7 @@ namespace MadWizard.Desomnia.Power.Source
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                if (!_warned)
-                {
-                    _warned = true;
-
-                    Logger.Warn(ex, $"Failed to read {POWER_SUPPLY_PATH}.");
-                }
+                Logger.Warn(ex, $"Failed to read {POWER_SUPPLY_PATH}.");
 
                 return PowerSource.Unknown;
             }

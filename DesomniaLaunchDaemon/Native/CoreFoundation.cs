@@ -134,6 +134,11 @@ namespace MadWizard.Desomnia.LaunchDaemon.Native
             return cf != 0 && CFGetTypeID(cf) == CFArrayGetTypeID();
         }
 
+        public static bool IsDictionary(nint cf)
+        {
+            return cf != 0 && CFGetTypeID(cf) == CFDictionaryGetTypeID();
+        }
+
         #region dictionary accessors (CF "get rule": returned values are borrowed, not owned)
         /// <summary>Snapshots the entries of a CFDictionary (borrowed references, valid while the dictionary lives).</summary>
         public static (nint[] Keys, nint[] Values) GetKeysAndValues(nint dictionary)

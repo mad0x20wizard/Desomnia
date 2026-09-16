@@ -14,9 +14,11 @@ namespace MadWizard.Desomnia.Processes.Manager
     /// genuinely new are described, and the one stat line that describes them carries the name, the
     /// parent and the session together — so <c>watchChildren</c> works on this platform at all.
     /// </summary>
-    internal sealed class ProcFSProcessManager : PollingProcessManager
+    internal sealed class ProcFSProcessManager : PollingProcessManager, IProcessMetricSupport
     {
         private EpollProcessExitWatcher? _watcher;
+
+        public ProcessMetric SupportedMetrics => ProcessMetric.Processor | ProcessMetric.Storage;
 
         public ProcFSProcessManager(TimeSpan interval) : base(interval)
         {
@@ -53,19 +55,22 @@ namespace MadWizard.Desomnia.Processes.Manager
                 }
 
                 // catch up on everything already tracked (the enumeration guard sees this lock and
-                // will not start a refresh underneath us)
+                // will not start a refresh underneath us); roster entries may carry a decoration
+                // around the platform's process, so the concrete layer is unwrapped here
                 foreach (var process in this)
                 {
-                    WatchForExit(process);
+                    WatchForExit(process.Layer<LinuxProcess>());
                 }
             }
         }
 
-        private void WatchForExit(IProcess process)
+        // internal for the creation middleware, which reports what it just activated – always the
+        // concrete process, because the middleware runs before any decoration wraps it
+        internal void WatchForExit(LinuxProcess process)
         {
-            if (_watcher is EpollProcessExitWatcher watcher && process is LinuxProcess linux)
+            if (_watcher is EpollProcessExitWatcher watcher)
             {
-                watcher.Watch(linux.Id, linux.TriggerStop);
+                watcher.Watch(process.Id, process.TriggerStop);
             }
         }
 
@@ -97,42 +102,6 @@ namespace MadWizard.Desomnia.Processes.Manager
                 // pid 0 is not a process, and the kernel reparents orphans rather than leaving loops
                 ParentId = stat.ParentId > 0 && stat.ParentId != pid ? stat.ParentId : null,
             };
-        }
-
-        // Created here rather than through the container: a process is a value the manager already
-        // holds every ingredient for, and resolving one per pid would put the container on the path
-        // of a startup that materialises several hundred of them.
-        protected override IProcess CreateProcess(ProcessInformation entry, IProcess? parent)
-        {
-            var process = new LinuxProcess(entry, parent);
-
-            WatchForExit(process);
-
-            return process;
-        }
-
-        /// <summary>
-        /// Answers from procfs everything the monitor asks per cycle — the executable path a
-        /// path-shaped pattern is matched against, and whether the process is still there. Only
-        /// sampling processor time (under a configured <c>minCPU</c>) and stopping a process on
-        /// demand still reach for the BCL object the base creates lazily, and neither happens
-        /// unless the configuration asked for it.
-        /// </summary>
-        private sealed class LinuxProcess(ProcessInformation entry, IProcess? parent) : ProcessHandle(entry, parent)
-        {
-            public override string? ImagePath => ProcFs.ReadExecutablePath(Id);
-
-            // procfs keeps a directory for a process that has exited until its parent reaps it, so
-            // existence alone is not life — the state is what says so
-            public override bool HasStopped => ProcFs.ReadStat(Id) is not ProcFs.Stat stat || stat.State == ProcFs.Zombie;
-
-            // SIGTERM is the only "please stop" this platform offers a daemon; a process that has
-            // installed a handler unwinds, one that has not dies where SIGKILL would have killed it
-            // anyway – so it costs nothing to ask.
-            protected override bool RequestStop() => Signals.TrySend(Id, Signals.SIGTERM, out _);
-
-            /// <summary>The kernel says it has ended; the manager is listening for exactly this.</summary>
-            internal new void TriggerStop() => base.TriggerStop();
         }
     }
 }

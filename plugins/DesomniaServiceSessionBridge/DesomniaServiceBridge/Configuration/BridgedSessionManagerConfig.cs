@@ -1,5 +1,4 @@
-﻿using MadWizard.Desomnia.Configuration;
-using MadWizard.Desomnia.Session.Configuration;
+﻿using MadWizard.Desomnia.Session.Configuration;
 
 namespace MadWizard.Desomnia.Service.Bridge.Configuration
 {
@@ -8,9 +7,9 @@ namespace MadWizard.Desomnia.Service.Bridge.Configuration
         public bool? SpawnMinions { get; set; } = true;
     }
 
-    public class BridgedSessionDescriptor : SessionDescriptor
+    public record BridgedSessionDescriptor : SessionWatchDescriptor
     {
-        public SessionMatcher? AllowControlSession { get; set; }
+        public SessionSelector? AllowControlSession { get; set; }
         public bool? AllowControlSleep { get; set; }
     }
 }

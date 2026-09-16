@@ -1,6 +1,7 @@
 using MadWizard.Desomnia.Configuration.Binding;
 using MadWizard.Desomnia.Environments;
 using MadWizard.Desomnia.Power.Source;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace MadWizard.Desomnia.Tests
@@ -11,7 +12,7 @@ namespace MadWizard.Desomnia.Tests
         {
             public PowerSource Source { get; set; }
 
-            public event EventHandler? PowerSourceChanged { add { } remove { } }
+            public event EventHandler? SourceChanged { add { } remove { } }
         }
 
         [Theory]
@@ -22,7 +23,7 @@ namespace MadWizard.Desomnia.Tests
         [InlineData("battery", PowerSource.AC, false)]
         public void MatchesTheRequiredPowerSource(string value, PowerSource current, bool expected)
         {
-            var condition = new PowerSourceCondition(value) { Probe = new FakeProbe { Source = current } };
+            var condition = new PowerSourceCondition(value) { Logger = NullLogger.Instance, Power = new FakeProbe { Source = current } };
 
             Assert.Equal(expected, condition.IsSatisfied());
         }
@@ -32,7 +33,7 @@ namespace MadWizard.Desomnia.Tests
         [InlineData("battery")]
         public void UnknownPowerSource_NeverMatches(string value)
         {
-            var condition = new PowerSourceCondition(value) { Probe = new FakeProbe { Source = PowerSource.Unknown } };
+            var condition = new PowerSourceCondition(value) { Logger = NullLogger.Instance, Power = new FakeProbe { Source = PowerSource.Unknown } };
 
             Assert.False(condition.IsSatisfied());
         }
@@ -40,7 +41,7 @@ namespace MadWizard.Desomnia.Tests
         [Fact]
         public void InvalidValue_Throws()
         {
-            Assert.Throws<ConfigurationValueException>(() => new PowerSourceCondition("solar") { Probe = new FakeProbe() });
+            Assert.Throws<ConfigurationValueException>(() => new PowerSourceCondition("solar") { Logger = NullLogger.Instance, Power = new FakeProbe() });
         }
     }
 }

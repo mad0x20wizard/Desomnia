@@ -6,6 +6,8 @@
     <RootNamespace>DesomniaSessionMinion</RootNamespace>
     <StartupObject>MadWizard.Desomnia.Minion.Program</StartupObject>
     <UseWindowsForms>true</UseWindowsForms>
+    <!-- The GUI supports localization; an empty value retains all satellite languages. -->
+    <SatelliteResourceLanguages />
     <ApplicationIcon>Minion.ico</ApplicationIcon>
     <ApplicationManifest>Properties\app.manifest</ApplicationManifest>
     <!-- Never bind against the throwing Menu/ContextMenu stubs .NET 10 re-added to System.Windows.Forms;

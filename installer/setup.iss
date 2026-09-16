@@ -137,13 +137,13 @@ Source: "build\components\plugins\HyperVSupport\*"; DestDir: "{app}\plugins\Hype
 [INI]
 Filename: {tmp}\prefs.ini; Section: "config:monitor.xml"; Key: "SHA256"; String: "?";
 
-Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: version; String: 1; Check: ShouldConfigureDesomnia
+Filename: {tmp}\prefs.ini; Section: config; Key: version; String: 2; Check: ShouldConfigureDesomnia
 Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: timeout; String: {code:SystemMonitorPrefs|Timeout}; Check: ShouldConfigureDesomnia
 Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: idle; String: {code:SystemMonitorPrefs|IdleAction}; Check: ShouldConfigureDesomnia
-Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: demand; String: {code:SystemMonitorPrefs|DemandAction}; Check: ShouldConfigureDesomnia
+Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: usage; String: {code:SystemMonitorPrefs|UsageAction}; Check: ShouldConfigureDesomnia
 
-Filename: {tmp}\prefs.ini; Section: DuoStreamMonitor; Key: idle; String: {code:DuoStreamMonitorPrefs|IdleAction}; Check: ShouldConfigureDuoStreamMonitor
-Filename: {tmp}\prefs.ini; Section: DuoStreamMonitor; Key: demand; String: {code:DuoStreamMonitorPrefs|DemandAction}; Check: ShouldConfigureDuoStreamMonitor
+Filename: {tmp}\prefs.ini; Section: DuoSessionMonitor; Key: idle; String: {code:DuoSessionMonitorPrefs|IdleAction}; Check: ShouldConfigureDuoSessionMonitor
+Filename: {tmp}\prefs.ini; Section: DuoSessionMonitor; Key: demand; String: {code:DuoSessionMonitorPrefs|DemandAction}; Check: ShouldConfigureDuoSessionMonitor
 
 Filename: {tmp}\prefs.ini; Section: NetworkMonitor; Key: name; String: {code:NetworkMonitorPrefs|InterfaceName}; Check: ShouldConfigureNetworkMonitor
 Filename: {tmp}\prefs.ini; Section: NetworkMonitor; Key: interface; String: {code:NetworkMonitorPrefs|InterfaceID}; Check: ShouldConfigureNetworkMonitor
@@ -163,7 +163,7 @@ Type: filesandordirs; Name: "{app}\plugins\DesomniaServiceBridge"; Check: not Wi
 
 [Run]
 Filename: "sc.exe"; \
-  Parameters: "create DesomniaService binPath= ""{app}\DesomniaService.exe"" start= delayed-auto displayname= Desomnia"; \
+  Parameters: "create DesomniaService binPath= ""{app}\DesomniaService.exe"" start= auto displayname= Desomnia"; \
   StatusMsg: "Registering Windows service..."; \
   Flags: runhidden waituntilterminated
   

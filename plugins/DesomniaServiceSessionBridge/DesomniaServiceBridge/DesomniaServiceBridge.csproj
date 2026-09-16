@@ -4,6 +4,7 @@
     <TargetFramework>net10.0-windows8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <IsDesomniaPlugin>true</IsDesomniaPlugin>
     <RootNamespace>MadWizard.Desomnia.Service.Bridge</RootNamespace>
     <SupportedOSPlatformVersion>8.0</SupportedOSPlatformVersion>
 	<LangVersion>preview</LangVersion>
@@ -14,39 +15,8 @@
   </ItemGroup>
 
   <ItemGroup>
-	  <ProjectReference Include="..\..\..\DesomniaService\DesomniaService.csproj">
-		  <Private>false</Private>
-		  <ExcludeAssets>runtime</ExcludeAssets>
-	  </ProjectReference>
-
-	  <ProjectReference Include="..\..\..\DesomniaCore\DesomniaCore.csproj">
-		  <Private>false</Private>
-		  <ExcludeAssets>runtime</ExcludeAssets>
-	  </ProjectReference>
-
-	  <ProjectReference Include="..\..\..\modules\ProcessMonitor\ProcessMonitor.csproj">
-		  <Private>false</Private>
-		  <ExcludeAssets>all</ExcludeAssets>
-	  </ProjectReference>
-	  <ProjectReference Include="..\..\..\modules\PowerRequestMonitor\PowerRequestMonitor.csproj">
-		  <Private>false</Private>
-		  <ExcludeAssets>all</ExcludeAssets>
-	  </ProjectReference>
-	  <ProjectReference Include="..\..\..\modules\NetworkMonitor\NetworkMonitor.csproj">
-		  <Private>false</Private>
-		  <ExcludeAssets>all</ExcludeAssets>
-	  </ProjectReference>
-	  <ProjectReference Include="..\..\..\modules\NetworkSessionMonitor\NetworkSessionMonitor.csproj">
-		  <Private>false</Private>
-		  <ExcludeAssets>all</ExcludeAssets>
-	  </ProjectReference>
-	  <ProjectReference Include="..\..\..\modules\SessionMonitor\SessionMonitor.csproj">
-		  <Private>false</Private>
-		  <ExcludeAssets>all</ExcludeAssets>
-	  </ProjectReference>
-
-
-	  <ProjectReference Include="..\DesomniaPipe\DesomniaPipe.csproj" />
+    <ProjectReference Include="..\..\..\DesomniaService\DesomniaService.csproj" />
+    <ProjectReference Include="..\DesomniaPipe\DesomniaPipe.csproj" />
   </ItemGroup>
 
 </Project>

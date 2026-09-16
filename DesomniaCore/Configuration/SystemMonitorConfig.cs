@@ -6,18 +6,13 @@ namespace MadWizard.Desomnia.Configuration
 {
     public class SystemMonitorConfig
     {
-        public const uint MIN_VERSION = 1;
-        public const uint MAX_VERSION = 1;
-
-        public required uint        Version             { get; set; }
-
         public TimeSpan?            Timeout             { get; set; }
 
         /// <summary>Additionally keep the display from idle-sleeping while sleepless.</summary>
         public bool                 KeepDisplayAwake    { get; set; } = false;
 
         public DelayedActionInfo?   OnIdle              { get; set; }
-        public ActionInfo?          OnDemand            { get; set; }
+        public ActionInfo?          OnUsage             { get; set; }
         public ActionInfo?          OnSuspend           { get; set; }
         public DelayedActionInfo?   OnSuspendTimeout    { get; set; }
         public DelayedActionInfo?   OnResume            { get; set; }

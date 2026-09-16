@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Application.Shutdown;
 using Microsoft.Extensions.Logging;
 using System.Net.NetworkInformation;
 
@@ -15,16 +16,16 @@ namespace MadWizard.Desomnia.Network.Manager
     /// <see cref="INetworkInterface.ShouldBeDisabled"/> intent are additionally held strongly,
     /// so the intent survives a disconnection — on Windows the disable itself removes the
     /// adapter from the enumeration, and it is exactly that hidden adapter whose intent must
-    /// outlive it. Intents still applied when the manager is disposed (persistent container
-    /// teardown = process exit) are restored, so a stopped Desomnia never leaves the machine
-    /// without its interfaces.
+    /// outlive it. Intents still applied when the manager is stopped (the persistent host's
+    /// stop phase — see <see cref="IAsyncStoppable"/> — with disposal as the backstop) are
+    /// restored, so a stopped Desomnia never leaves the machine without its interfaces.
     /// </summary>
-    public abstract class NetworkInterfaceManager : INetworkInterfaceManager, IDisposable
+    public abstract class NetworkInterfaceManager : INetworkInterfaceManager, IAsyncStoppable, IDisposable
     {
         internal const string SSID_UNSUPPORTED = "This platform exposes no wireless information; "
             + "only a platform host's " + nameof(NetworkInterfaceManager) + " can answer an SSID.";
 
-        private readonly ILogger _logger;
+        public required ILogger Logger { protected get; init; }
 
         private readonly Lock _lock = new();
 
@@ -36,11 +37,11 @@ namespace MadWizard.Desomnia.Network.Manager
 
         private readonly InterfaceMemory _memory = new();
 
-        /// <summary>Set under the lock by <see cref="Dispose"/>. Unsubscribing the
-        /// NetworkChange statics does not stop an already-dispatched handler: a change in
-        /// flight parks on the lock while the self-heal runs and proceeds once it is
-        /// released — it must find a dead manager then, never re-apply an intent nobody
-        /// is left to heal.</summary>
+        /// <summary>Set under the lock by <see cref="Shutdown"/> (the stop phase, or the
+        /// <see cref="Dispose"/> backstop). Unsubscribing the NetworkChange statics does not
+        /// stop an already-dispatched handler: a change in flight parks on the lock while
+        /// the self-heal runs and proceeds once it is released — it must find a dead manager
+        /// then, never re-apply an intent nobody is left to heal.</summary>
         private bool _disposed;
 
         /// <summary>How many detached handles the weak memory currently tracks — a test
@@ -55,10 +56,8 @@ namespace MadWizard.Desomnia.Network.Manager
         public event EventHandler<INetworkInterface>? InterfaceDetached;
         public event EventHandler? Changed;
 
-        protected NetworkInterfaceManager(ILogger logger)
+        protected NetworkInterfaceManager()
         {
-            _logger = logger;
-
             Refresh(); // creation is gated (CreationTracker), so observing from birth is fine
 
             NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
@@ -102,7 +101,7 @@ namespace MadWizard.Desomnia.Network.Manager
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to refresh the network interface snapshot.");
+                Logger.LogError(ex, "Failed to refresh the network interface snapshot.");
             }
         }
 
@@ -159,7 +158,7 @@ namespace MadWizard.Desomnia.Network.Manager
                         // the interface died while disabled (dock USB NICs vanish across
                         // sleep): the state we took away died with it, and its re-enumerated
                         // successor starts fresh — only the intent itself lives on
-                        _logger.LogInformation($"Network interface '{handle.Name}' no longer exists — nothing to restore.");
+                        Logger.LogInformation($"Network interface '{handle.Name}' no longer exists — nothing to restore.");
 
                         handle.DisableApplied = false;
                         handle.TookDown = false;
@@ -206,7 +205,7 @@ namespace MadWizard.Desomnia.Network.Manager
                 else
                     _intents.Remove(handle.Identity);
 
-                _logger.LogDebug($"Network interface '{handle.Name}' should be {(value ? "disabled" : "enabled")}.");
+                Logger.LogDebug($"Network interface '{handle.Name}' should be {(value ? "disabled" : "enabled")}.");
 
                 Reconcile(handle);
             }
@@ -266,11 +265,11 @@ namespace MadWizard.Desomnia.Network.Manager
 
                 if (!handle.TookDown)
                 {
-                    _logger.LogDebug($"Network interface '{handle.Name}' was already down before it was disabled — leaving it down.");
+                    Logger.LogDebug($"Network interface '{handle.Name}' was already down before it was disabled — leaving it down.");
                 }
                 else if (!StillExists(handle))
                 {
-                    _logger.LogInformation($"Network interface '{handle.Name}' no longer exists — nothing to restore.");
+                    Logger.LogInformation($"Network interface '{handle.Name}' no longer exists — nothing to restore.");
                 }
                 else
                 {
@@ -278,11 +277,11 @@ namespace MadWizard.Desomnia.Network.Manager
                     {
                         EnableInterface(handle); // the intent gone -> back into service
 
-                        _logger.LogInformation($"Enabled network interface '{handle.Name}'");
+                        Logger.LogInformation($"Enabled network interface '{handle.Name}'");
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, $"Failed to enable network interface '{handle.Name}'.");
+                        Logger.LogError(ex, $"Failed to enable network interface '{handle.Name}'.");
                     }
                 }
 
@@ -296,14 +295,14 @@ namespace MadWizard.Desomnia.Network.Manager
             {
                 DisableInterface(handle);
 
-                _logger.LogInformation($"Disabled network interface '{handle.Name}'");
+                Logger.LogInformation($"Disabled network interface '{handle.Name}'");
 
                 handle.DisableApplied = true;
             }
             catch (Exception ex)
             {
                 // DisableApplied stays false — the next reconcile (any refresh) retries
-                _logger.LogError(ex, $"Failed to disable network interface '{handle.Name}'.");
+                Logger.LogError(ex, $"Failed to disable network interface '{handle.Name}'.");
             }
         }
         #endregion
@@ -368,13 +367,36 @@ namespace MadWizard.Desomnia.Network.Manager
         }
         #endregion
 
-        public virtual void Dispose() // self-heal: never leave interfaces disabled behind
+        /// <summary>The stop phase (see <see cref="IAsyncStoppable"/>): the self-heal runs
+        /// here, while the process lifetime still waits — on Windows, before the SCM is told
+        /// the service stopped. The restore is synchronous OS work (CIM on Windows); the
+        /// token cannot interrupt it mid-call, the shutdown timeout bounds it from outside.</summary>
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            Shutdown();
+
+            return Task.CompletedTask;
+        }
+
+        /// <summary>Backstop for a teardown that never ran the stop phase (tests, a faulted
+        /// host); after <see cref="StopAsync"/> did its work, this is a no-op.</summary>
+        public virtual void Dispose()
+        {
+            Shutdown();
+
+            GC.SuppressFinalize(this);
+        }
+
+        private void Shutdown() // self-heal: never leave interfaces disabled behind
         {
             NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged;
             NetworkChange.NetworkAvailabilityChanged -= OnNetworkAvailabilityChanged;
 
             lock (_lock)
             {
+                if (_disposed)
+                    return; // the stop phase already healed; the disposal backstop finds nothing to do
+
                 _disposed = true;
 
                 foreach (var handle in _intents.Values)
@@ -384,14 +406,14 @@ namespace MadWizard.Desomnia.Network.Manager
 
                     if (!handle.TookDown)
                     {
-                        _logger.LogDebug($"Network interface '{handle.Name}' was already down before it was disabled — leaving it down.");
+                        Logger.LogDebug($"Network interface '{handle.Name}' was already down before it was disabled — leaving it down.");
 
                         continue;
                     }
 
                     if (!StillExists(handle))
                     {
-                        _logger.LogInformation($"Network interface '{handle.Name}' no longer exists — nothing to restore.");
+                        Logger.LogInformation($"Network interface '{handle.Name}' no longer exists — nothing to restore.");
 
                         continue;
                     }
@@ -400,11 +422,11 @@ namespace MadWizard.Desomnia.Network.Manager
                     {
                         EnableInterface(handle);
 
-                        _logger.LogInformation($"Enabled network interface '{handle.Name}'");
+                        Logger.LogInformation($"Enabled network interface '{handle.Name}'");
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, $"Failed to restore network interface '{handle.Name}' on shutdown.");
+                        Logger.LogError(ex, $"Failed to restore network interface '{handle.Name}' on shutdown.");
                     }
                 }
 
@@ -420,8 +442,6 @@ namespace MadWizard.Desomnia.Network.Manager
 
                 _intents.Clear();
             }
-
-            GC.SuppressFinalize(this);
         }
     }
 

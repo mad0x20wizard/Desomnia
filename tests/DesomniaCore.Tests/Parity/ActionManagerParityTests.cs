@@ -146,7 +146,7 @@ namespace MadWizard.Desomnia.Tests.Parity
             var resource = container.Resolve<ChainResource>();
             resource.Tokens = [new TestToken()];
 
-            ((IEventSystem)resource)["Demand"].AddAction(Actions.Named("shared"));   // only the root has it
+            ((IEventSystem)resource)["Usage"].AddAction(Actions.Named("shared"));   // only the root has it
             resource.Inspect(TimeSpan.Zero);
 
             Assert.Equal(["root"], log);
@@ -161,7 +161,7 @@ namespace MadWizard.Desomnia.Tests.Parity
             var resource = container.Resolve<ChainResource>();
             resource.Tokens = [new TestToken()];
 
-            ((IEventSystem)resource)["Demand"].AddAction(Actions.Named("shared"));
+            ((IEventSystem)resource)["Usage"].AddAction(Actions.Named("shared"));
             resource.Inspect(TimeSpan.Zero);                 // completes without throwing
         }
     }

@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.11" />
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.2" />
     <PackageReference Include="Tmds.DBus.Generator" Version="0.94.2" PrivateAssets="all" />
   </ItemGroup>

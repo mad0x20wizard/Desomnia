@@ -9,31 +9,29 @@ namespace MadWizard.Desomnia.Network.Watch
     {
         public NetworkService Service => service;
 
-        public virtual bool IsHidden { get; set; } = false;
-
         public virtual bool ShouldHandoffToSleepProxy { get; set; } = true;
 
         public AdvertiseOptions     AdvertiseOptions    { get; init; }
         public KnockOptions?        KnockOptions        { get; init; }
 
-        public bool CanTriggerDemand(EthernetPacket trigger)
+        public bool CanTriggerDemand(Packet trigger)
         {
             return IsIdle && ((IEventSystem)this)[nameof(Demand)].HasHandlers && Service.Accepts(trigger);
         }
 
-        protected internal override void ReportNetworkTraffic(EthernetPacket packet)
+        protected internal override void ReportNetworkTraffic(EthernetPacket packet, PacketDirection direction)
         {
-            if (Service.Accepts(packet))
+            if (Service.Accepts(packet, direction))
             {
-                base.ReportNetworkTraffic(packet);
-            } 
+                base.ReportNetworkTraffic(packet, direction);
+            }
         }
 
         protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
         {
             if (HadThresholdTraffic(interval, out long bytes))
             {
-                yield return new NetworkServiceUsage(Service, bytes);
+                yield return new NetworkServiceUsage(Service, bytes) { Rate = ThresholdRate(interval, bytes) };
             }
         }
     }

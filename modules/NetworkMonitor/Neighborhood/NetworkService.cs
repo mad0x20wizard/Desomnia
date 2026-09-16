@@ -6,6 +6,6 @@ namespace MadWizard.Desomnia.Network.Neighborhood
     {
         public string Name { get; init; } = name;
 
-        public abstract bool Accepts(Packet packet);
+        public abstract bool Accepts(Packet packet, PacketDirection direction = PacketDirection.Inbound);
     }
 }

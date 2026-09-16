@@ -3,13 +3,16 @@ using Microsoft.Win32.SafeHandles;
 
 namespace MadWizard.Desomnia.Processes.Manager
 {
-    internal class Win32Process(ProcessInformation info, IProcess? parent, ILogger logger) : ProcessHandle(info, parent)
+    internal class Win32Process(ProcessInformation info) : ProcessHandle(info)
     {
+        public required ILogger Logger { private get; init; }
+
         private readonly Lock _gate = new();
 
         private RegisteredWaitHandle? _registration;
         private WaitHandle? _signal;
 
+        #region Win32 Metrics
         /**
          * The processor time, asked of the kernel rather than of a process object.
          *
@@ -21,15 +24,47 @@ namespace MadWizard.Desomnia.Processes.Manager
          */
         public override TimeSpan? ProcessorTime => Win32ProcessManager.QueryProcessorTime(Id);
 
+        /// <summary>The graphics clock – see <see cref="Win32GraphicsAccounting"/> for what is summed and why zero differs from null.</summary>
+        public override TimeSpan? GraphicsProcessorTime => Win32GraphicsAccounting.QueryTime(Id);
+
+        /// <summary>Sampled like the processor time: a limited handle, one syscall, null once the process is gone.</summary>
+        public override ProcessInputOutput? StorageData => Win32ProcessManager.QueryIO(Id);
+
+        // No NetworkData here, deliberately: the kernel keeps no per-process network counter a
+        // handle could be asked for (the IO counters' Other bucket measures device-control
+        // chatter, not the network), so the base answers "cannot sample" and the metering
+        // decorator around this process is the only one who can do better.
+        #endregion
+
         /**
          * Whether the process is still there – the last of the routine questions the BCL object was
          * kept around for. The indexer asks it of every process it hands out, and the session bridge
          * asks it of its minion before and after every attempt to stop it.
          *
-         * Only where the kernel refuses to say does the BCL get a turn, which is where it would have
-         * been asked anyway: a process we cannot open is one we can only ask about second-hand.
+         * The watch already holds the one handle that answers this exactly: a process handle is
+         * signalled when its process ends, so a zero-length wait on it is the whole question in a
+         * single syscall – against three for opening the pid anew, and about the *right* process,
+         * where a re-opened pid may since have been handed to a stranger. Once the exit has been
+         * reported the answer is a settled fact and costs nothing. Only a process that never gave
+         * the watch a handle is asked the long way – and where the kernel refuses even that, the
+         * BCL gets a turn, which is where it would have been asked anyway.
          */
-        public override bool HasStopped => Win32ProcessManager.QueryHasStopped(Id) ?? base.HasStopped;
+        public override bool HasStopped
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    if (_signal is not null)
+                        return _signal.WaitOne(0);
+
+                    if (_stopped)
+                        return true;
+                }
+
+                return Win32ProcessManager.QueryHasStopped(Id) ?? base.HasStopped;
+            }
+        }
 
         /**
          * Waits on the process handle, which Windows signals the moment the process ends – the same
@@ -60,7 +95,15 @@ namespace MadWizard.Desomnia.Processes.Manager
             }
         }
 
-        protected override void TriggerStop()
+        /**
+         * Gives up the wait, without a word to anybody.
+         *
+         * For a process that has ended this is half of reporting it; for one this manager is simply
+         * letting go of – a duplicate that lost the race to be tracked, or everything at all when the
+         * configuration is rebuilt underneath us – it is the whole of it. The handle would otherwise
+         * be held until the process itself ends, which is exactly the lifetime nobody is watching.
+         */
+        internal void StopWatching()
         {
             lock (_gate)
             {
@@ -68,7 +111,13 @@ namespace MadWizard.Desomnia.Processes.Manager
                 _registration = null;
 
                 _signal?.Dispose(); // with it the process handle, which is what kept the pid ours
+                _signal = null;
             }
+        }
+
+        protected override void TriggerStop()
+        {
+            StopWatching();
 
             try
             {
@@ -78,8 +127,15 @@ namespace MadWizard.Desomnia.Processes.Manager
             {
                 // the wait fires on a thread-pool thread, where an exception is not something anybody
                 // is left to catch – it would take the service down with whoever was listening
-                logger.LogError(ex, "Reporting the exit of '{name}' ({pid}) failed", Name, Id);
+                Logger.LogError(ex, "Reporting the exit of '{name}' ({pid}) failed", Name, Id);
             }
+        }
+
+        public override void Dispose()
+        {
+            StopWatching();
+
+            base.Dispose();
         }
     }
 

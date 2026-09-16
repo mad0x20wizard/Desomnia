@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Application.Shutdown;
 using Microsoft.Extensions.Logging;
 using Microsoft.Management.Infrastructure;
 
@@ -17,7 +18,7 @@ namespace MadWizard.Desomnia.Display.Manager
     ///  - Connector type / built-in panel: WmiMonitorConnectionParams (root\wmi, needs SYSTEM/admin).
     ///  - Lid: GUID_LIDSWITCH_STATE_CHANGE, surfaced on the built-in display.
     /// </summary>
-    public class WindowsDisplayManager : IDisplayManager, IDisposable
+    public class WindowsDisplayManager : IDisplayManager, IAsyncStoppable, IDisposable
     {
         public required ILogger<WindowsDisplayManager> Logger { protected get; init; }
 
@@ -472,7 +473,21 @@ namespace MadWizard.Desomnia.Display.Manager
         }
         #endregion
 
-        public void Dispose()
+        /// <summary>The stop phase (see <see cref="IAsyncStoppable"/>): the native
+        /// notifications are unregistered while the process lifetime still waits — and a
+        /// future Windows soft-disconnect restore belongs here too, ahead of SERVICE_STOPPED.</summary>
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            Shutdown();
+
+            return Task.CompletedTask;
+        }
+
+        /// <summary>Backstop for a teardown that never ran the stop phase (tests, a faulted
+        /// host); after <see cref="StopAsync"/> did its work, this is a no-op.</summary>
+        public void Dispose() => Shutdown();
+
+        private void Shutdown() // idempotent: every handle is zeroed/cleared as it is released
         {
             if (_interfaceNotification != 0)
             {

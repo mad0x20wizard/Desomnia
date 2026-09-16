@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <Product>Desomnia</Product>
+    <!-- CLI components use English resources. DesomniaSessionMinion clears this
+         default in its project file to retain all available translations. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <!--

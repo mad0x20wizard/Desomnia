@@ -5,22 +5,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>preview</LangVersion>
     <Nullable>enable</Nullable>
+    <IsDesomniaPlugin>true</IsDesomniaPlugin>
     <IsAotCompatible>true</IsAotCompatible>
     <RootNamespace>MadWizard.Desomnia.Network.FRITZ</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Host-provided assemblies: reference for compilation, never bundle into the plugin
-         (a second copy of Core/NetworkMonitor would break type identity across the load context). -->
-    <ProjectReference Include="..\..\DesomniaCore\DesomniaCore.csproj">
-      <Private>false</Private>
-      <ExcludeAssets>runtime</ExcludeAssets>
-    </ProjectReference>
-
-    <ProjectReference Include="..\..\modules\NetworkMonitor\NetworkMonitor.csproj">
-      <Private>false</Private>
-      <ExcludeAssets>runtime</ExcludeAssets>
-    </ProjectReference>
+    <ProjectReference Include="..\..\DesomniaCore\DesomniaCore.csproj" />
+    <ProjectReference Include="..\..\modules\NetworkMonitor\NetworkMonitor.csproj" />
   </ItemGroup>
 
 </Project>

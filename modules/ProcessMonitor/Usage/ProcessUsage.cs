@@ -1,32 +1,20 @@
-﻿namespace MadWizard.Desomnia.Processes
+namespace MadWizard.Desomnia.Processes
 {
-    public class ProcessUsage(string name) : UsageToken
+    /// <summary>
+    /// What the group measured, in the unit it was measured in: each threshold fills exactly one
+    /// of its pair – the relative or the absolute member, the amount or the rate – and only a
+    /// filled member is rendered. A watch without thresholds fills nothing and renders bare.
+    /// </summary>
+    public class ProcessUsage(string? name) : MetricsUsageToken<ProcessMetricsUsage?>
     {
-        public string Name => name;
+        public string? Name => name;
 
-        public double? Usage { get; private init; }
-        public TimeSpan? Time { get; private init; }
-
-        public ProcessUsage(string name, double usage) : this(name)
+        public override string ToString()
         {
-            this.Usage = usage;
-        }
-
-        public ProcessUsage(string name, TimeSpan time) : this(name)
-        {
-            this.Time = time;
-        }
-
-        public string ToUsage()
-        {
-            if (Usage is double usage)
-                return $":{usage * 100:0.0}%";
-            else if (Time is TimeSpan time)
-                return $":{time}";
+            if (Name != null)
+                return "{" + Name + (Metrics?.ToString() is { Length: > 0 } parts ? " @ " + parts : "") + "}";
             else
-                return "";
+                return "{{" + Metrics?.ToString() + "}}";
         }
-
-        public override string ToString() => "{" + Name + ToUsage() + "}";
     }
 }

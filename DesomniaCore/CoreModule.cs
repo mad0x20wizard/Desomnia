@@ -1,17 +1,36 @@
 ﻿using Autofac;
+using Autofac.Core;
 using MadWizard.Desomnia.Configuration;
+using MadWizard.Desomnia.Configuration.Migration;
+using MadWizard.Desomnia.Configuration.Xml;
+using MadWizard.Desomnia.Environments;
+using MadWizard.Desomnia.Environments.Conditions;
 using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Logging;
 using MadWizard.Desomnia.Power.Guard;
 using MadWizard.Desomnia.Power.Manager;
+using MadWizard.Desomnia.Power.Source;
 using MadWizard.Desomnia.Power.Watch;
 using NLog;
 using NLog.Config;
+using System.Xml.Linq;
 
 namespace MadWizard.Desomnia
 {
-    public class CoreModule : Desomnia.ConfigurableModule<SystemMonitorConfig>
+    public class CoreModule : Desomnia.ConfigurableModule<SystemMonitorConfig>, IXConfigurationMigration
     {
+        #region Versioning
+        protected internal override uint MinVersion => 2;
+
+        void IXConfigurationMigration.Run(XDocument configuration, uint version)
+        {
+            switch (version)
+            {
+                case 2: V2.Run(configuration); break;
+            }
+        }
+        #endregion
+
         protected internal override void ConfigureLogging(ISetupExtensionsBuilder builder)
         {
             builder.RegisterLayoutRenderer<SleepTimeLayoutRenderer>("sleep-duration");
@@ -19,20 +38,19 @@ namespace MadWizard.Desomnia
 
         protected internal override void LoadOnce(ContainerBuilder builder)
         {
-            // the default failure handler: the console/daemon hosts react to the process exit code.
-            // A platform module (which loads first) may register its own — the Windows service does,
-            // to set the SCM-visible exit code — and PreserveExistingDefaults keeps that one.
-            builder.RegisterType<LoggingFailureHandler>()
-                .As<IApplicationFailureHandler>()
-                .SingleInstance()
+            // conditions on the process's environment variables (xmlns:env="environment:process");
+            // PreserveExistingDefaults so a platform module (which loads first) could take it over
+            builder.RegisterType<ProcessEnvironmentConditionProvider>()
+                .Named<IEnvironmentConditionProvider>(ProcessEnvironmentConditionProvider.Namespace)
                 .PreserveExistingDefaults();
+
+            builder.RegisterType<PowerSourceCondition>()
+                .OnlyIf(reg => reg.IsRegistered(new TypedService(typeof(IPowerSource))))
+                .Named<IEnvironmentCondition>("power");
         }
 
         protected override void Load(ContainerBuilder builder, SystemMonitorConfig config)
         {
-            if ((config.Version) < SystemMonitorConfig.MIN_VERSION || (config.Version) > SystemMonitorConfig.MAX_VERSION)
-                throw new NotSupportedException($"Unsupported configuration version = {config.Version}");
-
             builder.RegisterServiceMiddlewareSource(new EventSystemMiddlewareSource());
 
             builder.RegisterType<ActionManager>()

@@ -6,7 +6,7 @@ namespace MadWizard.Desomnia.Processes.Manager
     /**
      * Fallback, if OS doesn't support event-based process start/stop notifications.
      */
-    public class PollingProcessManager(TimeSpan interval) : ListenerAwareProcessManager, IHostedService, IDisposable
+    public class PollingProcessManager(TimeSpan interval) : ListenerAwareProcessManager, IHostedService
     {
         private DateTimeOffset _lastRefresh;
 
@@ -38,9 +38,11 @@ namespace MadWizard.Desomnia.Processes.Manager
             }
         }
 
-        public virtual void Dispose()
+        public override void Dispose()
         {
             _stoppingCts?.Cancel();
+
+            base.Dispose();
         }
         #endregion
 

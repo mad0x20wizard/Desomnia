@@ -9,9 +9,7 @@
 
     public enum WatchMode
     {
-        None = 0,
-
-        Normal,
+        Normal = 0,
         Promiscuous
     }
 }

@@ -1,13 +1,14 @@
-﻿using Autofac;
+﻿using Autofac.Core;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 
 namespace MadWizard.Desomnia.Processes.Manager
 {
-    public abstract class ProcessManager : IProcessManager, IStartable
+    public abstract class ProcessManager : IProcessManager, IDisposable
     {
-        public required ILogger<ProcessManager> Logger { protected get; init; }
+        public required ILogger Logger { protected get; init; }
 
         private bool _initialized = false;
 
@@ -16,7 +17,13 @@ namespace MadWizard.Desomnia.Processes.Manager
         public virtual event EventHandler<IProcess>? ProcessStarted;
         public virtual event EventHandler<IProcess>? ProcessStopped;
 
-        public virtual void Start() => RefreshProcessList();
+        /**
+         * Creates the processes through the container, where everything a bare new could not
+         * reach takes part: the logger arrives as a required property, the exit watch and the
+         * parent resolver as middleware on the registration, and the platform's metric
+         * decorations wrap the result. What remains here is only the seam the base class calls.
+         */
+        public required Func<ProcessInformation, IProcess> CreateProcess { private get; init; }
 
         /**
          * The processes alive right now – the ids are all the refresh below actually compares.
@@ -44,10 +51,14 @@ namespace MadWizard.Desomnia.Processes.Manager
          */
         protected virtual ProcessInformation? QueryProcess(int pid) => new(Process.GetProcessById(pid));
 
-        protected virtual ProcessInformation? QueryParentProcess(ProcessInformation info) => info.ParentId;
-
-        /// <summary>Builds the <see cref="IProcess"/> behind a freshly discovered entry.</summary>
-        protected virtual IProcess CreateProcess(ProcessInformation info, IProcess? parent) => new ProcessHandle(info, parent);
+        /**
+         * The parent's description, asked by the parent resolver for a process whose own
+         * description did not name one already. The .NET runtime doesn't provide a
+         * cross-platform abstraction for this, so the platform managers answer via P/Invoke
+         * where they can – or report it straight from an enumeration that knows it anyway,
+         * which is what the base falls back to.
+         */
+        protected internal virtual ProcessInformation? QueryParentProcess(ProcessInformation info) => info.ParentId;
 
         protected virtual void RefreshProcessList()
         {
@@ -99,26 +110,25 @@ namespace MadWizard.Desomnia.Processes.Manager
             }
         }
 
-        public IProcess this[int pid]
+        public IProcess this[int pid] => TryFindProcess(pid, out IProcess? process, true, true) ? process : throw new ProcessNotFoundException(pid);
+
+        public bool TryFindProcess(int pid, [NotNullWhen(true)] out IProcess? process, bool createIfUnknown = false, bool checkIfStopped = false)
         {
-            get
+            if (!_processList.TryGetValue(pid, out process))
             {
-                if (!_processList.TryGetValue((int)pid, out IProcess? process))
+                if (createIfUnknown && TriggerStart(pid) is IProcess created)
                 {
-                    if (TriggerStart(pid) is IProcess created)
-                    {
-                        return created;
-                    }
+                    return (process = created) is not null;
                 }
-                else if (process?.HasStopped ?? false)
-                {
-                    TriggerStop(process.Id);
-
-                    process = null;
-                }
-
-                return process ?? throw new ProcessNotFoundException(pid);
             }
+            else if (checkIfStopped && (process?.HasStopped ?? false))
+            {
+                TriggerStop(process.Id);
+
+                process = null;
+            }
+
+            return process != null;
         }
 
         public virtual IProcess LaunchProcess(ProcessStartInfo info)
@@ -128,14 +138,8 @@ namespace MadWizard.Desomnia.Processes.Manager
             return TriggerStart(native)!;
         }
 
-        /**
-         * The .NET runtime doesn't provide a cross-platform abstraction for this.
-         * Therefore the platform managers need to implement this via P/Invoke,
-         * if possible – or report it straight from an enumeration that knows it anyway.
-         */
-
         #region Internal Process Management
-        protected IProcess? TriggerStart(ProcessInformation info)
+        protected internal IProcess? TriggerStart(ProcessInformation info)
         {
             try
             {
@@ -153,24 +157,8 @@ namespace MadWizard.Desomnia.Processes.Manager
                     info = queried with { MaxParents = info.MaxParents };
                 }
 
-                IProcess? parent;
-                // pid 0 is nobody's parent, and a process that claims to be its own would loop forever
-                if (info.MaxParents > 0 && (info.ParentId ?? QueryParentProcess(info)) is ProcessInformation infoParent
-                    && infoParent.Id != 0 
-                    && infoParent.Id != pid)
-                {
-                    if (!_processList.TryGetValue(infoParent.Id, out parent))
-                    {
-                        parent = TriggerStart(infoParent with { MaxParents = info.MaxParents - 1 });
-                    }
-                }
-                else
-                {
-                    parent = null;
-                }
-
-                IProcess process;
-                if (_processList.TryAdd(pid, process = CreateProcess(info, parent)))
+                IProcess? process = null;
+                if (_processList.GetOrAdd(pid, pid => process = CreateProcess(info)) == process)
                 {
                     // A platform may learn that this process is gone long before the next enumeration
                     // would: Windows by waiting on the process handle, macOS through kqueue, Linux
@@ -185,8 +173,15 @@ namespace MadWizard.Desomnia.Processes.Manager
                         ProcessStarted?.Invoke(this, process);
                     }
                 }
+                else
+                {
+                    // built, and beaten to the roster by another lane: the duplicate is handed
+                    // back with everything creating it took out – an exit watch, a kernel handle
+                    process?.Dispose();
+                    process = null;
+                }
 
-                return _processList[pid];
+                return process ?? _processList.GetValueOrDefault(pid);
             }
             catch (KeyNotFoundException)
             {
@@ -198,6 +193,14 @@ namespace MadWizard.Desomnia.Processes.Manager
 
                 return null;
             }
+            catch (DependencyResolutionException ex) when (ex.GetBaseException() is ArgumentException or InvalidOperationException)
+            {
+                // the same "probably not running" – but thrown inside the container the processes
+                // are created through now, which wraps it beyond the filter above
+                Logger.LogTrace(ex.GetBaseException().Message);
+
+                return null;
+            }
         }
 
         protected void TriggerStop(int pid)
@@ -206,16 +209,44 @@ namespace MadWizard.Desomnia.Processes.Manager
             {
                 Logger.LogTrace("Process '{name}' ({pid}) stopped", process.Name, process.Id);
 
-                if (process is ProcessHandle wrapper)
+                // if parent dies, remove it from all children
+                foreach (var orphaned in _processList.Values.Where(p => p.Parent == process))
                 {
-                    wrapper.TriggerStop(); // a no-op when this stop came from the process itself
+                    orphaned.Layer<ProcessHandle>()?.Parent = null;
                 }
+
+                process.Layer<ProcessHandle>()?.TriggerStop();  // a no-op when this stop came from the process itself
 
                 ProcessStopped?.Invoke(this, process);
             }
         }
         #endregion
 
-        public virtual IEnumerator<IProcess> GetEnumerator() => _processList.Values.GetEnumerator();
+        /**
+         * The roster is built on first use, never at activation: a build where nothing ever asks
+         * for processes never enumerates the machine, and never arms a single exit watch – and
+         * because no process is created inside the manager's own activation anymore, the creation
+         * middlewares may resolve the manager back from the container. The guard is for the
+         * catch-up walks the platform watchers do under the manager's own lock: those must see
+         * the roster as it is, not start a refresh underneath themselves.
+         */
+        public virtual IEnumerator<IProcess> GetEnumerator()
+        {
+            if (!_initialized && !Monitor.IsEntered(this))
+                RefreshProcessList();
+
+            return _processList.Values.GetEnumerator();
+        }
+
+        public virtual void Dispose()
+        {
+            if (_initialized)
+            {
+                foreach (var process in this)
+                {
+                    process.Dispose();
+                }
+            }
+        }
     }
 }

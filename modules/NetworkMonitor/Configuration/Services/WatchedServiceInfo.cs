@@ -10,7 +10,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Services
 {
     public class WatchedServiceInfo() : ServiceInfo()
     {
-        public TrafficThreshold? MinTraffic { get; set; }
+        public TransmissionThreshold? MinTraffic { get; set; }
 
         // Options
         #region                 AdvertiseOptions
@@ -87,8 +87,8 @@ namespace MadWizard.Desomnia.Network.Configuration.Services
 
         // Events
         public ActionInfo? OnDemand { get; set; }
+        public DelayedActionInfo? OnUsage { get; set; }
         public DelayedActionInfo? OnIdle { get; set; }
-
         // Filter-Rules
         public IList<HostFilterRuleInfo> HostFilterRule { get; set; } = [];
         public IList<HostRangeFilterRuleInfo> HostRangeFilterRule { get; init; } = [];

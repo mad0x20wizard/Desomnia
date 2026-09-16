@@ -30,11 +30,11 @@ namespace MadWizard.Desomnia.Network.Watch
         public required Func<LocalHostWatch, SleepProxyRegistration> CreateSleepProxyRegistration { private get; init; }
         public required Func<SleepProxyRegistration, ushort, SleepProxyRegistrationMessageBurst> CreateMessageBurst { private get; init; }
 
-        protected override bool ShouldStartRequest(EthernetPacket packet)
+        private protected override bool ShouldStartRequest(in CaptureSummary packet)
         {
             if (base.ShouldStartRequest(packet))
             {
-                return !IsOnline || packet.IsIPUnicast(); // if proxy is online, only consider unicast traffic
+                return !IsOnline || packet.IsIPUnicast; // if proxy is online, only consider unicast traffic
             }
 
             return false;

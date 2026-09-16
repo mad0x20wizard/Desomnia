@@ -41,12 +41,12 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
 
                             Logger.LogHostPhysicalAddressChanged(host, mapping.PhysicalAddress);
 
-                            semaphore.FinallyRelease();
+                            semaphore.ReleaseFinally();
                         }
                     }
                 }
 
-                Device.EthernetCaptured += Capture;
+                Device.PacketCaptured += Capture;
 
                 try
                 {
@@ -60,7 +60,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
                 }
                 finally
                 {
-                    Device.EthernetCaptured -= Capture;
+                    Device.PacketCaptured -= Capture;
                 }
             }
         }

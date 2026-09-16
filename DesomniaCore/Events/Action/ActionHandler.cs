@@ -8,8 +8,11 @@ namespace MadWizard.Desomnia.Events
 {
     internal class ActionHandler(MethodInfo method)
     {
-        public string   Name => method.GetCustomAttribute<ActionHandlerAttribute>()!.Name;
-        public bool     MayRunInParallel => method.GetCustomAttribute<ActionHandlerAttribute>()!.Concurrent;
+        private ActionHandlerAttribute Attribute { get; } = method.GetCustomAttribute<ActionHandlerAttribute>()!;
+
+        public string Name => Attribute.Name;
+        public bool MayRunInParallel => Attribute.Concurrent;
+        public bool IsDetached => Attribute.Detached;
 
         private readonly Lock _gate = new();
         private int _running;

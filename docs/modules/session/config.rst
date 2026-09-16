@@ -13,7 +13,9 @@ You can configure any number of selectors to watch OS user sessions. If multiple
     <SessionMonitor
       clockTime="true"
       clockRemote="false"
-      clockDisconnected="false">
+      clockDisconnected="false"
+      onUsage=""
+      onIdle="">
 
       <User ... />
       <Administrator ... />
@@ -26,6 +28,20 @@ You can configure any number of selectors to watch OS user sessions. If multiple
   </SystemMonitor>
 
 .. include:: options/clock.rst
+
+onUsage
++++++++
+
+:⚡️ event:
+
+This event is triggered on every inspection cycle in which at least one watched session reports activity.
+
+onIdle
+++++++
+
+:⚡️ event:
+
+This event is triggered when every watched session is idle.
 
 User
 ----
@@ -138,6 +154,7 @@ The configuration of ``<Process>`` groups is the same as described in :doc:`/mod
 
   <Process name="VLC Media Player" ...
 
+    onSessionUsage=""
     onSessionIdle="stop"
     onSessionConsoleConnect=""
     onSessionRemoteConnect=""
@@ -146,6 +163,13 @@ The configuration of ``<Process>`` groups is the same as described in :doc:`/mod
     vlc
 
   </Process>
+
+onSessionUsage
+++++++++++++++
+
+:⚡️ event:
+
+This event is triggered on every inspection cycle in which the containing session reports activity.
 
 onSessionIdle
 +++++++++++++

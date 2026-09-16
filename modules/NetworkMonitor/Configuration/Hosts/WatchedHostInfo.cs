@@ -8,7 +8,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
 {
     public class WatchedHostInfo : NetworkHostInfo
     {
-        public TrafficThreshold? MinTraffic { get; set; }
+        public TransmissionThreshold? MinTraffic { get; set; }
 
         // Options
         #region                     DemandOptions
@@ -81,7 +81,9 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
         #endregion
 
         // Events
+        public DelayedActionInfo?   OnServiceUsage          { get; set; }
         public ActionInfo?          OnServiceDemand         { get; set; }
+        public DelayedActionInfo?   OnUsage                 { get; set; }
         public ActionInfo?          OnDemand                { get; set; } = new ActionInfo("wake");
         public DelayedActionInfo?   OnIdle                  { get; set; }
 

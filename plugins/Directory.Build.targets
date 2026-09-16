@@ -1,0 +1,5 @@
+<Project>
+  <!-- Helper applications and plugin-private libraries keep their normal dependencies. -->
+  <Import Project="$(MSBuildThisFileDirectory)../build/Desomnia.Plugin.targets"
+          Condition="'$(IsDesomniaPlugin)' == 'true'" />
+</Project>

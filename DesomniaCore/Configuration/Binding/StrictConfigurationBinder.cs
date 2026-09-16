@@ -19,8 +19,9 @@
 //     Types whose ONLY constructor takes the string make the text mandatory (a missing text
 //     fails loudly). Text content that no constructor consumes stays tolerated, just like
 //     unknown attributes — it may address another module's or plugin's view of the element.
-//  5. Collection items with a numeric configuration key and an unset string "Name" property
-//     get a synthesized name "{SectionKey}#{index+1}" (replaces AddNamelessCollectionElement).
+//  5. A C# `required` member is enforced: a required property the configuration does not set,
+//     and that no constructor or initializer default filled either, aborts the binding
+//     (reflection construction bypasses the compiler's required-member check silently).
 //  6. Enum values accept "|"-separated flags and dashed member names, TimeSpan values accept
 //     friendly formats like "90s", "5min", "7 days" and ISO 8601 durations (replaces the
 //     provider's AddEnumAttribute registrations and blanket attribute rewriting).
@@ -34,6 +35,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace MadWizard.Desomnia.Configuration.Binding
 {
@@ -48,8 +50,6 @@ namespace MadWizard.Desomnia.Configuration.Binding
         private const string InstanceGetTypeTrimmingWarningMessage = "Cannot statically analyze the type of instance so its members may be trimmed";
         private const string PropertyTrimmingWarningMessage = "Cannot statically analyze property.PropertyType so its members may be trimmed.";
 
-        // DESOMNIA: convention for change #5
-        private const string NamePropertyName = "Name";
 
         /// <summary>
         /// Attempts to bind the configuration instance to a new instance of type T.
@@ -185,7 +185,37 @@ namespace MadWizard.Desomnia.Configuration.Binding
                 {
                     ResetPropertyValue(property, instance, options);
                 }
+
+                EnsureRequiredProperty(property, instance, configuration);
             }
+        }
+
+        // DESOMNIA: a C# `required` member is only enforced by the compiler at object-initializer
+        // sites - reflection construction bypasses it silently. The binder makes the declaration
+        // mean what it says for configuration types: a required property the configuration does
+        // not set, and that no constructor or initializer default filled either, aborts the
+        // startup instead of surfacing later as a null where none was ever expected.
+        [RequiresDynamicCode(DynamicCodeWarningMessage)]
+        [RequiresUnreferencedCode(PropertyTrimmingWarningMessage)]
+        private static void EnsureRequiredProperty(PropertyInfo property, object instance, IConfiguration configuration)
+        {
+            if (property.GetCustomAttribute<RequiredMemberAttribute>() is null)
+                return;
+
+            if (property.GetMethod is not MethodInfo getter || getter.GetParameters().Length > 0)
+                return;
+
+            if (configuration.GetSection(GetPropertyName(property)).Exists())
+                return;
+
+            if (getter.Invoke(instance, null) is not null)
+                return; // a constructor or initializer default satisfies the requirement
+
+            string subject = configuration is IConfigurationSection section && section.Path.Length > 0
+                ? $"'{section.Path}'" : $"a {instance.GetType().Name}";
+
+            throw new ConfigurationValueException(
+                $"{subject} requires the '{GetPropertyName(property)}' attribute, but the configuration does not set it.");
         }
 
         /// <summary>
@@ -736,7 +766,6 @@ namespace MadWizard.Desomnia.Configuration.Binding
                         true);
                     if (itemBindingPoint.HasNewValue)
                     {
-                        SynthesizeItemName(itemBindingPoint.Value, config, section, options); // DESOMNIA
                         addMethod?.Invoke(collection, new[] { itemBindingPoint.Value });
                     }
                 }
@@ -793,7 +822,6 @@ namespace MadWizard.Desomnia.Configuration.Binding
                         isParentCollection: true);
                     if (itemBindingPoint.HasNewValue)
                     {
-                        SynthesizeItemName(itemBindingPoint.Value, config, section, options); // DESOMNIA
                         list.Add(itemBindingPoint.Value);
                     }
                 }
@@ -999,35 +1027,6 @@ namespace MadWizard.Desomnia.Configuration.Binding
             catch (TargetInvocationException ex) // the constructor rejected the value
             {
                 throw new ConfigurationValueException(SR.Format(SR.Error_FailedBinding, text, section?.Path, constructor.DeclaringType!), ex.InnerException ?? ex);
-            }
-        }
-
-        // DESOMNIA: collection items without a name attribute keep their numeric provider index
-        // as configuration key. Synthesize "{SectionKey}#{index+1}" into an unset string "Name"
-        // property, so elements stay identifiable in logs and labels
-        // (replaces ExtendedXmlConfigurationSource.AddNamelessCollectionElement).
-        private static void SynthesizeItemName(object? item, IConfiguration parent, IConfigurationSection itemSection, BinderOptions options)
-        {
-            if (item is null || !int.TryParse(itemSection.Key, out int index))
-                return;
-
-            foreach (PropertyInfo property in GetAllProperties(item.GetType()))
-            {
-                if (property.Name.Equals(NamePropertyName, StringComparison.OrdinalIgnoreCase) &&
-                    property.PropertyType == typeof(string) &&
-                    property.SetMethod is MethodInfo setter &&
-                    (setter.IsPublic || options.BindNonPublicProperties) &&
-                    property.GetMethod?.GetParameters().Length is 0)
-                {
-                    if (property.GetValue(item) is not string name || string.IsNullOrEmpty(name))
-                    {
-                        string sectionName = (parent as IConfigurationSection)?.Key ?? item.GetType().Name;
-
-                        property.SetValue(item, $"{sectionName}#{index + 1}");
-                    }
-
-                    return;
-                }
             }
         }
 

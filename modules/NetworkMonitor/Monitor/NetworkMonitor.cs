@@ -1,16 +1,23 @@
-﻿using MadWizard.Desomnia.Events;
+﻿using Autofac.Features.Indexed;
+using MadWizard.Desomnia.Events;
+using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Manager;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Watch;
 using MadWizard.Desomnia.Power.Guard;
+using MadWizard.Desomnia.Ressource.Events;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
+using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 
 namespace MadWizard.Desomnia.Network
 {
     public class NetworkMonitor : ResourceMonitor<NetworkHostWatch>, IPowerTransitionGuard
     {
+        readonly IIndex<NetworkHost, NetworkHostWatch> _index;
+
         public required ILogger<NetworkMonitor> Logger { private get; init; }
 
         public required string Name { get; init; }
@@ -28,17 +35,17 @@ namespace MadWizard.Desomnia.Network
         [EventContext]
         public INetworkInterface Interface => Device.Interface;
 
-        public IOrderedCollection<INetworkService> Services { private get; init; } = [];
+        public IEnumerable<INetworkService> Services { private get; init; } = [];
 
         public event EventInvocation? Connected;
         public event EventInvocation? Disconnected;
 
-        public NetworkHostWatch? this[NetworkHost host] => this.FirstOrDefault(w => w.Host == host);
-
-        public bool IsWatchedBy<T>(EthernetPacket packet) where T : NetworkHostWatch
+        public NetworkMonitor()
         {
-            return this.OfType<T>().Any(w => w.Host.HasAddress(packet.FindTargetPhysicalAddress(), packet.FindTargetIPAddress()));
+            _index = new NetworkMonitorIndex(this);
         }
+
+        public NetworkHostWatch? this[NetworkHost host] => _index.TryGetValue(host, out var watch) ? watch : null;
 
         public override IEnumerable<UsageToken> Inspect(TimeSpan interval)
         {
@@ -62,7 +69,7 @@ namespace MadWizard.Desomnia.Network
         internal async Task StartMonitoring()
         {
             Device.StartCapture();
-            Device.EthernetCaptured += HandlePacket;
+            Device.PacketCaptured += HandlePacket;
 
             foreach (var service in Services)
                 await service.Startup();
@@ -156,12 +163,44 @@ namespace MadWizard.Desomnia.Network
                 }
             }
 
-            Device.EthernetCaptured -= HandlePacket;
+            Device.PacketCaptured -= HandlePacket;
             Device.StopCapture();
 
             Disconnected.TriggerEvent();
 
             Logger.LogDebug($"Monitoring of '{Name}' has been stopped.");
         }
+    }
+}
+
+file class NetworkMonitorIndex : IIndex<NetworkHost, NetworkHostWatch>
+{
+    private readonly ConcurrentDictionary<NetworkHost, NetworkHostWatch> _watchesByHost = [];
+
+    public NetworkMonitorIndex(NetworkMonitor monitor)
+    {
+        monitor.TrackingStarted += NetworkMonitor_TrackingStarted;
+        monitor.TrackingStopped += NetworkMonitor_TrackingStopped;
+    }
+
+    private void NetworkMonitor_TrackingStarted(object? sender, InspectableEventArgs<NetworkHostWatch> args)
+    {
+        _watchesByHost[args.Inspectable.Host] = args.Inspectable;
+    }
+
+    private void NetworkMonitor_TrackingStopped(object? sender, InspectableEventArgs<NetworkHostWatch> args)
+    {
+        if (_watchesByHost.TryGetValue(args.Inspectable.Host, out var current)
+            && ReferenceEquals(current, args.Inspectable))
+        {
+            _watchesByHost.TryRemove(args.Inspectable.Host, out _);
+        }
+    }
+
+    public NetworkHostWatch this[NetworkHost host] => _watchesByHost[host];
+
+    bool IIndex<NetworkHost, NetworkHostWatch>.TryGetValue(NetworkHost host, [MaybeNullWhen(false)] out NetworkHostWatch watch)
+    {
+        return _watchesByHost.TryGetValue(host, out watch);
     }
 }

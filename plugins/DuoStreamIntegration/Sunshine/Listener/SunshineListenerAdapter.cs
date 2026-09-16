@@ -1,41 +1,42 @@
-﻿using Autofac;
-using MadWizard.Desomnia.Service.Duo.Manager;
+﻿using MadWizard.Desomnia.Events;
+using MadWizard.Desomnia.Ressource.Events;
 using Microsoft.Extensions.Logging;
-using MadWizard.Desomnia.Events;
 
 namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
 {
-    internal class SunshineListenerAdapter(DuoManager manager) : IStartable, IDisposable
+    internal class SunshineListenerAdapter(DuoSessionMonitor monitor) : SunshineServiceAdapter, IDisposable
     {
         public required ILogger<SunshineListenerAdapter> Logger { get; set; }
 
         public required Func<SunshineService, SunshineListener> CreateSunshineListener { private get; init; }
 
-        void IStartable.Start()
+        internal void Attach()
         {
-            manager.Started += DuoService_Started;
-            manager.Stopped += DuoService_Stopped;
+            monitor.TrackingStarted += Monitor_TrackingStarted;
+            monitor.TrackingStopped += Monitor_TrackingStopped;
         }
 
-        private void DuoService_Started(object? sender, EventArgs e)
+        private void Monitor_TrackingStarted(object? sender, InspectableEventArgs<DuoInstance> args)
         {
-            foreach (var instance in manager)
+            var instance = args.Inspectable;
+
+            if (instance.Info.MinStreamTraffic != null)
+                throw new FormatException("Cannot monitor MinStreamTraffic while in Listener Mode.");
+
+            instance.Started += DuoInstance_Started;
+            instance.Stopped += DuoInstance_Stopped;
+
+            if (!instance.Settings.IsSandboxed)
             {
-                instance.Started += DuoInstance_Started;
-                instance.Stopped += DuoInstance_Stopped;
+                Logger.LogInformation($"Monitoring {instance}:{instance.Settings.Port}"
+                    + (instance.IsRunning == true ? " (running)" : "")  
+                    + " -> using listener");
 
-                if (!instance.IsSandboxed)
-                {
-                    Logger.LogInformation($"Monitoring {instance}:{instance.Port} -> using fallback");
-
-                    instance.StartTracking(CreateSunshineListener(instance.Service));
-                }
-                else
-                {
-                    Logger.LogWarning($"NOT Monitoring {instance}:{instance.Port} -> fallback is not available for sandboxed instances");
-
-                    continue;
-                }
+                RegisterWatch(instance, CreateSunshineListener(instance.Service));
+            }
+            else
+            {
+                Logger.LogWarning($"NOT Monitoring {instance}:{instance.Settings.Port} -> listener is not available for sandboxed instances");
             }
         }
 
@@ -44,34 +45,45 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
             var instance = (DuoInstance)@event.Source!;
 
             foreach (var listener in instance.OfType<SunshineListener>())
+            {
                 listener.StopWaiting();
+            }
         }
 
         private async Task DuoInstance_Stopped(Event @event)
         {
             var instance = (DuoInstance)@event.Source!;
 
-            foreach (var listener in instance.OfType<SunshineListener>())
+            foreach (var listener in instance.OfType<SunshineListener>().Where(i => !i.Service.IsWaitingForClient))
+            {
                 listener.WaitForClient();
+            }
         }
 
-        private void DuoService_Stopped(object? sender, EventArgs e)
+        private void Monitor_TrackingStopped(object? sender, InspectableEventArgs<DuoInstance> args)
         {
-            foreach (var instance in manager)
-            {
-                foreach (var listener in instance.OfType<SunshineListener>())
-                {
-                    instance.StopTracking(listener);
+            var instance = args.Inspectable;
 
-                    listener.Dispose();
-                }
+            instance.Started -= DuoInstance_Started;
+            instance.Stopped -= DuoInstance_Stopped;
+
+            foreach (var listener in instance.OfType<SunshineListener>())
+            {
+                UnregisterWatch(instance, listener);
+
+                listener.Dispose();
             }
+        }
+
+        private void Detach()
+        {
+            monitor.TrackingStarted -= Monitor_TrackingStarted;
+            monitor.TrackingStopped -= Monitor_TrackingStopped;
         }
 
         void IDisposable.Dispose()
         {
-            manager.Started -= DuoService_Started;
-            manager.Stopped -= DuoService_Stopped;
+            Detach();
         }
     }
 }

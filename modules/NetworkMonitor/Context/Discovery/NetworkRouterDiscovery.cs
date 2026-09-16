@@ -14,13 +14,13 @@ namespace MadWizard.Desomnia.Network.Context
         private static void RegisterRouterDiscovery(ContainerBuilder builder, NetworkMonitorConfig config)
         {
             // Router/Options-Discovery
-            builder.RegisterType<DefaultGatewayDetector>().WithOrder(1)
+            builder.RegisterType<DefaultGatewayDetector>().WithPriority(1)
                 .WithParameter(TypedParameter.From(config.AutoDetect))
                 .WithParameter(TypedParameter.From(config.MakeAutoDiscoveryOptions()))
                 .AsImplementedInterfaces()
                 .SingleInstance()
                 .AsSelf();
-            builder.RegisterType<RouterAdvertismentDetector>().WithOrder(2)
+            builder.RegisterType<RouterAdvertismentDetector>().WithPriority(2)
                 .WithParameter(TypedParameter.From(config.AutoDetect))
                 .WithParameter(TypedParameter.From(config.MakeAutoDiscoveryOptions()))
                 .AsImplementedInterfaces()
@@ -66,18 +66,16 @@ namespace MadWizard.Desomnia.Network.Context
         {
             Logger.LogDebug("Discovering routers...");
 
-            // register static routers from the configuration — always
             foreach (var configRouter in Config.Router)
             {
                 await CreateRouter<NetworkRouterContext>(configRouter);
             }
 
-            var discoveries = Scope.Resolve<IOrderedCollection<IRouterDiscovery>>();
+            var discoveries = Scope.Resolve<IEnumerable<IRouterDiscovery>>();
 
-            // let discoverers create their statically-configured routers — always
             foreach (var discovery in discoveries)
             {
-                await discovery.ConfigureRouters(Network);
+                await discovery.ConfigureRouters(this);
             }
 
             // active router lookup (default gateway, NDP advertisements, DNS-SD) — only on opt-in
@@ -85,7 +83,7 @@ namespace MadWizard.Desomnia.Network.Context
             {
                 foreach (var discovery in discoveries)
                 {
-                    await discovery.DiscoverRouters(Network);
+                    await discovery.DiscoverRouters(this);
                 }
             }
         }

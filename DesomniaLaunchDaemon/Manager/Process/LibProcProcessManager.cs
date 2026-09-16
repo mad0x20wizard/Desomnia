@@ -1,4 +1,6 @@
-﻿using MadWizard.Desomnia.LaunchDaemon.Native;
+using MadWizard.Desomnia.LaunchDaemon.Configuration;
+using MadWizard.Desomnia.LaunchDaemon.Native;
+using MadWizard.Desomnia.Processes.Manager.Metrics;
 using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia.Processes.Manager
@@ -14,15 +16,59 @@ namespace MadWizard.Desomnia.Processes.Manager
     /// calls — which is also where the parent comes from, the thing the BCL has no cross-platform
     /// way to report, and therefore why <c>watchChildren</c> works on this platform at all.
     /// </summary>
-    internal sealed class LibProcProcessManager : PollingProcessManager
+    internal sealed class LibProcProcessManager : PollingProcessManager, IProcessMetricSupport
     {
         private KQueueProcessExitWatcher? _watcher;
+        private bool _reportedGraphicsMeasurement;
+        private readonly GraphicsMeasurementMode _configuredGraphics;
+        private readonly GraphicsMeasurementMethod _graphicsMeasurement;
 
-        public LibProcProcessManager(TimeSpan interval) : base(interval)
+        public ProcessMetric SupportedMetrics =>
+            ProcessMetric.Processor | ProcessMetric.Storage |
+            (_graphicsMeasurement == GraphicsMeasurementMethod.None ? ProcessMetric.None : ProcessMetric.Graphics);
+
+        public ProcessMetric SharedMetrics =>
+            _graphicsMeasurement == GraphicsMeasurementMethod.Coalition ? ProcessMetric.Graphics : ProcessMetric.None;
+
+        public LibProcProcessManager(
+            TimeSpan interval,
+            GraphicsMeasurementMode configuredGraphics,
+            GraphicsMeasurementMethod graphicsMeasurement) : base(interval)
         {
-            // the same bargain the Windows ETW manager strikes: the kernel is only asked to report
+            _configuredGraphics = configuredGraphics;
+            _graphicsMeasurement = graphicsMeasurement;
+
+            // the kernel is only asked to report
             // anything while somebody is actually listening for it
             ListenerCountChanged += (sender, count) => ConfigureWatcher();
+        }
+
+        public override Task StartAsync(CancellationToken cancellationToken)
+        {
+            ReportGraphicsMeasurement();
+
+            return base.StartAsync(cancellationToken);
+        }
+
+        private void ReportGraphicsMeasurement()
+        {
+            if (_reportedGraphicsMeasurement)
+                return;
+
+            _reportedGraphicsMeasurement = true;
+
+            if (_graphicsMeasurement == GraphicsMeasurementMethod.None)
+            {
+                Logger.LogWarning("GPU measurement mode {configured} is unavailable; process GPU metrics are not supported", _configuredGraphics);
+            }
+            else if (_configuredGraphics == GraphicsMeasurementMode.Automatic)
+            {
+                Logger.LogInformation("GPU measurement automatically selected {measurement}", _graphicsMeasurement);
+            }
+            else
+            {
+                Logger.LogInformation("GPU measurement selected {measurement}", _graphicsMeasurement);
+            }
         }
 
         private void ConfigureWatcher()
@@ -53,10 +99,11 @@ namespace MadWizard.Desomnia.Processes.Manager
                 }
 
                 // catch up on everything already tracked (the enumeration guard sees this lock and
-                // will not start a refresh underneath us)
-                foreach (var process in this.OfType<LibProcProcess>())
+                // will not start a refresh underneath us); roster entries may carry a decoration
+                // around the platform's process, so the concrete layer is unwrapped here
+                foreach (var process in this)
                 {
-                    WatchForExit(process);
+                    WatchForExit(process.Layer<LibProcProcess>());
                 }
             }
         }
@@ -83,19 +130,9 @@ namespace MadWizard.Desomnia.Processes.Manager
             };
         }
 
-        // Created here rather than through the container: a process is a value the manager already
-        // holds every ingredient for, and resolving one per pid would put the container on the path
-        // of a startup that materialises several hundred of them.
-        protected override IProcess CreateProcess(ProcessInformation entry, IProcess? parent)
-        {
-            var process = new LibProcProcess(entry, parent);
-
-            WatchForExit(process);
-
-            return process;
-        }
-
-        private void WatchForExit(LibProcProcess process)
+        // internal for the creation middleware, which reports what it just activated – always the
+        // concrete process, because the middleware runs before any decoration wraps it
+        internal void WatchForExit(LibProcProcess process)
         {
             if (_watcher is KQueueProcessExitWatcher watcher)
             {
@@ -109,28 +146,6 @@ namespace MadWizard.Desomnia.Processes.Manager
             _watcher = null;
 
             base.Dispose();
-        }
-
-        /// <summary>
-        /// Answers from libproc everything the monitor asks per cycle — the executable path a
-        /// path-shaped pattern is matched against, and whether the process is still there. Only
-        /// sampling processor time (under a configured <c>minCPU</c>) and stopping a process on
-        /// demand still reach for the BCL object the base creates lazily, and neither happens
-        /// unless the configuration asked for it.
-        /// </summary>
-        private sealed class LibProcProcess(ProcessInformation info, IProcess? parent) : ProcessHandle(info, parent)
-        {
-            public override string? ImagePath => LibProc.GetProcessPath(Id);
-
-            public override bool HasStopped => LibProc.GetProcessInfo(Id) == null;
-
-            // SIGTERM is the only "please stop" this platform offers a daemon; a process that has
-            // installed a handler unwinds, one that has not dies where SIGKILL would have killed it
-            // anyway – so it costs nothing to ask.
-            protected override bool RequestStop() => Signals.TrySend(Id, Signals.SIGTERM, out int error);
-
-            /// <summary>The kernel says it has ended; the manager is listening for exactly this.</summary>
-            internal new void TriggerStop() => base.TriggerStop();
         }
     }
 }

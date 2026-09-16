@@ -1,5 +1,7 @@
 using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Configuration.Binding;
+using MadWizard.Desomnia.Configuration.Model;
+using MadWizard.Desomnia.Configuration.Xml;
 using NLog;
 using System.Xml.Linq;
 
@@ -20,9 +22,9 @@ namespace MadWizard.Desomnia.Environments
         internal const string SYSTEM_MONITOR_ELEMENT = "SystemMonitor";
 
         internal const string NAME_ATTRIBUTE = "name";
-        internal const string VERSION_ATTRIBUTE = "version";
         internal const string DEBOUNCE_ATTRIBUTE = "debounce";
-        internal const string OUTPUT_EFFECTIVE_XML_ATTRIBUTE = "outputEffectiveXML";
+        internal const string WRITE_EFFECTIVE_XML_ATTRIBUTE = "writeEffectiveXML";
+        internal const string WRITE_EFFECTIVE_CONFIGURATION_ATTRIBUTE = "writeEffectiveConfiguration";
         internal const string ONCONFLICT_ATTRIBUTE = "onConflict";
         internal const string ONLY_IF_ATTRIBUTE = "onlyIf";
         internal const string ONLY_IF_NOT_ATTRIBUTE = "onlyIfNot";
@@ -35,8 +37,8 @@ namespace MadWizard.Desomnia.Environments
         static readonly string[] RESERVED_NAMES = ["always", "never", "else"];
 
         /// <summary>The parsed root attributes and environment blocks of an &lt;EnvironmentMonitor&gt; document.</summary>
-        internal sealed record Result(string Version, TimeSpan Debounce, string? OutputEffectiveXML,
-            ConflictResolution OnConflict, IReadOnlyList<EnvironmentBlock> Blocks);
+        internal sealed record Result(TimeSpan Debounce, string? WriteEffectiveXML,
+            string? WriteEffectiveConfiguration, ConflictResolution OnConflict, IReadOnlyList<EnvironmentBlock> Blocks);
 
         public static Result Parse(XDocument document)
         {
@@ -45,10 +47,7 @@ namespace MadWizard.Desomnia.Environments
             if (root.Descendants().Any(element => Is(element, ROOT_ELEMENT)))
                 throw new ConfigurationValueException($"<{ROOT_ELEMENT}> must not be nested.");
 
-            (string? version, TimeSpan debounce, string? outputEffectiveXML, ConflictResolution onConflict) = ParseRootAttributes(root);
-
-            if (version is null)
-                throw new ConfigurationValueException($"<{ROOT_ELEMENT}> requires a '{VERSION_ATTRIBUTE}' attribute.");
+            (TimeSpan debounce, var outputs, ConflictResolution onConflict) = ParseRootAttributes(root);
 
             List<EnvironmentBlock> blocks = [];
 
@@ -82,35 +81,44 @@ namespace MadWizard.Desomnia.Environments
 
             ValidateReferences(blocks);
 
-            return new Result(version, debounce, outputEffectiveXML, onConflict, blocks);
+            return new Result(debounce, outputs.EffectiveXML, outputs.EffectiveConfiguration, onConflict, blocks);
         }
 
-        private static (string? Version, TimeSpan Debounce, string? OutputEffectiveXML, ConflictResolution OnConflict) ParseRootAttributes(XElement root)
+        private static (TimeSpan Debounce, (string? EffectiveXML, string? EffectiveConfiguration) Outputs, ConflictResolution OnConflict) ParseRootAttributes(XElement root)
         {
-            string? version = null;
             TimeSpan debounce = DEFAULT_DEBOUNCE;
-            string? outputEffectiveXML = null;
+            string? writeEffectiveXML = null;
+            string? writeEffectiveConfiguration = null;
             ConflictResolution onConflict = ConflictResolution.Last;
 
             foreach (var attribute in root.Attributes())
             {
+                if (attribute.IsNamespaceDeclaration)
+                    continue; // structural: declares a condition namespace (e.g. xmlns:env)
+
                 var name = attribute.Name.LocalName;
 
-                if (name.Equals(VERSION_ATTRIBUTE, StringComparison.OrdinalIgnoreCase))
-                {
-                    version = attribute.Value;
-                }
-                else if (name.Equals(DEBOUNCE_ATTRIBUTE, StringComparison.OrdinalIgnoreCase))
+                if (name.Equals(DEBOUNCE_ATTRIBUTE, StringComparison.OrdinalIgnoreCase))
                 {
                     var normalized = ValueVariations.NormalizeTimeSpan(attribute.Value);
 
                     if (!TimeSpan.TryParse(normalized, out debounce) || debounce < TimeSpan.Zero)
                         throw new ConfigurationValueException($"Invalid {DEBOUNCE_ATTRIBUTE} = {attribute.Value}");
                 }
-                else if (name.Equals(OUTPUT_EFFECTIVE_XML_ATTRIBUTE, StringComparison.OrdinalIgnoreCase))
+                else if (name.Equals(WRITE_EFFECTIVE_XML_ATTRIBUTE, StringComparison.OrdinalIgnoreCase))
                 {
                     if (!string.IsNullOrWhiteSpace(attribute.Value))
-                        outputEffectiveXML = attribute.Value;
+                        writeEffectiveXML = attribute.Value;
+                }
+                else if (name.Equals(WRITE_EFFECTIVE_CONFIGURATION_ATTRIBUTE, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!string.IsNullOrWhiteSpace(attribute.Value))
+                        writeEffectiveConfiguration = attribute.Value;
+                }
+                else if (name.Equals(XConfigVersion.VERSION_ATTRIBUTE, StringComparison.OrdinalIgnoreCase))
+                {
+                    // the file's format declaration (see XConfigVersion) - validated by the
+                    // reader and checked by the version check, not this parser's business
                 }
                 else if (name.Equals(ONCONFLICT_ATTRIBUTE, StringComparison.OrdinalIgnoreCase))
                 {
@@ -130,7 +138,7 @@ namespace MadWizard.Desomnia.Environments
                 }
             }
 
-            return (version, debounce, outputEffectiveXML, onConflict);
+            return (debounce, (writeEffectiveXML, writeEffectiveConfiguration), onConflict);
         }
 
         private static EnvironmentBlock ParseDefaultEnvironment(XElement element)
@@ -142,6 +150,16 @@ namespace MadWizard.Desomnia.Environments
 
             foreach (var attribute in element.Attributes())
             {
+                if (attribute.IsNamespaceDeclaration)
+                    continue; // structural: declares a condition namespace (e.g. xmlns:env)
+
+                if (attribute.Name.NamespaceName.Length > 0)
+                {
+                    // a namespaced attribute is always a condition - which the default must not have
+                    throw new ConfigurationValueException($"<{DEFAULT_ENVIRONMENT_ELEMENT}> must not have " +
+                        $"a '{DescribeAttribute(element, attribute)}' attribute.");
+                }
+
                 if (attribute.Name.LocalName.Equals(ONLY_IF_ATTRIBUTE, StringComparison.OrdinalIgnoreCase))
                 {
                     (mode, onlyIf) = ParseOnlyIf(attribute.Value, DEFAULT_ENVIRONMENT_ELEMENT, allowElse: true);
@@ -181,11 +199,22 @@ namespace MadWizard.Desomnia.Environments
             int priority = 0;
             string? onlyIf = null;
             string? onlyIfNot = null;
-            List<(string Name, string Value)> conditions = [];
+            List<ConditionAttribute> conditions = [];
 
             foreach (var attribute in element.Attributes())
             {
-                if (attribute.Name.LocalName.Equals(NAME_ATTRIBUTE, StringComparison.OrdinalIgnoreCase))
+                if (attribute.IsNamespaceDeclaration)
+                    continue; // structural: declares a condition namespace (e.g. xmlns:env)
+
+                if (attribute.Name.NamespaceName is { Length: > 0 } ns)
+                {
+                    // a namespaced attribute is always a condition, resolved through the
+                    // IEnvironmentConditionProvider registered for the namespace URI - even
+                    // when its local name collides with a structural attribute (env:name)
+                    conditions.Add(new ConditionAttribute(ns, attribute.Name.LocalName, attribute.Value,
+                        DescribeAttribute(element, attribute)));
+                }
+                else if (attribute.Name.LocalName.Equals(NAME_ATTRIBUTE, StringComparison.OrdinalIgnoreCase))
                     name = ParseName(attribute.Value);
                 else if (attribute.Name.LocalName.Equals(ONLY_IF_ATTRIBUTE, StringComparison.OrdinalIgnoreCase))
                     (mode, onlyIf) = ParseOnlyIf(attribute.Value, ENVIRONMENT_ELEMENT, allowElse: false);
@@ -194,7 +223,8 @@ namespace MadWizard.Desomnia.Environments
                 else if (attribute.Name.LocalName.Equals(PRIORITY_ATTRIBUTE, StringComparison.OrdinalIgnoreCase))
                     priority = ParsePriority(attribute.Value);
                 else
-                    conditions.Add((attribute.Name.LocalName, attribute.Value));
+                    conditions.Add(new ConditionAttribute(null, attribute.Name.LocalName, attribute.Value,
+                        attribute.Name.LocalName));
             }
 
             var displayName = name ?? DescribeConditions(conditions) ?? $"anonymous #{++anonymous}";
@@ -217,10 +247,17 @@ namespace MadWizard.Desomnia.Environments
         /// <c>lid="closed" power="ac"</c>. Returns null when the block declares none,
         /// leaving it to the "anonymous #N" fallback.
         /// </summary>
-        private static string? DescribeConditions(IReadOnlyList<(string Name, string Value)> conditions)
+        private static string? DescribeConditions(IReadOnlyList<ConditionAttribute> conditions)
             => conditions.Count > 0
-                ? string.Join(' ', conditions.Select(condition => $"{condition.Name}=\"{condition.Value}\""))
+                ? string.Join(' ', conditions.Select(condition => $"{condition.DisplayName}=\"{condition.Value}\""))
                 : null;
+
+        /// <summary>The attribute as written ("env:USER"), reconstructing the prefix from the
+        /// namespace declaration in scope.</summary>
+        private static string DescribeAttribute(XElement element, XAttribute attribute)
+            => element.GetPrefixOfNamespace(attribute.Name.Namespace) is { Length: > 0 } prefix
+                ? $"{prefix}:{attribute.Name.LocalName}"
+                : attribute.Name.LocalName;
 
         /// <summary>
         /// Parses the onlyIf attribute. The keywords "always"/"never"/"else" select a
@@ -345,18 +382,20 @@ namespace MadWizard.Desomnia.Environments
         }
 
         /// <summary>
-        /// Returns the block's content as a detached &lt;SystemMonitor&gt; container.
-        /// Since &lt;SystemMonitor&gt; is the formal configuration root, it may be omitted
-        /// below the block and is then added transparently, without any attributes.
+        /// Returns the block's content as a detached, abstract &lt;SystemMonitor&gt; container
+        /// (see <see cref="ConfigNode"/> — everything past the parser is independent of the
+        /// XML representation). Since &lt;SystemMonitor&gt; is the formal configuration root,
+        /// it may be omitted below the block and is then added transparently, without any
+        /// attributes.
         /// </summary>
-        private static XElement NormalizeContent(XElement block, string displayName)
+        private static ConfigNode NormalizeContent(XElement block, string displayName)
         {
             if (block.Nodes().OfType<XText>().Any(text => !string.IsNullOrWhiteSpace(text.Value)))
                 throw new ConfigurationValueException($"Environment '{displayName}' must not contain text content.");
 
             var elements = block.Elements().ToList();
 
-            XElement content;
+            ConfigNode content;
 
             if (elements.Any(element => Is(element, SYSTEM_MONITOR_ELEMENT)))
             {
@@ -364,19 +403,14 @@ namespace MadWizard.Desomnia.Environments
                     throw new ConfigurationValueException($"Environment '{displayName}': " +
                         $"when <{SYSTEM_MONITOR_ELEMENT}> is used, it must be the only child element.");
 
-                content = new XElement(elements[0]);
+                content = XmlConfigurationReader.ToConfigNode(elements[0]);
             }
             else
             {
-                content = new XElement(SYSTEM_MONITOR_ELEMENT, elements.Select(element => new XElement(element)));
-            }
+                content = new ConfigNode(SYSTEM_MONITOR_ELEMENT, ConfigNodeKind.Element);
 
-            // the version attribute always lives on the configuration root, where the merger stamps it
-            if (content.Attributes().FirstOrDefault(a => a.Name.LocalName.Equals(VERSION_ATTRIBUTE, StringComparison.OrdinalIgnoreCase)) is XAttribute version)
-            {
-                Logger.Warn($"Environment '{displayName}': ignoring '{VERSION_ATTRIBUTE}' attribute; it belongs on the <{ROOT_ELEMENT}> root.");
-
-                version.Remove();
+                foreach (var element in elements)
+                    content.Children.Add(XmlConfigurationReader.ToConfigNode(element));
             }
 
             return content;

@@ -9,4 +9,5 @@ For each process group, you can set a cumulative CPU threshold so that it counts
 ``10min``
     When a number is configured with a time unit, it is compared to the absolute processing time since the last timeout. If multiple cores are used, the processing time can exceed the elapsed clock time by a factor equal to the number of installed cores. You can use the usual format for durations.
 
-If you do not configure this, every matching process will be counted as activity. In this case, the onIdle event will not be triggered.
+Use the ``watch`` expression to combine this result with other configured metrics. With no
+thresholds, the default catch-all expression counts every matching process as activity.

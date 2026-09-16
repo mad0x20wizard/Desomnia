@@ -14,9 +14,11 @@ namespace MadWizard.Desomnia.Session.Manager
 
         public required Func<uint, Owned<TerminalServicesSession>> ConfigureSession { private get; init; }
 
-        // the service is persistent now and outlives this manager, so the subscription must be
-        // released when a rebuild disposes this instance (see Dispose)
         private readonly WindowsService _service;
+
+        private Dictionary<uint, Owned<TerminalServicesSession>>? _sessions;
+
+        private bool _disposed;
 
         public TerminalServicesManager(WindowsService service)
         {
@@ -29,15 +31,17 @@ namespace MadWizard.Desomnia.Session.Manager
         {
             get
             {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+
                 var ids = EnumerateSessionIDs();
 
-                if (field == null)
+                if (_sessions == null)
                 {
-                    field = ids.Select(MaybeConfigureSession).Where(s => s != null).Select(s => s!).ToDictionary(s => s.Value.Id);
+                    _sessions = ids.Select(MaybeConfigureSession).OfType<Owned<TerminalServicesSession>>().ToDictionary(s => s.Value.Id);
 
                     Logger.LogDebug($"Enumerating existing user sessions:");
 
-                    foreach (var owned in field.Values)
+                    foreach (var owned in _sessions.Values)
                     {
                         Logger.LogDebug($"{owned.Value}");
                     }
@@ -51,9 +55,9 @@ namespace MadWizard.Desomnia.Session.Manager
                     /// This produces Win32Exceptions throughout the program.
                     /// To prevent this from happening, we try to remove 
                     /// these sessions eagerly here.
-                    foreach (var missing in field.Keys.Except(ids).ToArray())
+                    foreach (var missing in _sessions.Keys.Except(ids).ToArray())
                     {
-                        if (field.Remove(missing, out var scope))
+                        if (_sessions.Remove(missing, out var scope))
                         {
                             Logger.LogWarning("WTSSession[id={ID}, name=?, state=Unknown] -> gone", missing);
 
@@ -62,7 +66,7 @@ namespace MadWizard.Desomnia.Session.Manager
                     }
                 }
 
-                return field;
+                return _sessions;
             }
         }
 
@@ -202,11 +206,21 @@ namespace MadWizard.Desomnia.Session.Manager
 
         public virtual void Dispose()
         {
-            _service.SessionChanged -= Service_SessionChanged;
-
-            foreach (var session in Sessions.Values)
+            if (!_disposed)
             {
-                session.Dispose();
+                _disposed = true;
+
+                _service.SessionChanged -= Service_SessionChanged;
+
+                if (_sessions is not null)
+                {
+                    foreach (var session in _sessions.Values)
+                    {
+                        session.Dispose();
+                    }
+
+                    _sessions = null;
+                }
             }
         }
     }

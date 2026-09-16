@@ -9,7 +9,7 @@
 
   Add static hosts, routers or a Wake-on-LAN client role below to tailor it to your network.
 -->
-<SystemMonitor version="1">
+<SystemMonitor version="2">
 
     <NetworkMonitor watchMode="promiscuous" autoDetect="MAC|IP|Router|Host|Service" autoRefresh="1h">
 

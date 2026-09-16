@@ -1,7 +1,7 @@
-﻿using MadWizard.Desomnia.Configuration;
-using MadWizard.Desomnia.Pipe.Config;
+﻿using MadWizard.Desomnia.Pipe.Config;
 using MadWizard.Desomnia.Pipe.Messages;
 using MadWizard.Desomnia.Service.Bridge.Minion;
+using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
 
 namespace MadWizard.Desomnia.Service.Bridge
@@ -39,10 +39,10 @@ namespace MadWizard.Desomnia.Service.Bridge
             Minion = null;
         }
 
-        internal SessionMatcher SessionControl { get; set; } = SessionMatcher.None;
+        internal SessionSelector SessionControl { get; set; } = SessionSelector.None;
         internal bool PowerControl { get; set; } = false;
 
-        public override DateTime? LastInputTime { get => _lastInputTime ?? base.LastInputTime; }
+        //public override DateTime? LastInputTime { get => _lastInputTime ?? base.LastInputTime; }
 
         public override async Task Lock()
         {

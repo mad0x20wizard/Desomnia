@@ -347,7 +347,7 @@ namespace MadWizard.Desomnia.Tests.Engine
             var resource = new PlainResource { Tokens = [new TestToken()] };   // manual, unattached
             monitor.StartTracking(resource);
 
-            ((IEventSystem)resource)["Demand"].AddAction(Actions.Named("root-only"));
+            ((IEventSystem)resource)["Usage"].AddAction(Actions.Named("root-only"));
             resource.Inspect(TimeSpan.Zero);
 
             Assert.Equal(["root"], log);
@@ -597,7 +597,7 @@ namespace MadWizard.Desomnia.Tests.Engine
             var monitor = new UrlMonitor(log);
             monitor.StartTracking(resource);
 
-            ((IEventSystem)resource)["Demand"].AddAction(new URLEventAction(new Uri("test://via/parent")));
+            ((IEventSystem)resource)["Usage"].AddAction(new URLEventAction(new Uri("test://via/parent")));
             resource.Inspect(TimeSpan.Zero);
 
             await Wait.Until(() => log.Count == 1);
@@ -684,7 +684,7 @@ namespace MadWizard.Desomnia.Tests.Engine
             first.StartTracking(resource);
             second.StartTracking(resource);
 
-            ((IEventSystem)resource)["Demand"].AddAction(Actions.Named("claim"));
+            ((IEventSystem)resource)["Usage"].AddAction(Actions.Named("claim"));
             resource.Inspect(TimeSpan.Zero);
 
             Assert.Equal(["first"], log);

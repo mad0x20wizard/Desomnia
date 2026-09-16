@@ -157,22 +157,39 @@ namespace MadWizard.Desomnia.Session.Manager
                 startup.WorkingDirectory.NullIfWhiteSpace(),    // name of current directory 
                 si,                                             // pointer to STARTUPINFO structure
                 out PROCESS_INFORMATION pi                      // receives PROCESS_INFORMATION
-            )) throw new Win32Exception();
+            ))
+            {
+                // Capture the launch error before releasing handles changes the last error.
+                var error = new Win32Exception();
+
+                if (hRead != 0) CloseHandle(hRead);
+                if (hWrite != 0) CloseHandle(hWrite);
+
+                // Translate only failures from process creation, not token or pipe setup.
+                if (error.NativeErrorCode is 2 or 3) // ERROR_FILE_NOT_FOUND / ERROR_PATH_NOT_FOUND
+                    throw new FileNotFoundException($"Could not start '{startup.FileName}': {error.Message}", startup.FileName, error);
+
+                throw error;
+            }
 
             CloseHandle(pi.hProcess);
             CloseHandle(pi.hThread);
 
-            var process = Manager[(int)pi.dwProcessId];
-
-            if (startup.RedirectStandardOutput)
+            if (Manager.TryFindProcess((int)pi.dwProcessId, out var process, true))
             {
-                CloseHandle(hWrite); // Close write handle in this process
+                if (startup.RedirectStandardOutput)
+                {
+                    CloseHandle(hWrite); // Close write handle in this process
 
-                // the pipe is handed to the BCL object itself, which only the BCL-backed process has
-                ((ProcessHandle)process).Native.AddStandardOutput(new StreamReader(new FileStream(new SafeFileHandle(hRead, true), FileAccess.Read)));
+                    // the pipe is handed to the BCL object itself, which only the BCL-backed
+                    // process has – and which may sit beneath a metric decoration in the roster
+                    process.Native.AddStandardOutput(new StreamReader(new FileStream(new SafeFileHandle(hRead, true), FileAccess.Read)));
+                }
+
+                return process;
             }
 
-            return process;
+            throw new ProcessNotFoundException((int)pi.dwProcessId); // launched, and gone before it could be adopted
         }
 
         #region Windows-API

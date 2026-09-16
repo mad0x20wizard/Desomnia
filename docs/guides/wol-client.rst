@@ -29,7 +29,7 @@ The following configuration tells Desomnia to watch your network and send a Magi
 .. code:: xml
 
    <?xml version="1.0" encoding="UTF-8"?>
-   <SystemMonitor version="1">
+   <SystemMonitor version="2">
 
      <NetworkMonitor>
        <RemoteHost name="server" MAC="00:1A:2B:3C:4D:5E" IPv4="192.168.1.10" />

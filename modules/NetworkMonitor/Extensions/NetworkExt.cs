@@ -50,6 +50,21 @@ namespace MadWizard.Desomnia.Network
             return null;
         }
 
+        public static string ToHostTypeString(this NetworkHost host)
+        {
+            switch (host)
+            {
+                case LocalHost:
+                    return "local host";
+                case NetworkRouter:
+                    return "router";
+                case VirtualNetworkHost:
+                    return "virtual host";
+                default:
+                    return "host";
+            }
+        }
+
         public static bool IsInLocalRange(this NetworkHost host)
         {
             return host.IPAddresses.Any(host.Network.LocalRange.Contains);

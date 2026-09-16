@@ -1,9 +1,11 @@
 using Autofac;
 using MadWizard.Desomnia;
-using MadWizard.Desomnia.Service.Windows;
-using Microsoft.Extensions.Hosting;
+using MadWizard.Desomnia.Application;
+using MadWizard.Desomnia.Service;
 using System.Diagnostics;
 using System.Reflection;
+
+//MadWizard.Desomnia.Test.Debugger.UntilAttached().Wait();
 
 if (!Environment.IsPrivilegedProcess)
     throw new NotSupportedException("The application must be run with elevated privileges.");
@@ -14,10 +16,7 @@ DesomniaWindowsBuilder builder;
 
 if (Environment.IsWindowsService)
 {
-    builder = new DesomniaWindowsServiceBuilder()
-    {
-        AutoReload = true // reload configuration on change
-    };
+    builder = new DesomniaWindowsServiceBuilder();
 
     builder.RegisterModule<WindowsServiceModule>();
 }
@@ -41,7 +40,10 @@ try
 
     builder.RegisterPluginModules();
 
-    builder.Build().Run();
+    using (var host = builder.Build())
+    {
+        host.Run();
+    }
 
     return Environment.ExitCode;
 }
@@ -63,12 +65,8 @@ catch (Exception ex)
 
     throw;
 }
-finally
-{
-    builder.Dispose();
-}
 
-class DesomniaWindowsBuilder(params string[] args) : MadWizard.Desomnia.ApplicationBuilder(args)
+class DesomniaWindowsBuilder(params string[] args) : SystemApplicationBuilder(args)
 {
 
 }
@@ -88,6 +86,8 @@ class DesomniaWindowsServiceBuilder : DesomniaWindowsBuilder
     internal DesomniaWindowsServiceBuilder() : base()
     {
         Directory.SetCurrentDirectory(ProgramDataDir);
+
+        Source.ReloadOnChange = true;
 
         CreateEventLog();
     }

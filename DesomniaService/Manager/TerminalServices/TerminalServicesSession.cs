@@ -1,5 +1,4 @@
-﻿using MadWizard.Desomnia.Processes.Manager;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 
@@ -54,12 +53,12 @@ namespace MadWizard.Desomnia.Session.Manager
             {
                 if (Path.Combine(Path.GetDirectoryName(Environment.ProcessPath!)!, "DesomniaServiceHelper.exe") is string helper)
                 {
-                    using var process = ((ProcessHandle)LaunchProcess(new(helper, "read LastInputTime")
+                    using var process = LaunchProcess(new(helper, "read LastInputTime")
                     {
                         UseShellExecute = false,
                         RedirectStandardOutput = true,
                         CreateNoWindow = true
-                    })).Native; // reading redirected output needs the BCL object itself
+                    }).Native; // reading redirected output needs the BCL object itself
 
                     using (process.StandardOutput)
                     {

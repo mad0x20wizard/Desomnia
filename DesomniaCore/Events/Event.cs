@@ -13,6 +13,13 @@
         /// </summary>
         public EventMetaObject? Source { get; set; }
 
+        // Parallel actions can share an event, but must keep their parent paths separate.
+        private readonly AsyncLocal<Stack<EventMetaObject>> _parentContext = new();
+
+        internal Stack<EventMetaObject> ParentContext
+        {
+            get => _parentContext.Value ??= [];
+        }
 
         public IEnumerable<object> Context
         {
@@ -27,7 +34,7 @@
                 lock (_contexts)                  // timer thread while a multi-owner re-trigger adds
                     snapshot = [.. _contexts];    // contexts concurrently
 
-                foreach (var context in snapshot)
+                foreach (var context in snapshot.Concat(ParentContext))
                 {
                     yield return context;
                 }

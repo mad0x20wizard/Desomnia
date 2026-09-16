@@ -86,7 +86,7 @@ namespace MadWizard.Desomnia.Power.Manager
         /// subscriber as well as by the hosted-service start — the environment conditions
         /// subscribe while the persistent host is still being built, before that start.
         /// </summary>
-        public event EventHandler? PowerSourceChanged
+        public event EventHandler? SourceChanged
         {
             add
             {

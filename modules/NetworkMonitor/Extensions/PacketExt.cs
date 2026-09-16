@@ -413,6 +413,19 @@ namespace PacketDotNet
         }
     }
 
+    internal static class TransportPacketExt
+    {
+        extension (TransportPacket transport)
+        {
+            public int PayloadLength => transport switch
+            {
+                { HasPayloadData: true } => transport.PayloadDataSegment.Length,
+                { PayloadPacket: not null } => transport.PayloadPacket.TotalPacketLength,
+                _ => 0
+            };
+        }
+    }
+
     internal static class WakeOnLanPacketExt
     {
         public static WakeOnLanPacket WithPassword(this WakeOnLanPacket wol, byte[] password)

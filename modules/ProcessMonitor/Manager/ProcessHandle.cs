@@ -1,5 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics;
+using System.Reactive.Disposables;
+using System.Reactive.Disposables.Fluent;
 
 namespace MadWizard.Desomnia.Processes.Manager
 {
@@ -13,8 +15,14 @@ namespace MadWizard.Desomnia.Processes.Manager
      * thread of every one of them. A platform that can do better overrides the members it has a
      * cheaper answer for, and every one of them is written to be answerable lazily.
      */
-    public class ProcessHandle(ProcessInformation info, IProcess? parent = null) : IProcess
+    public class ProcessHandle(ProcessInformation info) : IProcess
     {
+        protected readonly CompositeDisposable _heldResources = [];
+
+        /// <summary>Settled by TriggerStop before the wait is torn down – written before StopWatching
+        /// takes the gate, so whoever finds the signal gone under it finds this set.</summary>
+        protected bool _stopped;
+
         /// <summary>
         /// The BCL process object, created once and kept – callers write state into this very
         /// instance (redirected output handles) and read it back through a later access.
@@ -24,7 +32,10 @@ namespace MadWizard.Desomnia.Processes.Manager
             get
             {   try
                 {
-                    return field ??= Process.GetProcessById(info.Id);
+                    lock (_heldResources)
+                    {
+                        return field ??= Process.GetProcessById(info.Id).DisposeWith(_heldResources);
+                    }
                 }
                 catch (ArgumentException)
                 {
@@ -33,7 +44,7 @@ namespace MadWizard.Desomnia.Processes.Manager
             }
         } = info.Native;
 
-        public IProcess? Parent => parent;
+        public IProcess? Parent { get; internal set; }
 
         public int Id => info.Id;
         public int SessionId => info.SessionId ?? Native.SessionId;
@@ -79,13 +90,25 @@ namespace MadWizard.Desomnia.Processes.Manager
             }
         }
 
+        /**
+         * The counter pairs and the graphics clock have no BCL fallback to reach for –
+         * System.Diagnostics.Process simply has nothing to offer – so the base answers "cannot
+         * sample" and only a platform that actually measured something overrides. That keeps an
+         * un-ported platform failing visibly (the watch warns and stops trusting the threshold)
+         * instead of failing wrong.
+         */
+        public virtual TimeSpan? GraphicsProcessorTime => null;
+
+        public virtual ProcessInputOutput? StorageData => null;
+        public virtual ProcessInputOutput? NetworkData => null;
+
         public virtual bool HasStopped
         {
             get
             {
                 try
                 {
-                    return Native.HasExited;
+                    return _stopped || Native.HasExited;
                 }
                 catch (ProcessNotFoundException)
                 {
@@ -155,11 +178,26 @@ namespace MadWizard.Desomnia.Processes.Manager
          */
         internal protected virtual void TriggerStop()
         {
-            var stopped = Stopped;
+            _stopped = true;
+
+            var handlers = Stopped;
 
             Stopped = null;
 
-            stopped?.Invoke(this, EventArgs.Empty);
+            handlers?.Invoke(this, EventArgs.Empty);
+        }
+
+        public virtual void Dispose()
+        {
+            lock (_heldResources)
+            {
+                _heldResources.Dispose();
+            }
+        }
+
+        public override string ToString()
+        {
+            return $"ProcessHandle('{info.Name}')";
         }
     }
 }

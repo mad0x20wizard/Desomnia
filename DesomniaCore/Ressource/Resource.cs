@@ -16,10 +16,13 @@ namespace MadWizard.Desomnia
         /// parent edges (ServiceFilterWatch aggregates filter rules through it).</summary>
         protected IEnumerable<ResourceMonitor> Monitors => Parents.OfType<ResourceMonitor>();
 
+        public bool IsMonitoredBy<T>() where T : ResourceMonitor => Parents.OfType<T>().Any();
+
         public bool IsIdle { get; private set; } = true;
 
-        [EventOpposite(nameof(Demand))]                       // symmetric: either side's trigger
-        public event EventInvocation? Idle;                   // aborts the other's pending action
+        [EventOpposite(nameof(Usage), nameof(Demand))] // either kind of activity aborts pending idle actions
+        public event EventInvocation? Idle;
+        public event EventInvocation? Usage;
         public event EventInvocation? Demand;
 
         protected internal virtual void StartTrackingBy(ResourceMonitor monitor, bool adopt)
@@ -34,7 +37,7 @@ namespace MadWizard.Desomnia
         {
             IsIdle = true;
 
-            Idle.TriggerEvent(@event); // opposite-cancel is pipeline-enforced — a VETOED event cancels nothing (§9.3)
+            Idle.TriggerEvent(@event); // opposite-cancellation is pipeline-enforced before event vetoes
         }
 
         protected void TriggerDemand(Event? eventObj = null)
@@ -54,6 +57,13 @@ namespace MadWizard.Desomnia
             await Demand.TriggerEventAsync(@event);
         }
 
+        private void TriggerUsage(InspectionEvent @event)
+        {
+            IsIdle = false;
+
+            Usage.TriggerEvent(@event);
+        }
+
         public virtual IEnumerable<UsageToken> Inspect(TimeSpan interval) // TODO: maybe async?
         {
             Stopwatch watch = new();
@@ -62,26 +72,28 @@ namespace MadWizard.Desomnia
             var tokens = InspectResource(interval).ToArray();
             watch.Stop();
 
-            if (tokens.Length == 0)
-            {
-                TriggerIdle(new InspectionEvent(nameof(Idle)) { Duration = watch.Elapsed, Tokens = tokens });
-            }
-            else
-            {
-                TriggerDemand(new InspectionEvent(nameof(Demand)) { Duration = watch.Elapsed, Tokens = tokens });
-            }
+            HandleInspectionResult(watch.Elapsed, tokens);
 
             return tokens;
         }
 
         protected abstract IEnumerable<UsageToken> InspectResource(TimeSpan interval);
 
+        protected virtual void HandleInspectionResult(TimeSpan duration, IEnumerable<UsageToken> tokens)
+        {
+            if (tokens.Any())
+            {
+                TriggerUsage(new InspectionEvent(nameof(Usage)) { Duration = duration, Tokens = tokens });
+            }
+            else
+            {
+                TriggerIdle(new InspectionEvent(nameof(Idle)) { Duration = duration, Tokens = tokens });
+            }
+        }
+
         protected internal virtual void StopTrackingBy(ResourceMonitor monitor)
         {
             DetachParent(monitor);
         }
-
-        // the hand-wired action/error bubbling that used to live here is gone —
-        // the engine walks the parent edges and falls back to the root (§6.3)
     }
 }

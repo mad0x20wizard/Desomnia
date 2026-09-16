@@ -5,7 +5,7 @@ using MadWizard.Desomnia.Network.SleepProxy.Registration;
 using MadWizard.Desomnia.Network.Watch;
 using System.Net;
 
-namespace MadWizard.Desomnia.Session
+namespace MadWizard.Desomnia.Session.Middleware
 {
     public sealed class RDPSleepProxyRegistration : IResolveMiddleware
     {

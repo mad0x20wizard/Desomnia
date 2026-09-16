@@ -1,5 +1,4 @@
-﻿using Autofac;
-using MadWizard.Desomnia.Network.Configuration.Hosts;
+﻿using MadWizard.Desomnia.Network.Configuration.Hosts;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Context;
 using MadWizard.Desomnia.Network.Extensions;
@@ -22,77 +21,52 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
 
         private int _routerNr = 1;
 
-        // Serializes the check-and-create in RememberRouterAddress. Router advertisements now reach
-        // this detector via two concurrent, fire-and-forget paths — the solicitation capture hook in
-        // DiscoverRouters and the packet fan-out (INetworkService.ProcessPacket), which is active
-        // during discovery since StartMonitoring runs first — so without this an advertisement seen
-        // by both (or two advertisements racing) could create the same router twice and throw on AddHost.
-        private readonly SemaphoreSlim _routerLock = new(1, 1);
+        private SemaphoreSlim? _semaphore;
 
-        async Task IRouterDiscovery.DiscoverRouters(NetworkSegment network)
+        private bool _discoverPassively = false;
+
+        async Task IRouterDiscovery.DiscoverRouters(NetworkContext ctx)
         {
             if (Device.IPv6LinkLocalAddress != null)
             {
-                using SemaphoreSlim semaphore = new(0);
-
-                async void Capture(object? sender, EthernetPacket packet)
-                {
-                    if (await ProcessPacketMaybeAsync(packet))
-                        semaphore.FinallyRelease();
-                }
-
-                Device.EthernetCaptured += Capture;
+                _semaphore = new(0);
 
                 try
                 {
                     SendNDPRouterSolicitation();
 
-                    await semaphore.WaitAsync(options.Timeout);
+                    await _semaphore.WaitAsync(options.Timeout);
                 }
                 finally
                 {
-                    Device.EthernetCaptured -= Capture;
+                    _discoverPassively = true;
+
+                    _semaphore = null;
                 }
             }
         }
 
-        #pragma warning disable CS4014 
-        void INetworkService.ProcessPacket(EthernetPacket packet) => ProcessPacketMaybeAsync(packet);
-        #pragma warning restore CS4014
-
-        private async Task<bool> ProcessPacketMaybeAsync(EthernetPacket packet)
+        async void INetworkService.ProcessPacket(EthernetPacket packet)
         {
-            if (packet.Extract<NdpPacket>() is NdpRouterAdvertisementPacket ndp)
+            if (_semaphore != null || _discoverPassively)
             {
-                if (packet.FindSourcePhysicalAddress() is PhysicalAddress mac && packet.FindSourceIPAddress() is IPAddress ip)
+                if (packet.Extract<NdpPacket>() is NdpRouterAdvertisementPacket ndp)
                 {
-                    var lifetime = TimeSpan.FromSeconds(ndp.RouterLifetime);
+                    if (packet.FindSourcePhysicalAddress() is PhysicalAddress mac && packet.FindSourceIPAddress() is IPAddress ip)
+                    {
+                        var lifetime = TimeSpan.FromSeconds(ndp.RouterLifetime);
 
-                    //Logger.LogTrace($"Received NDP router advertisement from {ip} -> {mac.ToHexString()} with lifetime = {lifetime}");
+                        //Logger.LogTrace($"Received NDP router advertisement from {ip} -> {mac.ToHexString()} with lifetime = {lifetime}");
 
-                    await RememberRouterAddress(mac, ip, lifetime);
+                        await RememberRouterAddress(mac, ip, lifetime);
 
-                    return true;
+                        _semaphore?.ReleaseFinally();
+                    }
                 }
             }
-
-            return false;
         }
 
         private async Task RememberRouterAddress(PhysicalAddress mac, IPAddress ip, TimeSpan lifetime)
-        {
-            await _routerLock.WaitAsync();
-            try
-            {
-                await RememberRouterAddressCore(mac, ip, lifetime);
-            }
-            finally
-            {
-                _routerLock.Release();
-            }
-        }
-
-        private async Task RememberRouterAddressCore(PhysicalAddress mac, IPAddress ip, TimeSpan lifetime)
         {
             if (Network[mac] is not NetworkRouter router)
             {

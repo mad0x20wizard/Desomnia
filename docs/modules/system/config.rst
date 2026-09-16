@@ -5,11 +5,10 @@ SystemMonitor
 -------------
 
 .. code:: xml
-
-  <SystemMonitor version="1"  timeout="5min"
+  <SystemMonitor version="2" timeout="5min"
 
     onIdle="sleep"
-    onDemand="sleepless"
+    onUsage="sleepless"
 
     onSuspend=""
     onSuspendTimeout="restart"
@@ -31,7 +30,7 @@ timeout
 
 This represents the duration for which all configured monitors must be idle to trigger the ``onIdle`` event. Since not all monitors may be able to determine a precise idle time, this is actually implemented as a periodic timer. Then the timer elapses and no monitor detects a usage, the action configured for the ``onIdle`` gets executed.
 
-If you do not configure this option, no idle cheks will be performed whatsoever. As a consequence no nested monitor or resource will execute their ``onIdle`` actions ever. Some ``onDemand`` events may still be triggered, if the respective monitor has other means of detecting this.
+If you do not configure this option, no idle checks will be performed whatsoever. As a consequence no nested monitor or resource will execute their ``onIdle`` or ``onUsage`` actions. Capable resources may still trigger ``onDemand`` from an external request, such as an incoming network packet.
 
 onIdle
 ++++++
@@ -40,12 +39,12 @@ onIdle
 
 The ``onIdle`` event of the ``<SystemMonitor>`` gets triggered, when none of the nested monitor reports a usage. This would be a good moment to suspend the computer. Alternatively you can configure any of the other :doc:`available actions <actions>`.
 
-onDemand
-++++++++
+onUsage
++++++++
 
 :⚡️ event:
 
-Each time when the ``timeout`` elapses and at least one nested monitor reports a usage, the ``onDemand`` action gets executed. To prevent the built-in power management from interfering with Desomnia's workings, it is recommended to set the system to ``sleepless``.
+Each time the ``timeout`` elapses and at least one nested monitor reports activity, the ``onUsage`` action gets executed. To prevent the built-in power management from interfering with Desomnia's workings, it is recommended to set the system to ``sleepless``.
 
 onSuspend
 +++++++++

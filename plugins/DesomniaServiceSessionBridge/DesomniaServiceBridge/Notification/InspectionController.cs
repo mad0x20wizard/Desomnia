@@ -79,14 +79,20 @@ namespace MadWizard.Desomnia.Service.Bridge.Notification
 
                 NetworkServiceUsage service => new UsageTokenInfo
                 {
-                    DisplayName = service.Service.Name,
+                    DisplayName = service.Name,
                     TypeName = "Netzwerkdienst",
                 },
 
-                ProcessUsage process => new UsageTokenInfo
+                ProcessUsage process when process.Name != null => new UsageTokenInfo
                 {
                     DisplayName = process.Name,
                     TypeName = "Prozess",
+                },
+
+                ProcessUsage process when process.Name == null => new UsageTokenInfo
+                {
+                    DisplayName = process.Metrics?.ToString(),
+                    TypeName = "Systemauslatung",
                 },
 
                 _ => ConvertUnknownToken(token)

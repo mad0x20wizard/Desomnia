@@ -1,31 +1,32 @@
 Configuration
 =============
 
-To enable the plugin, add a ``<DuoStreamMonitor>`` to your configuration. The plugin reads the available instances from the Duo Manager, so no individual instance configuration is required to get started.
+To enable the plugin, add a ``<DuoSessionMonitor>`` to your configuration. The plugin reads the available instances from the Duo Manager, so no individual instance configuration is required to get started.
 
-DuoStreamMonitor
-----------------
+DuoSessionMonitor
+-----------------
 
 .. code:: xml
 
   <SystemMonitor>
 
-    <DuoStreamMonitor serviceName="DuoService" refresh="5s"
-      onDemand="sleepless"
+    <DuoSessionMonitor serviceName="DuoService" refresh="5s"
+      onUsage="sleepless"
       onIdle=""
 
+      onInstanceUsage=""
       onInstanceDemand="start"
       onInstanceIdle="stop"
 
       onInstanceLogin=""
-      onInstanceStart=""
-      onInstanceStop=""
+      onInstanceStarted=""
+      onInstanceStopped=""
       onInstanceLogout="">
 
       <Instance name="Neo" ... />
       <Instance name="Thomas Anderson" ... />
 
-    </DuoStreamMonitor>
+    </DuoSessionMonitor>
 
   </SystemMonitor>
 
@@ -48,19 +49,27 @@ refresh
 
 The interval at which the state of the Duo instances is polled from the Duo Manager web interface. Instance start and stop events are currently detected by polling; a future version will use Windows Event Log notifications instead.
 
-onDemand
-++++++++
+onUsage
++++++++
 
 :⚡️ event:
 
-Triggered when any Duo instance receives a connection request and at least one instance transitions from idle to active — that is, when the monitor as a whole goes from fully idle to having at least one running session. You can use this to stop any background activity, the physical system should perform while no streaming client is connected, for example with ``exec``.
+Triggered during every timeout inspection in which at least one Duo instance has an active client connection. You can use this to stop any background activity the physical system should perform while no streaming client is connected, for example with ``exec``.
 
 onIdle
 ++++++
 
 :⚡️ event:
 
-Triggered during the timeout phase when no Duo instance has an active client connection — that is, when all instances have become idle. This is the counterpart to ``onDemand`` and can be used to startup performance intense background tasks.
+Triggered during the timeout phase when no Duo instance has an active client connection — that is, when all instances have become idle. This is the counterpart to ``onUsage`` and can be used to start performance-intensive background tasks.
+
+onInstanceUsage
++++++++++++++++
+
+:⚡️ event:
+:inherited:
+
+.. include:: attributes/usage.rst
 
 onInstanceDemand
 ++++++++++++++++
@@ -86,16 +95,16 @@ onInstanceLogin
 
 .. include:: attributes/login.rst
 
-onInstanceStart
-+++++++++++++++
+onInstanceStarted
++++++++++++++++++
 
 :⚡️ event:
 :inherited:
 
 .. include:: attributes/start.rst
 
-onInstanceStop
-++++++++++++++
+onInstanceStopped
++++++++++++++++++
 
 :⚡️ event:
 :inherited:
@@ -118,6 +127,7 @@ If you need to configure individual instances differently from the monitor-level
 .. code:: xml
 
     <Instance name="Thomas Anderson"
+      onUsage=""
       onDemand="start"
       onIdle="stop"
 
@@ -142,6 +152,13 @@ onDemand
 :⚡️ event:
 
 .. include:: attributes/demand.rst
+
+onUsage
++++++++
+
+:⚡️ event:
+
+.. include:: attributes/usage.rst
 
 onIdle
 ++++++

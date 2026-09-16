@@ -1,13 +1,25 @@
 using MadWizard.Desomnia;
+using MadWizard.Desomnia.Application;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Hosting.Systemd;
 
 if (!Environment.IsPrivilegedProcess)
     throw new NotSupportedException("The application must be run with root privileges.");
 
 using var mutex = new SystemMutex("MadWizard.Desomnia", true);
 
-using (var builder = new DesomniaDaemonBuilder(args))
+DesomniaDaemonBuilder builder;
 {
+    if (SystemdHelpers.IsSystemdService())
+    {
+        builder = new DesomniaSystemDaemonBuilder(args);
+    }
+    else
+    {
+        builder = new DesomniaDaemonBuilder(args);
+    }
+
     builder.RegisterModule<MadWizard.Desomnia.CoreModule>();
 
     builder.RegisterModule<MadWizard.Desomnia.Daemon.PlatformModule>();
@@ -24,12 +36,15 @@ using (var builder = new DesomniaDaemonBuilder(args))
     builder.RegisterPluginModules();
 #endif
 
-    builder.Build().Run();
+    using (var host = builder.Build())
+    {
+        host.Run();
+    }
 }
 
 return Environment.ExitCode;
 
-class DesomniaDaemonBuilder(string[] args) : MadWizard.Desomnia.ApplicationBuilder(args)
+class DesomniaDaemonBuilder(string[] args) : SystemApplicationBuilder(args)
 {
     // Filesystem Hierarchy Standard
     const string FHS_CONFIG_PATH        = "/etc/desomnia";
@@ -38,10 +53,27 @@ class DesomniaDaemonBuilder(string[] args) : MadWizard.Desomnia.ApplicationBuild
     const string FHS_CORE_PLUGINS_PATH  = "/usr/lib/desomnia/plugins";
     const string FHS_USER_PLUGINS_PATH  = "/var/lib/desomnia/plugins";
 
-    internal bool UseFHS => ConfigPath.StartsWith(FHS_CONFIG_PATH);
+    private bool useFHS = false;
 
     protected override string[] DefaultConfigPaths  => [.. base.DefaultConfigPaths, FHS_CONFIG_PATH];
 
-    protected override string[] DefaultPluginsPaths => UseFHS ? [FHS_CORE_PLUGINS_PATH, FHS_USER_PLUGINS_PATH] : base.DefaultPluginsPaths;
-    protected override string   DefaultLogPath      => UseFHS ? FHS_LOG_PATH : base.DefaultLogPath;
+    protected override string LookupConfigPath()
+    {
+        var path = base.LookupConfigPath();
+
+        useFHS = path.StartsWith(FHS_CONFIG_PATH);
+
+        return path;
+    }
+
+    protected override string[] DefaultPluginsPaths => useFHS ? [FHS_CORE_PLUGINS_PATH, FHS_USER_PLUGINS_PATH] : base.DefaultPluginsPaths;
+    protected override string   DefaultLogPath      => useFHS ? FHS_LOG_PATH : base.DefaultLogPath;
+}
+
+class DesomniaSystemDaemonBuilder(string[] args) : DesomniaDaemonBuilder(args)
+{
+    protected override void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSystemd();
+    }
 }

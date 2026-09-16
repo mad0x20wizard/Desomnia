@@ -31,6 +31,15 @@ namespace MadWizard.Desomnia.LaunchDaemon.Native
         [LibraryImport(Framework)]
         public static partial int IOObjectRelease(uint obj);
 
+        [LibraryImport(Framework, StringMarshalling = StringMarshalling.Utf8)]
+        public static partial int IORegistryEntryGetChildIterator(uint entry, string plane, out uint iterator);
+
+        [LibraryImport(Framework, StringMarshalling = StringMarshalling.Utf8)]
+        public static partial uint IOObjectConformsTo(uint obj, string className);
+
+        [LibraryImport(Framework)]
+        public static partial int IORegistryEntryGetRegistryEntryID(uint entry, out ulong id);
+
         [LibraryImport(Framework)]
         public static partial int IOServiceClose(uint connect);
 
@@ -128,6 +137,25 @@ namespace MadWizard.Desomnia.LaunchDaemon.Native
             try
             {
                 return IOIteratorNext(iterator);
+            }
+            finally
+            {
+                IOObjectRelease(iterator);
+            }
+        }
+
+        /// <summary>Returns every currently matchable service of a class; the caller owns each entry.</summary>
+        public static IEnumerable<uint> FindServices(string className)
+        {
+            nint matching = IOServiceMatching(className);
+
+            if (matching == 0 || IOServiceGetMatchingServices(kIOMainPortDefault, matching, out uint iterator) != 0)
+                yield break;
+
+            try
+            {
+                while (IOIteratorNext(iterator) is uint service && service != 0)
+                    yield return service;
             }
             finally
             {

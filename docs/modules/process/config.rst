@@ -10,7 +10,7 @@ You can configure any number of ``<Process>`` to watch OS processes or groups of
 
   <SystemMonitor>
 
-    <ProcessMonitor>
+    <ProcessMonitor onUsage="" onIdle="">
 
       <Process ... />
       <Process ... />
@@ -23,16 +23,30 @@ You can configure any number of ``<Process>`` to watch OS processes or groups of
   
 See :doc:`performance`.
 
+onUsage
++++++++
+
+:⚡️ event:
+
+This event is triggered on every inspection cycle in which at least one configured process group reports activity.
+
+onIdle
+++++++
+
+:⚡️ event:
+
+This event is triggered when every configured process group is idle.
+
 Process
 -------
 
 .. code:: xml
 
-  <Process name="Browser" withChildren="false" minCPU="1%" 
-    onIdle="stop" onStart="" onStop="">
-    
+  <Process name="Browser" watchChildren="false" minCPU="1%" watch="CPU"
+    onUsage="" onIdle="stop" onStart="" onStop="">
+
     chrome|edge|firefox
-  
+
   </Process>
 
 name
@@ -63,12 +77,26 @@ By default, this process group will only include processes with a matching image
 
 .. include:: attributes/cpu.rst
 
+.. include:: attributes/io.rst
+
+.. include:: attributes/traffic.rst
+
+.. include:: attributes/min.rst
+
 onIdle
 ++++++
 
 :⚡️ event:
 
-This event is triggered if the processing time used since the last timeout is less than the configured ``minCPU`` value. If no CPU threshold is configured, this event will not be triggered.
+This event is triggered when the ``watch`` expression evaluates to false for a running process
+group. With no thresholds, the default catch-all expression keeps a matching process demanded.
+
+onUsage
++++++++
+
+:⚡️ event:
+
+This event is triggered on every inspection cycle in which the ``watch`` expression evaluates to true for the process group.
 
 onStart
 +++++++
@@ -82,4 +110,4 @@ onStop
 
 :⚡️ event:
 
-This event is triggered when the last process of this group exists 
+This event is triggered when the last process of this group exits.

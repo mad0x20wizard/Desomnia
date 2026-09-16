@@ -4,6 +4,7 @@ using MadWizard.Desomnia.Environments;
 using MadWizard.Desomnia.Network.Address;
 using MadWizard.Desomnia.Network.Bridges;
 using MadWizard.Desomnia.Network.Configuration;
+using MadWizard.Desomnia.Network.Configuration.Migration;
 using MadWizard.Desomnia.Network.Configuration.Interfaces;
 using MadWizard.Desomnia.Network.Context;
 using MadWizard.Desomnia.Network.Context.Bridges;
@@ -21,28 +22,33 @@ using MadWizard.Desomnia.Network.Manager.Guard;
 using MadWizard.Desomnia.Network.Middleware;
 using MadWizard.Desomnia.Network.Reachability;
 using MadWizard.Desomnia.Power.Guard;
-using Microsoft.Extensions.Configuration.Xml;
+using MadWizard.Desomnia.Configuration.Xml;
 using NLog;
 using NLog.Config;
 using System.ComponentModel;
+using System.Xml.Linq;
 
 namespace MadWizard.Desomnia.Network
 {
-    public class Module : ConfigurableModule<ModuleConfig<NetworkMonitorConfig>>
+    public class Module : ConfigurableModule<ModuleConfig<NetworkMonitorConfig>>, IXConfigurationMigration
     {
+        #region Versioning
+        protected override uint MinVersion => 2;
+
+        void IXConfigurationMigration.Run(XDocument configuration, uint version)
+        {
+            switch (version)
+            {
+                case 2: V2.Run(configuration); break;
+            }
+        }
+        #endregion
+
         protected override void ConfigureLogging(ISetupExtensionsBuilder builder)
         {
             builder.RegisterLayoutRenderer<NetworkHostLayoutRenderer>();
             builder.RegisterLayoutRenderer<NetworkLayoutRenderer>(); 
             builder.RegisterLayoutRenderer<NetworkRealmLayoutRenderer>();
-        }
-
-        protected override void ConfigureConfigurationSource(ExtendedXmlConfigurationSource source)
-        {
-            base.ConfigureConfigurationSource(source); // derives collection element names from the config type
-
-            source.AddBooleanAttribute("must", new() { ["type"] = "Must" })
-                  .AddCollectionNameBuilder("NetworkMonitor", (element, nr) => NetworkMonitorConfig.NAMLESS_PREFIX + nr);
         }
 
         protected override void LoadOnce(ContainerBuilder builder)
@@ -210,8 +216,14 @@ namespace MadWizard.Desomnia.Network
     {
         public class Metadata
         {
+            /// <summary>
+            /// The <see cref="Configuration.NetworkMonitorConfig.Ordinal"/> of the one network
+            /// this module belongs to — null for a module that applies to every network. The
+            /// ordinal (not the name) is the correlation identity: the plugin binds its own
+            /// view of the same configuration, and a network may not be named at all.
+            /// </summary>
             [DefaultValue(null)]
-            public string? Name { get; set; }
+            public int? Network { get; set; }
         }
     }
 }

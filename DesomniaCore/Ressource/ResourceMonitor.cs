@@ -7,21 +7,23 @@ namespace MadWizard.Desomnia
 
     public class ResourceMonitor<T> : ResourceMonitor, IIEnumerable<T> where T : IInspectable
     {
-        public event Func<T, bool>? Filters;
+        public event Func<T, bool>? TrackingFilter;
+        public event Func<T, bool>? InspectionFilter;
 
         public event EventHandler<InspectableEventArgs<T>>? TrackingStarted;
         public event EventHandler<InspectableEventArgs<T>>? TrackingStopped;
 
+        public event EventHandler<TimeSpan>? InspectResources;
+
         // mutated on observer threads (explicit hand-off, §7.2) while the inspection
         // loop enumerates — guarded, with snapshot-on-enumerate
         private readonly HashSet<T> _inspectables = [];
-        private readonly Lock _rosterLock = new();
 
         private bool ShouldTrackRessource(T inspectable)
         {
-            if (Filters != null)
+            if (TrackingFilter != null)
             {
-                foreach (Func<T, bool> filter in Filters.GetInvocationList().Cast<Func<T, bool>>())
+                foreach (Func<T, bool> filter in TrackingFilter.GetInvocationList().Cast<Func<T, bool>>())
                     if (!filter(inspectable))
                         return false;
             }
@@ -38,8 +40,10 @@ namespace MadWizard.Desomnia
             {
                 bool added;
 
-                lock (_rosterLock)
+                lock (_inspectables)
+                {
                     added = _inspectables.Add(inspectable);
+                }
 
                 if (added)
                 {
@@ -63,8 +67,10 @@ namespace MadWizard.Desomnia
         {
             bool removed;
 
-            lock (_rosterLock)
+            lock (_inspectables)
+            {
                 removed = _inspectables.Remove(inspectable);
+            }
 
             if (removed)
             {
@@ -77,11 +83,23 @@ namespace MadWizard.Desomnia
             }
         }
 
-        protected virtual bool ShouldInspectResource(T inspectable) => true;
+        protected virtual bool ShouldInspectResource(T inspectable)
+        {
+            if (InspectionFilter != null)
+            {
+                foreach (Func<T, bool> filter in InspectionFilter.GetInvocationList().Cast<Func<T, bool>>())
+                    if (!filter(inspectable))
+                        return false;
+            }
+
+            return true;
+        }
 
         protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
         {
-            foreach (var inspectable in this)
+            InspectResources?.Invoke(this, interval);
+
+            foreach (var inspectable in TakeSnapshot())
                 if (ShouldInspectResource(inspectable))
                 {
                     foreach (var token in InspectResource(inspectable, interval))
@@ -96,7 +114,7 @@ namespace MadWizard.Desomnia
 
         public override void Dispose()
         {
-            foreach (var inspectable in this)
+            foreach (var inspectable in TakeSnapshot())
             {
                 this.StopTracking(inspectable);
             }
@@ -104,21 +122,19 @@ namespace MadWizard.Desomnia
             base.Dispose();
         }
 
-        IEnumerator<T> IEnumerable<T>.GetEnumerator()
+        public T[] TakeSnapshot()
         {
-            T[] snapshot;
-
-            lock (_rosterLock)
+            lock (_inspectables)
             {
                 // roster disposal backstop (§7.1): members disposed without an explicit
                 // StopTracking (crash paths) are evicted lazily — a dead monitor must
                 // never be inspected again (its edges were already dropped by Dispose)
                 _inspectables.RemoveWhere(i => i is EventMetaObject { IsEngineDisposed: true });
 
-                snapshot = [.. _inspectables];
+                return [.. _inspectables];
             }
-
-            return ((IEnumerable<T>)snapshot).GetEnumerator();
         }
+
+        IEnumerator<T> IEnumerable<T>.GetEnumerator() => _inspectables.GetEnumerator();
     }
 }

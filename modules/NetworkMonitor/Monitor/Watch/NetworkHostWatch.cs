@@ -1,8 +1,8 @@
-﻿using MadWizard.Desomnia.Network.Demand;
+﻿using MadWizard.Desomnia.Events;
+using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Network.Neighborhood;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
-using MadWizard.Desomnia.Events;
 
 namespace MadWizard.Desomnia.Network.Watch
 {
@@ -32,21 +32,21 @@ namespace MadWizard.Desomnia.Network.Watch
             await base.StartWatch();
         }
 
-        protected internal override void ReportNetworkTraffic(EthernetPacket packet)
+        protected internal override void ReportNetworkTraffic(EthernetPacket packet, PacketDirection direction)
         {
             foreach (var watch in this)
             {
-                watch.ReportNetworkTraffic(packet);
+                watch.ReportNetworkTraffic(packet, direction);
             }
 
-            base.ReportNetworkTraffic(packet);
+            base.ReportNetworkTraffic(packet, direction);
         }
 
         protected void ReportNetworkTraffic(DemandEvent @event)
         {
             foreach (var packet in @event)
             {
-                ReportNetworkTraffic(packet);
+                ReportNetworkTraffic(packet, PacketDirection.Inbound); // demand is always aimed AT the host
             }
         }
 
@@ -58,22 +58,20 @@ namespace MadWizard.Desomnia.Network.Watch
             await base.StopWatch(gracefully);
         }
 
-        protected override bool ShouldInspectResource(NetworkServiceWatch service) => !service.IsHidden;
-
         protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
         {
             if (HadThresholdTraffic(interval, out long bytes))
             {
-                var token = new NetworkHostUsage(Host, bytes);
+                var usage = new NetworkHostUsage(Host, bytes);
 
                 // summarize tokens
                 foreach (var serviceToken in base.InspectResource(interval))
                     if (serviceToken is NetworkServiceUsage service)
-                        token.Tokens.Add(service);
+                        usage.Tokens.Add(service);
 
-                yield return token;
+                if (usage.Tokens.Any() || Host is not LocalHost)
+                    yield return usage;
             }
         }
-
     }
 }

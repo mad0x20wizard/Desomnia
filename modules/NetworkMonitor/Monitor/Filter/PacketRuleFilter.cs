@@ -3,14 +3,17 @@ using PacketDotNet;
 
 namespace MadWizard.Desomnia.Network.Filter
 {
-    internal class PacketRuleFilter : IPacketFilter
+    internal class PacketRuleFilter(IEnumerable<PacketFilterRule> rules) : IPacketFilter
     {
-        public required IEnumerable<PacketFilterRule> Rules { get; init; }
+        public IEnumerable<PacketFilterRule> Rules => rules;
+
+        readonly bool _blocksByDefault  = rules.Any(rule => rule.Type == FilterRuleType.Must);
+        readonly bool _needsIPTraffic   = rules.Any(rule => rule is IPFilterRule);
 
         public virtual bool ShouldFilter(EthernetPacket packet, PacketFilterOptions options)
         {
-            options.BlockByDefault |= Rules.Any(rule => rule.Type == FilterRuleType.Must);
-            options.NeedsIPTraffic |= Rules.Any(rule => rule is IPFilterRule);
+            options.BlockByDefault |= _blocksByDefault;
+            options.NeedsIPTraffic |= _needsIPTraffic;
 
             foreach (var rule in Rules)
             {

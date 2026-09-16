@@ -23,13 +23,13 @@ namespace MadWizard.Desomnia.Power.Manager
 
         public PowerSource Source => SysfsPowerSource.Read();
 
-        private string[] AvailablePowerStates => File.ReadAllText(SysPowerState).Split(' ');
+        private static string[] AvailableStates => File.ReadAllText(SysPowerState).Split(' ');
 
-        private string PowerState
+        private string State
         {
             set
             {
-                var supported = !AvailablePowerStates.Contains(value)
+                var supported = !AvailableStates.Contains(value)
                     ? throw new NotSupportedException($"Power state {value} is not supported by this system.") 
                     : true;
 
@@ -43,18 +43,19 @@ namespace MadWizard.Desomnia.Power.Manager
             }
         }
 
+        #region Power state changes
         public async Task Suspend()
         {
             Logger.LogDebug("Requested ACPI state: {acpi}", "S1-S3 (sleep)");
 
-            PowerState = "mem";
+            State = "mem";
         }
 
         public async Task Hibernate()
         {
             Logger.LogDebug("Requested ACPI state: {acpi}", "S4 (hibernate)");
 
-            PowerState = "disk";
+            State = "disk";
         }
 
         public async Task Shutdown(TimeSpan? timeout = null, string? message = null, bool force = false)
@@ -95,6 +96,7 @@ namespace MadWizard.Desomnia.Power.Manager
             if (process.ExitCode != 0)
                 throw new Exception($"'${ShutdownCommand}' exited with code {process.ExitCode}.");
         }
+        #endregion
 
         async Task<IPowerRequest> IPowerManager.CreateRequest(PowerRequestType type, string reason)
         {

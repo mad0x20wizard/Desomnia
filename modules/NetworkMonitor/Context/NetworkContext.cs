@@ -1,8 +1,7 @@
 ﻿using Autofac;
-using Autofac.Core;
 using Autofac.Features.Metadata;
+using MadWizard.Desomnia;
 using MadWizard.Desomnia.Events;
-using MadWizard.Desomnia.Network.Bridges;
 using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Context.Parameters;
@@ -21,7 +20,6 @@ using MadWizard.Desomnia.Network.SleepProxy;
 using MadWizard.Desomnia.Network.SleepProxy.Registration;
 using MadWizard.Desomnia.Network.Trace;
 using Microsoft.Extensions.Logging;
-using System.Net.NetworkInformation;
 
 namespace MadWizard.Desomnia.Network.Context
 {
@@ -78,10 +76,10 @@ namespace MadWizard.Desomnia.Network.Context
         {
             Config = config;
 
-            Name = Config.Label ?? @interface.Name;
+            Name = Config.Name ?? @interface.Name;
 
             Plugins = parent.Resolve<IEnumerable<Meta<PluginModule, PluginModule.Metadata>>>()
-                .Where(x => x.Metadata.Name is not string name || name == config.Name)
+                .Where(x => x.Metadata.Network is not int ordinal || ordinal == config.Ordinal)
                 .Select(x => x.Value);
 
             Scope = parent.BeginLifetimeScope(MatchingScopeLifetimeTags.NetworkLifetimeScopeTag, builder =>
@@ -97,7 +95,7 @@ namespace MadWizard.Desomnia.Network.Context
                     .OnActivated(args =>
                     {
                         ((IEventSystem)args.Instance)[nameof(NetworkMonitor.Idle)].AddAction(config.OnIdle);
-                        ((IEventSystem)args.Instance)[nameof(NetworkMonitor.Demand)].AddAction(config.OnDemand);
+                        ((IEventSystem)args.Instance)[nameof(NetworkMonitor.Usage)].AddAction(config.OnUsage);
                         ((IEventSystem)args.Instance)[nameof(NetworkMonitor.Connected)].AddAction(config.OnConnect);
                         ((IEventSystem)args.Instance)[nameof(NetworkMonitor.Disconnected)].AddAction(config.OnDisconnect);
                     })
@@ -114,6 +112,10 @@ namespace MadWizard.Desomnia.Network.Context
                     .SingleInstance()
                     .AsSelf();
 
+                builder.RegisterType<DroppedPacketReporter>().AutoActivate()
+                    .WithParameter(TypedParameter.From(TimeSpan.FromSeconds(5)))
+                    .SingleInstance()
+                    .AsSelf();
 
                 // Child Contexts
                 builder.RegisterType<NetworkHostContext>()
@@ -145,7 +147,7 @@ namespace MadWizard.Desomnia.Network.Context
                 if (config.UseBPF)
                 {
                     builder.RegisterType<BerkeleyPacketFilter>()
-                        .WithOrder(1)
+                        .WithPriority(1)
                         .AsImplementedInterfaces()
                         .InstancePerNetwork()
                         .AsSelf();
