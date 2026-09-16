@@ -163,7 +163,7 @@ Type: filesandordirs; Name: "{app}\plugins\DesomniaServiceBridge"; Check: not Wi
 
 [Run]
 Filename: "sc.exe"; \
-  Parameters: "create DesomniaService binPath= ""{app}\DesomniaService.exe"" start= delayed-auto displayname= Desomnia"; \
+  Parameters: "create DesomniaService binPath= ""{app}\DesomniaService.exe"" start= auto displayname= Desomnia"; \
   StatusMsg: "Registering Windows service..."; \
   Flags: runhidden waituntilterminated
   
