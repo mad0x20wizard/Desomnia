@@ -41,7 +41,7 @@ end;
 
 procedure Dependency_Clear;
 begin
-  SetLength(Dependency_Memo, 0)
+  // SetLength(Dependency_Memo, 0)
   SetArrayLength(Dependency_List, 0);
 end;
 
