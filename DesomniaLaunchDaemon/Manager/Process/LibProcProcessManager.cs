@@ -1,4 +1,6 @@
+using MadWizard.Desomnia.LaunchDaemon.Configuration;
 using MadWizard.Desomnia.LaunchDaemon.Native;
+using MadWizard.Desomnia.Processes.Manager.Metrics;
 using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia.Processes.Manager
@@ -17,14 +19,56 @@ namespace MadWizard.Desomnia.Processes.Manager
     internal sealed class LibProcProcessManager : PollingProcessManager, IProcessMetricSupport
     {
         private KQueueProcessExitWatcher? _watcher;
+        private bool _reportedGraphicsMeasurement;
+        private readonly GraphicsMeasurementMode _configuredGraphics;
+        private readonly GraphicsMeasurementMethod _graphicsMeasurement;
 
-        public ProcessMetric SupportedMetrics => ProcessMetric.Processor | ProcessMetric.Graphics | ProcessMetric.Storage;
+        public ProcessMetric SupportedMetrics =>
+            ProcessMetric.Processor | ProcessMetric.Storage |
+            (_graphicsMeasurement == GraphicsMeasurementMethod.None ? ProcessMetric.None : ProcessMetric.Graphics);
 
-        public LibProcProcessManager(TimeSpan interval) : base(interval)
+        public ProcessMetric SharedMetrics =>
+            _graphicsMeasurement == GraphicsMeasurementMethod.Coalition ? ProcessMetric.Graphics : ProcessMetric.None;
+
+        public LibProcProcessManager(
+            TimeSpan interval,
+            GraphicsMeasurementMode configuredGraphics,
+            GraphicsMeasurementMethod graphicsMeasurement) : base(interval)
         {
+            _configuredGraphics = configuredGraphics;
+            _graphicsMeasurement = graphicsMeasurement;
+
             // the kernel is only asked to report
             // anything while somebody is actually listening for it
             ListenerCountChanged += (sender, count) => ConfigureWatcher();
+        }
+
+        public override Task StartAsync(CancellationToken cancellationToken)
+        {
+            ReportGraphicsMeasurement();
+
+            return base.StartAsync(cancellationToken);
+        }
+
+        private void ReportGraphicsMeasurement()
+        {
+            if (_reportedGraphicsMeasurement)
+                return;
+
+            _reportedGraphicsMeasurement = true;
+
+            if (_graphicsMeasurement == GraphicsMeasurementMethod.None)
+            {
+                Logger.LogWarning("GPU measurement mode {configured} is unavailable; process GPU metrics are not supported", _configuredGraphics);
+            }
+            else if (_configuredGraphics == GraphicsMeasurementMode.Automatic)
+            {
+                Logger.LogInformation("GPU measurement automatically selected {measurement}", _graphicsMeasurement);
+            }
+            else
+            {
+                Logger.LogInformation("GPU measurement selected {measurement}", _graphicsMeasurement);
+            }
         }
 
         private void ConfigureWatcher()

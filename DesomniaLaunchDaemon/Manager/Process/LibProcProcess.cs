@@ -39,46 +39,6 @@ namespace MadWizard.Desomnia.Processes.Manager
             }
         }
 
-        /**
-         * The graphics clock, which this kernel keeps per coalition – the app together with the
-         * helpers it spawned – rather than per process. The whole coalition's time is this
-         * process' answer, and the scope below is what stops a watch holding several of its
-         * members from counting that one ledger once per member.
-         *
-         * Coarser than the other platforms, and deliberately so: the work a media app has its
-         * decoding service perform is booked to the app's coalition, where a per-process reading
-         * would find nothing at all – the service is spawned by launchd and named after itself.
-         */
-        public override TimeSpan? GraphicsProcessorTime
-        {
-            get
-            {
-                // a process the daemon launched is billed to the daemon's own coalition, whose
-                // ledger counts the daemon and every sibling too – nothing in it is this
-                // process' to claim, and a guess would be worse than admitting we cannot say
-                if (GraphicsProcessorScope is not ulong coalition || coalition == Coalitions.Own)
-                    return null;
-
-                return Coalitions.GraphicsTimeOf(coalition);
-            }
-        }
-
-        /**
-         * The coalition this process is billed to, asked once: a process is placed in one when it
-         * is created and never moves, so the answer cannot go stale – and boxing it here keeps
-         * the per-cycle lookup to a field read.
-         */
-        public override object GraphicsProcessorScope
-        {
-            get
-            {
-                if (field is null && Coalitions.ResourceCoalitionOf(Id) is ulong coalition)
-                    field = coalition;
-
-                return field ?? this; // unasked or gone: its own scope, sharing nothing
-            }
-        }
-
         public override bool HasStopped => LibProc.GetProcessInfo(Id) == null;
 
         // SIGTERM is the only "please stop" this platform offers a daemon; a process that has

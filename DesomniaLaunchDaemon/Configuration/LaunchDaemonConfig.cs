@@ -1,12 +1,11 @@
-using MadWizard.Desomnia.Processes.Configuration;
-
 namespace MadWizard.Desomnia.LaunchDaemon.Configuration
 {
     public class LaunchDaemonConfig
     {
         /// <summary>
-        /// The persistent ProcessManager settings (<c>&lt;?global ProcessManager:pollInterval="..."?&gt;</c>),
-        /// read for the <c>pollInterval</c> alone — the platform manager has to be built with it.
+        /// The persistent ProcessManager settings supplied through <c>&lt;?system?&gt;</c> directives.
+        /// They are boot-time choices because the platform manager and its GPU decorator are
+        /// selected before the persistent container is built.
         /// </summary>
         public ProcessManagerConfig ProcessManager { get; set; } = new();
     }
