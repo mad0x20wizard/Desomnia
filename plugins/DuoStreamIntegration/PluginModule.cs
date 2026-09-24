@@ -71,22 +71,31 @@ namespace MadWizard.Desomnia.Service.Duo
                     {
                         using var service = new ServiceController(duo.ServiceName);
 
-                        if (service.Version >= EventWatcher.MinVersion)
+                        if (service.Version >= PreciseEventWatcher.MinVersion)
                         {
-                            builder.RegisterType<EventWatcher>().As<IDuoInstanceWatcher>()
-                                .InstancePerOwned<DuoServiceContext>();
+                            builder.RegisterType<PreciseEventWatcher>()
+                                .InstancePerOwned<DuoServiceContext>()
+                                .As<IDuoInstanceWatcher>();
+
+                            goto skipPolling;
+                        }
+                        else if (service.Version >= EventWatcher.MinVersion)
+                        {
+                            builder.RegisterType<EventWatcher>()
+                                .InstancePerOwned<DuoServiceContext>()
+                                .As<IDuoInstanceWatcher>();
 
                             goto skipPolling;
                         }
                     }
                     catch (Exception ex) when
-                    (ex is Win32Exception
-                        or FileNotFoundException
-                        or FormatException
-                        or ArgumentException   // Version.Parse on structurally odd FileVersion strings
-                        or OverflowException
-                        or InvalidDataException
-                        or InvalidOperationException)
+                        (ex is Win32Exception
+                            or FileNotFoundException
+                            or FormatException
+                            or ArgumentException   // Version.Parse on structurally odd FileVersion strings
+                            or OverflowException
+                            or InvalidDataException
+                            or InvalidOperationException)
                     {
                         // Duo Service is not available (or its version is unreadable)
                     }

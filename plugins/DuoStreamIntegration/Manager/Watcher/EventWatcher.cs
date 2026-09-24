@@ -8,48 +8,77 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
     {
         internal static readonly Version MinVersion = new(1, 5, 7);
 
-        private static string XPath
-        {
-            get
-            {
-                var eventPaths = string.Join(" or ", Enum.GetValues<DuoEventID>().Select(id => "EventID=" + (int)id));
+        readonly EventLogWatcher _watcher;
 
-                return $"*[System[Provider[@Name='Duo'] and ({eventPaths})]]";
+        public EventWatcher()
+        {
+            var query = CreateQuery();
+
+            query.TolerateQueryErrors = true;
+
+            _watcher = new EventLogWatcher(query);
+        }
+
+        protected virtual EventLogQuery CreateQuery()
+        {
+            var eventPaths = string.Join(" or ", Enum.GetValues<DuoEventID>().Select(id => "EventID=" + (int)id));
+
+            var xpath = $"*[System[Provider[@Name='Duo'] and ({eventPaths})]]";
+
+            return new EventLogQuery("Application", PathType.LogName, xpath);
+        }
+
+        /**
+         * Unfortunately the developer of Duo chose to use the Name of the instances as well 
+         * as their DisplayName in a mixed fashion. Therefore we have to check both strings,
+         * to find out which instance started/stopped exactly.
+         * 
+         * If one instance name is a substring of another instance we cannot do this and
+         * have to discard the contents of the event message entirely, switching to
+         * a more brute way of discovering which instance started/stopped.
+         */
+        private static void CheckAmbiguousNames(IEnumerable<DuoInstance> instances)
+        {
+            foreach (var left in instances)
+            {
+                foreach (var right in instances.Where(i => i != left))
+                {
+                    if (left.Settings.Name.Contains(right.Settings.Name))
+                        throw new AmbiguousInstanceNameException(left.Settings.Name, right.Settings.Name);
+                    if (left.Settings.Name.Contains(right.Settings.DisplayName))
+                        throw new AmbiguousInstanceNameException(left.Settings.Name, right.Settings.DisplayName);
+                    if (left.Settings.DisplayName.Contains(right.Settings.Name))
+                        throw new AmbiguousInstanceNameException(left.Settings.DisplayName, right.Settings.Name);
+                    if (left.Settings.DisplayName.Contains(right.Settings.DisplayName))
+                        throw new AmbiguousInstanceNameException(left.Settings.DisplayName, right.Settings.DisplayName);
+                }
             }
         }
 
-        private Channel<Signal> _channel = Channel.CreateUnbounded<Signal>(new() { SingleReader = true });
-
-        private EventLogWatcher Watcher { get; } = new(new EventLogQuery("Application", PathType.LogName, XPath)
+        protected virtual DuoInstance FindInstance(IEnumerable<DuoInstance> instances, EventRecord record)
         {
-            TolerateQueryErrors = true,
-        });
+            CheckAmbiguousNames(instances);
+
+            foreach (var instance in instances)
+                foreach (var item in record.Properties)
+                {
+                    if (item.Value.ToString() is string text)
+                    {
+                        if (text.Contains(instance.Name) || text.Contains(instance.Settings.DisplayName))
+                        {
+                            return instance;
+                        }
+                    }
+                }
+
+            throw new KeyNotFoundException("Duo event does not identify a known instance.");
+        }
 
         public override async Task WatchAsync(IEnumerable<DuoInstance> instances, CancellationToken token)
         {
-            if (!HasAmbiguousNames(instances) is bool canUseFastPath && !canUseFastPath)
-            {
-                Logger.LogWarning("Duo instance names and display names are ambiguous; cannot use fast path");
-            }
+            Channel<Signal> channel = Channel.CreateUnbounded<Signal>(new() { SingleReader = true });
 
-            DuoInstance FindInstance(EventRecord record)
-            {
-                foreach (var instance in instances)
-                    foreach (var item in record.Properties)
-                    {
-                        if (item.Value.ToString() is string text)
-                        {
-                            if (text.Contains(instance.Name) || text.Contains(instance.Settings.DisplayName))
-                            {
-                                return instance;
-                            }
-                        }
-                    }
-
-                throw new KeyNotFoundException("Duo event does not identify a known instance.");
-            }
-
-            Watcher.EventRecordWritten += EventRecordWritten;
+            _watcher.EventRecordWritten += EventRecordWritten;
 
             void EventRecordWritten(object? sender, EventRecordWrittenEventArgs args)
             {
@@ -66,20 +95,24 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
                         switch (eventId)
                         {
                             case DuoEventID.InstanceStarted:
-                                if (!canUseFastPath) goto case DuoEventID.Resuming;
-                                _channel.Writer.TryWrite(new() { Instance = FindInstance(record), Running = true });
+                                channel.Writer.TryWrite(new() { Instance = FindInstance(instances, record), Running = true });
                                 break;
 
                             case DuoEventID.InstanceError:
                             case DuoEventID.InstanceStopped:
-                                if (!canUseFastPath) goto case DuoEventID.Resuming;
-                                _channel.Writer.TryWrite(new() { Instance = FindInstance(record), Running = false});
+                                channel.Writer.TryWrite(new() { Instance = FindInstance(instances, record), Running = false });
                                 break;
 
                             case DuoEventID.Resuming:
-                                _channel.Writer.TryWrite(new());
+                                channel.Writer.TryWrite(new());
                                 break;
                         }
+                    }
+                    catch (AmbiguousInstanceNameException ex)
+                    {
+                        Logger.LogWarning(ex, "Unable to determine event instance");
+
+                        channel.Writer.TryWrite(new());
                     }
                     catch (Exception ex)
                     {
@@ -92,11 +125,11 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
                 }
             }
 
+            _watcher.Enabled = true;
+
             try
             {
-                Watcher.Enabled = true;
-
-                await foreach (var signal in _channel.Reader.ReadAllAsync(token))
+                await foreach (var signal in channel.Reader.ReadAllAsync(token))
                 {
                     token.ThrowIfCancellationRequested();
 
@@ -123,45 +156,16 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             }
             finally
             {
-                _channel.Writer.TryComplete();
+                _watcher.Enabled = false;
+                _watcher.EventRecordWritten -= EventRecordWritten;
 
-                Watcher.EventRecordWritten -= EventRecordWritten;
-                Watcher.Enabled = false;
+                channel.Writer.TryComplete();
             }
-        }
-
-        /**
-         * Unfortunately the developer of Duo chose to use the Name of the instances as well 
-         * as their DisplayName in a mixed fashion. Therefore we have to check both strings,
-         * to find out which instance started/stopped exactly.
-         * 
-         * If one instance name is a substring of another instance we cannot do this and
-         * have to discard the contents of the event message entirely, switching to
-         * a more brute way of discovering which instance started/stopped.
-         */
-        private static bool HasAmbiguousNames(IEnumerable<DuoInstance> instances)
-        {
-            foreach (var left in instances)
-            {
-                foreach (var right in instances.Where(i => i != left))
-                {
-                    if (left.Settings.Name.Contains(right.Settings.Name))
-                        return true;
-                    if (left.Settings.Name.Contains(right.Settings.DisplayName))
-                        return true;
-                    if (left.Settings.DisplayName.Contains(right.Settings.Name))
-                        return true;
-                    if (left.Settings.DisplayName.Contains(right.Settings.DisplayName))
-                        return true;
-                }
-            }
-
-            return false;
         }
 
         void IDisposable.Dispose()
         {
-            Watcher.Dispose();
+            _watcher.Dispose();
         }
 
         private record class Signal
@@ -183,7 +187,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             }
         }
 
-        private enum DuoEventID
+        protected enum DuoEventID
         {
             // The available ranges are:
             // 1000-1028
@@ -191,14 +195,17 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             // 1130
 
             // Regular events
-            ServiceStarted = 1000,
-            ServiceStopped,
-            ServiceError,
-            InstanceStarted,
-            InstanceStopped,
-            InstanceError,
+            ServiceStarted  = 1000,
+            ServiceStopped  = 1001,
+            ServiceError    = 1002,
+
+            InstanceStarted = 1003,
+            InstanceStopped = 1004,
+            InstanceError   = 1005,
+
             ProcessStarted,
             ProcessError,
+
             FeatureConfigurationChanged,
             Suspending,
             Resuming,
@@ -207,5 +214,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             // Debug output
             DebugChannel = 1130
         }
+
+        protected class AmbiguousInstanceNameException(params string[] names) : Exception($"Duo instance names [{string.Join(", ", names.Select(n => $"'{n}'"))}] are ambiguous.");
     }
+
 }

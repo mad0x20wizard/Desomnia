@@ -2,7 +2,6 @@ using HarmonyLib;
 using MadWizard.Desomnia.Service.Duo;
 using MadWizard.Desomnia.Service.Duo.Manager.Watcher;
 using System.Diagnostics.Eventing.Reader;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using static DuoStreamIntegration.Tests.DuoTestSupport;
 
@@ -23,8 +22,8 @@ internal sealed class TestEventWatcher : EventWatcher
     public TaskCompletionSource Subscribed => _source.Subscribed;
     public TaskCompletionSource Unsubscribed => _source.Unsubscribed;
     public IReadOnlyList<WindowsMocks.RecordData> DeliveredRecords => _source.DeliveredRecords;
-    public Task SendAsync(DuoEventID id, params string[] properties) => _source.SendAsync(id, properties);
-    public bool Publish(DuoEventID id, params string[] properties) => _source.Publish(id, properties);
+    public Task SendAsync(Tests.DuoEventID id, params string[] properties) => _source.SendAsync((Tests.DuoEventID)id, properties);
+    public bool Publish(Tests.DuoEventID id, params string[] properties) => _source.Publish(id, properties);
     public void PublishError(Exception error) => _source.PublishError(error);
 }
 
