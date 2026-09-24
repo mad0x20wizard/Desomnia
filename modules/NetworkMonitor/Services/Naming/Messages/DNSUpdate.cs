@@ -18,20 +18,11 @@ namespace MadWizard.Desomnia.Network.Naming
             Response.AdditionalRecords.Add(opt);
         }
 
-        internal void AnswerWithError(Exception cause)
+        internal void AnswerWithError(MessageStatus status)
         {
             Response.AdditionalRecords.Clear();
 
-            switch (cause)
-            {
-                case FormatException:
-                    Response.Status = MessageStatus.FormatError;
-                    break;
-
-                default:
-                    Response.Status = MessageStatus.ServerFailure;
-                    break;
-            }
+            Response.Status = status;
         }
     }
 }

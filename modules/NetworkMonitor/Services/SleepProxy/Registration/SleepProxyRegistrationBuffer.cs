@@ -48,7 +48,9 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
             // Without an Owner option this can't be a Sleep Proxy registration -- refuse right away.
             if (update.Request.Options.OfType<EdnsOwnerOption>().FirstOrDefault() is not EdnsOwnerOption owner)
             {
-                update.AnswerWithError(new FormatException("DNS UPDATE without an EDNS0 Owner option"));
+                WireLogger.LogDebug("DNS UPDATE without an EDNS0 Owner option");
+
+                update.AnswerWithError(MessageStatus.FormatError);
 
                 RespondTo(update);
 
@@ -210,11 +212,21 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
             {
                 registration = (SleepProxyRegistration)burst.Merge();
             }
+            catch (FormatException ex)
+            {
+                WireLogger.LogDebug(ex, "Received a malformed registration from {Endpoint}.", update.SourceEndpoint);
+
+                update.AnswerWithError(MessageStatus.FormatError);
+
+                RespondTo(update);
+
+                return;
+            }
             catch (Exception ex)
             {
-                WireLogger.LogWarning(ex, "Received a malformed registration from {Endpoint}.", update.SourceEndpoint);
+                WireLogger.LogError(ex, "Could not parse registration from {Endpoint}.", update.SourceEndpoint);
 
-                update.AnswerWithError(ex);
+                update.AnswerWithError(MessageStatus.ServerFailure);
 
                 RespondTo(update);
 

@@ -1,6 +1,7 @@
 ﻿using Autofac;
 using Autofac.Core;
 using Autofac.Features.OwnedInstances;
+using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network.Configuration.Hosts;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Context;
@@ -10,7 +11,6 @@ using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net.NetworkInformation;
-using MadWizard.Desomnia.Events;
 
 namespace MadWizard.Desomnia.Network.SleepProxy.Registration
 {

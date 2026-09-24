@@ -84,17 +84,27 @@ namespace MadWizard.Desomnia.Network.SleepProxy
                 {
                     update.AnswerWithLease(lease.GrantedUntil - DateTime.Now);
                 }
+            }
+            catch (FormatException ex)
+            {
+                Logger.LogDebug(ex, "Registration for '{Name}' was invalid.", reg.Name);
 
-                RespondTo(update);
+                update.AnswerWithError(MessageStatus.FormatError);
+            }
+            catch (SystemException ex) when (ex is InvalidOperationException or NotSupportedException)
+            {
+                Logger.LogDebug(ex, "Registration for '{Name}' was refused.", reg.Name);
+
+                update.AnswerWithError(MessageStatus.Refused);
             }
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Registration of '{Name}' failed.", reg.Name);
 
-                update.AnswerWithError(ex);
-
-                RespondTo(update);
+                update.AnswerWithError(MessageStatus.ServerFailure);
             }
+
+            RespondTo(update);
         }
     }
 }

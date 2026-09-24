@@ -17,7 +17,7 @@ namespace MadWizard.Desomnia.Network.Context
         {
             if (config.AutoDetect.HasFlag(AutoDiscoveryType.SleepProxy))
             {
-                var reg = builder.RegisterType<SleepProxyDetector>().As<IDisposable>()
+                var reg = builder.RegisterType<SleepProxyDetector>()
                     .WithParameter(TypedParameter.From(config.AutoTimeout))
                     .SingleInstance()
                     .AsSelf();
