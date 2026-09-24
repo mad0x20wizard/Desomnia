@@ -103,6 +103,14 @@ namespace MadWizard.Desomnia.Network.Watch
 
                         return;
                     }
+                    catch (InvalidOperationException ex)
+                    {
+                        Logger.LogWarning(ex, "Could not register '{Host}' with sleep proxy '{Proxy}'.", Host.Name, proxy.Name);
+
+                        failure = ex;
+
+                        break; // the server didn't like our registration, don't try again
+                    }
                     catch (Exception ex)
                     {
                         Logger.LogWarning(ex, "Could not register '{Host}' with sleep proxy '{Proxy}'.", Host.Name, proxy.Name);
@@ -159,12 +167,21 @@ namespace MadWizard.Desomnia.Network.Watch
 
                 if (dnsResponse.Id != burst.Id)
                     throw new FormatException($"Sleep proxy '{proxy.Name}' replied with a mismatched message id.");
-                if (dnsResponse.Status != MessageStatus.NoError)
-                    throw new InvalidOperationException($"Sleep proxy '{proxy.Name}' rejected the registration: {dnsResponse.Status}.");
 
-                TimeSpan? duration = dnsResponse.Options.OfType<EdnsLeaseOption>().FirstOrDefault()?.Duration;
+                switch (dnsResponse.Status)
+                {
+                    case MessageStatus.NoError when dnsResponse.Options.OfType<EdnsLeaseOption>().FirstOrDefault()?.Duration is TimeSpan duration:
+                        Logger.LogInformation("Successfully registered '{Host}' with sleep proxy '{Proxy}'; lease granted: {Duration}.", Host.Name, proxy.Name, duration);
+                        break; // OK
 
-                Logger.LogInformation("Successfully registered '{Host}' with sleep proxy '{Proxy}'; lease granted: {Duration}.", Host.Name, proxy.Name, duration);
+                    case MessageStatus.Refused:
+                    case MessageStatus.FormatError:
+                    case MessageStatus.NotImplemented:
+                        throw new InvalidOperationException($"Sleep proxy '{proxy.Name}' declined the registration (status = {dnsResponse.Status})");
+
+                    default:
+                        throw new Exception($"Sleep proxy '{proxy.Name}' failed to process the registration (status = {dnsResponse.Status})");
+                }
             }
             catch (OperationCanceledException)
             {
