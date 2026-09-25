@@ -20,8 +20,8 @@ namespace MadWizard.Desomnia.NetworkSession.Manager
                 var id = (UInt64)instance.CimInstanceProperties["FileId"].Value;
                 var sid = (UInt64)instance.CimInstanceProperties["SessionId"].Value;
 
-                var path = ((String)instance.CimInstanceProperties["Path"].Value).TrimEnd('\\');
-                var pathRelative = ((String)instance.CimInstanceProperties["ShareRelativePath"].Value).TrimEnd('\\');
+                var path = ((String)instance.CimInstanceProperties["Path"].Value);//.TrimEnd('\\');
+                var pathRelative = ((String)instance.CimInstanceProperties["ShareRelativePath"].Value);//.TrimEnd('\\');
 
                 if (path.StartsWith(@"\"))
                     continue; // skip if path is a UNC path
