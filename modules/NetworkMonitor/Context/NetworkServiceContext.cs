@@ -67,12 +67,5 @@ namespace MadWizard.Desomnia.Network.Context
                 RegisterServiceFilter(builder, info);
             });
         }
-
-        protected void RegisterService(ContainerBuilder builder, TransportNetworkService service)
-        {
-            builder.RegisterInstance(service).As<NetworkService>();
-
-            RegisterServiceFilter(builder, service);
-        }
     }
 }

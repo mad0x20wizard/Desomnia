@@ -1,4 +1,5 @@
 ﻿using MadWizard.Desomnia.Configuration;
+using MadWizard.Desomnia.Network.Configuration.Filter;
 using MadWizard.Desomnia.Session.Configuration;
 
 namespace MadWizard.Desomnia.Service.Duo.Configuration
@@ -10,13 +11,16 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
         public ActionInfo? OnDemand { get; set; }
         public DelayedActionInfo? OnUsage { get; set; }
 
-
         public DelayedActionInfo? OnStart { get; set; }
         public DelayedActionInfo? OnStop { get; set; }
 
         public bool? WatchStreamTraffic { get; set; }
 
         public TransmissionThreshold? MinStreamTraffic { get; set; }
+
+        // Filter-Rules
+        public IList<HostFilterRuleInfo> HostFilterRule { get; set; } = [];
+        public IList<HostRangeFilterRuleInfo> HostRangeFilterRule { get; init; } = [];
 
         public DuoInstanceWatchInfo()
         {

@@ -55,8 +55,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
 
                         var context = LocalHostContext.CreateWatchedService<SunshineServiceContext>
                         (
-                            TypedParameter.From(instance.Service),
-                            TypedParameter.From(instance.Info.MinStreamTraffic)
+                            TypedParameter.From(instance)
                         );
 
                         RegisterWatch(instance, context.Watch);

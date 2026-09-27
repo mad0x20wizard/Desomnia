@@ -117,6 +117,12 @@ namespace MadWizard.Desomnia.Service.Duo
 
                 if (config.UseListener)
                 {
+                    foreach (var instance in duo.Instance)
+                    {
+                        if (instance.HostFilterRule.Count > 0 || instance.HostRangeFilterRule.Count > 0)
+                            throw new FormatException($"Duo instance '{instance.Name}': HostFilterRule and HostRangeFilterRule require packet capture and cannot be used in listener mode.");
+                    }
+
                     builder.RegisterModule<SunshineListenerModule>();
                 }
                 else

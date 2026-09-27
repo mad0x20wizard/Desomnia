@@ -18,8 +18,8 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
         public DelayedActionInfo? OnInstanceUsage               { get; set; }
         public DelayedActionInfo? OnInstanceIdle                { get; set; }
         public ScheduledActionInfo? OnInstanceLogin             { get; set; }
-        public ScheduledActionInfo? OnInstanceStarted           { get; set; }
-        public ScheduledActionInfo? OnInstanceStopped           { get; set; }
+        public ScheduledActionInfo? OnInstanceStart             { get; set; }
+        public ScheduledActionInfo? OnInstanceStop              { get; set; }
         public ScheduledActionInfo? OnInstanceLogout            { get; set; }
 
         public bool WatchStreamTraffic                          { get; set; } = true;

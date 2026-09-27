@@ -23,8 +23,8 @@ namespace MadWizard.Desomnia.Network.Middleware
                         info.OnDemand   ??= config.OnInstanceDemand;
                         info.OnIdle     ??= config.OnInstanceIdle;
                         info.OnLogin    ??= config.OnInstanceLogin;
-                        info.OnStart    ??= config.OnInstanceStarted;
-                        info.OnStop     ??= config.OnInstanceStopped;
+                        info.OnStart    ??= config.OnInstanceStart;
+                        info.OnStop     ??= config.OnInstanceStop;
                         info.OnLogout   ??= config.OnInstanceLogout;
 
                         // apply default traffic config

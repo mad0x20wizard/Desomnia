@@ -1,11 +1,12 @@
 ﻿using Autofac;
 using Autofac.Core;
+using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Environments;
 using MadWizard.Desomnia.Network.Address;
 using MadWizard.Desomnia.Network.Bridges;
 using MadWizard.Desomnia.Network.Configuration;
-using MadWizard.Desomnia.Network.Configuration.Migration;
 using MadWizard.Desomnia.Network.Configuration.Interfaces;
+using MadWizard.Desomnia.Network.Configuration.Migration;
 using MadWizard.Desomnia.Network.Context;
 using MadWizard.Desomnia.Network.Context.Bridges;
 using MadWizard.Desomnia.Network.Datagram;
@@ -22,7 +23,6 @@ using MadWizard.Desomnia.Network.Manager.Guard;
 using MadWizard.Desomnia.Network.Middleware;
 using MadWizard.Desomnia.Network.Reachability;
 using MadWizard.Desomnia.Power.Guard;
-using MadWizard.Desomnia.Configuration.Xml;
 using NLog;
 using NLog.Config;
 using System.ComponentModel;
@@ -76,9 +76,6 @@ namespace MadWizard.Desomnia.Network
             builder.RegisterType<SSIDCondition>()
                 .Named<IEnvironmentCondition>("ssid")
                 .PreserveExistingDefaults();
-
-            // no "ssid" here - there is no wireless information to be had without the
-            // platform underneath it, so only a platform host can register that condition
         }
 
         protected override void Load(ContainerBuilder builder, ModuleConfig<NetworkMonitorConfig> config)

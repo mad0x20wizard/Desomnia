@@ -6,7 +6,6 @@ using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Network.Monitor.Filter.Rules;
 using MadWizard.Desomnia.Network.Neighborhood;
-using MadWizard.Desomnia.Network.Neighborhood.Services;
 using NetTools;
 using System.Collections.Concurrent;
 using System.Net;
@@ -179,40 +178,6 @@ namespace MadWizard.Desomnia.Network.Context
                     RegisterTrafficFilter(builder, new UDPTrafficType(filter.Port));
 
                 RememberDynamicHostFilters(filter);
-            }
-        }
-
-        protected void RegisterServiceFilter(ContainerBuilder builder, TransportNetworkService service)
-        {
-            foreach (var port in service.Ports)
-            {
-                switch (port.Protocol)
-                {
-                    case IPProtocol.TCP:
-                        builder.RegisterType<TCPServiceFilterRule>().As<PacketFilterRule>()
-                            .WithParameter(TypedParameter.From(FilterRuleType.Must))
-                            .WithParameter(TypedParameter.From<ushort>(port))
-                            .SingleInstance()
-                            .AsSelf();
-
-                        RegisterTrafficFilter(builder, new TCPTrafficType(port, _needsTCPData));
-
-                        break;
-
-                    case IPProtocol.UDP:
-                        builder.RegisterType<UDPServiceFilterRule>().As<PacketFilterRule>()
-                            .WithParameter(TypedParameter.From(FilterRuleType.Must))
-                            .WithParameter(TypedParameter.From<ushort>(port))
-                            .SingleInstance()
-                            .AsSelf();
-
-                        RegisterTrafficFilter(builder, new UDPTrafficType(port));
-
-                        break;
-
-                    default:
-                        throw new NotSupportedException($"Protocol {port.Protocol} is not supported.");
-                }
             }
         }
 

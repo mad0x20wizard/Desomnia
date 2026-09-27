@@ -1,4 +1,7 @@
-﻿using MadWizard.Desomnia.Network.Neighborhood.Services;
+﻿using MadWizard.Desomnia.Network.Configuration.Filter;
+using MadWizard.Desomnia.Network.Filter.Rules;
+using MadWizard.Desomnia.Network.Neighborhood.Services;
+using MadWizard.Desomnia.Service.Duo.Configuration;
 using System.Net;
 
 namespace MadWizard.Desomnia.Service.Duo.Sunshine
@@ -19,6 +22,22 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine
 
         public bool IsWaitingForClient => PortChecker.IsAnyPortInUse(HTTP);
         public bool HasClientConnected => PortChecker.IsAnyPortInUse(Video, Control, Audio, Mic);
+
+        internal IEnumerable<ServiceFilterRuleInfo> CreateFilterRules(DuoInstanceWatchInfo info)
+        {
+            foreach (var servicePort in Ports)
+            {
+                yield return new ServiceFilterRuleInfo
+                {
+                    Type = FilterRuleType.Must,
+                    Protocol = servicePort.Protocol,
+                    Port = servicePort,
+
+                    HostFilterRule = info.HostFilterRule,
+                    HostRangeFilterRule = info.HostRangeFilterRule
+                };
+            }
+        }
 
         protected override IEnumerable<IPPort> Ports
         {
