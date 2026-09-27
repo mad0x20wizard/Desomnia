@@ -10,7 +10,7 @@ namespace MadWizard.Desomnia.Session.Manager
 
         public string UserName => !WTSInfo.UserName.IsWhiteSpace() ? field = WTSInfo.UserName : field ?? "?";
         public string DomainName => WTSInfo.Domain;
-        public string WindowStationName => WTSInfo.WinStationName;
+        public string SessionName => WTSInfo.WinStationName;
 
         public NTAccount? UserAccount => string.IsNullOrEmpty(UserName) ? null : new NTAccount(DomainName, UserName);
 
@@ -154,6 +154,26 @@ namespace MadWizard.Desomnia.Session.Manager
             }
 
             return $"WTSSession[id={Id}, name={name}, state={string.Join('|', state)}]";
+        }
+    }
+
+    public static class ISessionExt
+    {
+        extension (ISession session)
+        {
+            public bool IsHeadless
+            {
+                get
+                {
+                    if (session as TerminalServicesSession is { } win)
+                    {
+                        if (win.SessionName == "Headless")
+                            return true;
+                    }
+
+                    return false;
+                }
+            }
         }
     }
 }
