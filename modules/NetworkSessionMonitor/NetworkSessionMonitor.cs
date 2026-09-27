@@ -4,9 +4,7 @@ using MadWizard.Desomnia.NetworkSession.Configuration.Options;
 using MadWizard.Desomnia.NetworkSession.Manager;
 using Microsoft.Extensions.Logging;
 using System.Net;
-using System.Net.Sockets;
 using System.Text.RegularExpressions;
-using static System.Collections.Specialized.BitVector32;
 
 namespace MadWizard.Desomnia.NetworkSession
 {
