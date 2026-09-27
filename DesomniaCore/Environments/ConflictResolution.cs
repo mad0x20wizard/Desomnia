@@ -2,7 +2,7 @@ namespace MadWizard.Desomnia.Environments
 {
     /// <summary>
     /// How conflicting values from environment blocks of EQUAL priority are resolved
-    /// (the onConflict attribute); a block with higher priority always supersedes,
+    /// (the conflictStrategy attribute); a block with higher priority always supersedes,
     /// regardless of this setting.
     /// </summary>
     internal enum ConflictResolution

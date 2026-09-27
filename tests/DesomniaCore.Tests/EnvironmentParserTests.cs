@@ -215,11 +215,11 @@ namespace MadWizard.Desomnia.Tests
 
         [Theory]
         [InlineData("""<EnvironmentMonitor><DefaultEnvironment /></EnvironmentMonitor>""", ConflictResolution.Last)]
-        [InlineData("""<EnvironmentMonitor onConflict="first"><DefaultEnvironment /></EnvironmentMonitor>""", ConflictResolution.First)]
-        [InlineData("""<EnvironmentMonitor onConflict="Error"><DefaultEnvironment /></EnvironmentMonitor>""", ConflictResolution.Error)]
-        internal void ParsesOnConflict(string xml, ConflictResolution expected)
+        [InlineData("""<EnvironmentMonitor conflictStrategy="first"><DefaultEnvironment /></EnvironmentMonitor>""", ConflictResolution.First)]
+        [InlineData("""<EnvironmentMonitor conflictStrategy="Error"><DefaultEnvironment /></EnvironmentMonitor>""", ConflictResolution.Error)]
+        internal void ParsesConflictStrategy(string xml, ConflictResolution expected)
         {
-            Assert.Equal(expected, Parse(xml).OnConflict);
+            Assert.Equal(expected, Parse(xml).ConflictStrategy);
         }
 
         [Fact]
@@ -244,7 +244,7 @@ namespace MadWizard.Desomnia.Tests
 
         [Theory]
         [InlineData("""<EnvironmentMonitor debounce="soon"><DefaultEnvironment /></EnvironmentMonitor>""")] // bad debounce
-        [InlineData("""<EnvironmentMonitor onConflict="ignore"><DefaultEnvironment /></EnvironmentMonitor>""")] // invalid onConflict
+        [InlineData("""<EnvironmentMonitor conflictStrategy="ignore"><DefaultEnvironment /></EnvironmentMonitor>""")] // invalid conflictStrategy
         [InlineData("""<EnvironmentMonitor><SystemMonitor /></EnvironmentMonitor>""")] // unknown child
         [InlineData("""<EnvironmentMonitor><DefaultEnvironment /><DefaultEnvironment /></EnvironmentMonitor>""")] // two defaults
         [InlineData("""<EnvironmentMonitor><DefaultEnvironment power="ac" /></EnvironmentMonitor>""")] // default with condition

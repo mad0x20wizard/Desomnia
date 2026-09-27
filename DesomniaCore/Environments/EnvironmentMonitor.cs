@@ -277,7 +277,7 @@ namespace MadWizard.Desomnia.Environments
 
             var active = ComputeActiveBlocks(_blocks);
 
-            var root = ConfigMerger.Merge(active, _collections, settings.OnConflict);
+            var root = ConfigMerger.Merge(active, _collections, settings.ConflictStrategy);
 
             var data = new OrderedConfigurationData(ConfigNodeFlattener.Flatten(root, _collections));
 

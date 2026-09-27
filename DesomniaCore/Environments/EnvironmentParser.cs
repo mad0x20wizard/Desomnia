@@ -25,7 +25,7 @@ namespace MadWizard.Desomnia.Environments
         internal const string DEBOUNCE_ATTRIBUTE = "debounce";
         internal const string WRITE_EFFECTIVE_XML_ATTRIBUTE = "writeEffectiveXML";
         internal const string WRITE_EFFECTIVE_CONFIGURATION_ATTRIBUTE = "writeEffectiveConfiguration";
-        internal const string ONCONFLICT_ATTRIBUTE = "onConflict";
+        internal const string CONFLICT_STRATEGY_ATTRIBUTE = "conflictStrategy";
         internal const string ONLY_IF_ATTRIBUTE = "onlyIf";
         internal const string ONLY_IF_NOT_ATTRIBUTE = "onlyIfNot";
         internal const string PRIORITY_ATTRIBUTE = "priority";
@@ -38,7 +38,7 @@ namespace MadWizard.Desomnia.Environments
 
         /// <summary>The parsed root attributes and environment blocks of an &lt;EnvironmentMonitor&gt; document.</summary>
         internal sealed record Result(TimeSpan Debounce, string? WriteEffectiveXML,
-            string? WriteEffectiveConfiguration, ConflictResolution OnConflict, IReadOnlyList<EnvironmentBlock> Blocks);
+            string? WriteEffectiveConfiguration, ConflictResolution ConflictStrategy, IReadOnlyList<EnvironmentBlock> Blocks);
 
         public static Result Parse(XDocument document)
         {
@@ -47,7 +47,7 @@ namespace MadWizard.Desomnia.Environments
             if (root.Descendants().Any(element => Is(element, ROOT_ELEMENT)))
                 throw new ConfigurationValueException($"<{ROOT_ELEMENT}> must not be nested.");
 
-            (TimeSpan debounce, var outputs, ConflictResolution onConflict) = ParseRootAttributes(root);
+            (TimeSpan debounce, var outputs, ConflictResolution conflictStrategy) = ParseRootAttributes(root);
 
             List<EnvironmentBlock> blocks = [];
 
@@ -81,15 +81,15 @@ namespace MadWizard.Desomnia.Environments
 
             ValidateReferences(blocks);
 
-            return new Result(debounce, outputs.EffectiveXML, outputs.EffectiveConfiguration, onConflict, blocks);
+            return new Result(debounce, outputs.EffectiveXML, outputs.EffectiveConfiguration, conflictStrategy, blocks);
         }
 
-        private static (TimeSpan Debounce, (string? EffectiveXML, string? EffectiveConfiguration) Outputs, ConflictResolution OnConflict) ParseRootAttributes(XElement root)
+        private static (TimeSpan Debounce, (string? EffectiveXML, string? EffectiveConfiguration) Outputs, ConflictResolution ConflictStrategy) ParseRootAttributes(XElement root)
         {
             TimeSpan debounce = DEFAULT_DEBOUNCE;
             string? writeEffectiveXML = null;
             string? writeEffectiveConfiguration = null;
-            ConflictResolution onConflict = ConflictResolution.Last;
+            ConflictResolution conflictStrategy = ConflictResolution.Last;
 
             foreach (var attribute in root.Attributes())
             {
@@ -120,15 +120,15 @@ namespace MadWizard.Desomnia.Environments
                     // the file's format declaration (see XConfigVersion) - validated by the
                     // reader and checked by the version check, not this parser's business
                 }
-                else if (name.Equals(ONCONFLICT_ATTRIBUTE, StringComparison.OrdinalIgnoreCase))
+                else if (name.Equals(CONFLICT_STRATEGY_ATTRIBUTE, StringComparison.OrdinalIgnoreCase))
                 {
-                    onConflict = attribute.Value.ToLowerInvariant() switch
+                    conflictStrategy = attribute.Value.ToLowerInvariant() switch
                     {
                         "last" => ConflictResolution.Last,
                         "first" => ConflictResolution.First,
                         "error" => ConflictResolution.Error,
 
-                        _ => throw new ConfigurationValueException($"Invalid {ONCONFLICT_ATTRIBUTE} = \"{attribute.Value}\"; " +
+                        _ => throw new ConfigurationValueException($"Invalid {CONFLICT_STRATEGY_ATTRIBUTE} = \"{attribute.Value}\"; " +
                             $"expected \"last\", \"first\" or \"error\"."),
                     };
                 }
@@ -138,7 +138,7 @@ namespace MadWizard.Desomnia.Environments
                 }
             }
 
-            return (debounce, (writeEffectiveXML, writeEffectiveConfiguration), onConflict);
+            return (debounce, (writeEffectiveXML, writeEffectiveConfiguration), conflictStrategy);
         }
 
         private static EnvironmentBlock ParseDefaultEnvironment(XElement element)

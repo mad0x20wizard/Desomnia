@@ -71,7 +71,7 @@ namespace MadWizard.Desomnia.Environments
             }
             catch (Exception ex)
             {
-                // e.g. onConflict="error" in the re-merged result; a timer callback must never throw
+                // e.g. conflictStrategy="error" in the re-merged result; a timer callback must never throw
                 Logger.Error(ex, "Failed to re-evaluate the environment configuration - keeping the current one.");
             }
         }

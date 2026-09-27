@@ -12,7 +12,7 @@ namespace MadWizard.Desomnia.Environments
     internal sealed record EnvironmentSettings(
         uint Version,
         TimeSpan Debounce,
-        ConflictResolution OnConflict,
+        ConflictResolution ConflictStrategy,
         string? WriteEffectiveXML,
         string? WriteEffectiveConfiguration);
 

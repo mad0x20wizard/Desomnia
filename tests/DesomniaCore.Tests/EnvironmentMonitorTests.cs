@@ -471,7 +471,7 @@ namespace MadWizard.Desomnia.Tests
         public void HigherPriority_WinsAcrossEnvironments()
         {
             var path = WriteConfig("""
-                <EnvironmentMonitor onConflict="error">
+                <EnvironmentMonitor conflictStrategy="error">
                   <Environment test="true" priority="1"><SystemMonitor timeout="5min" /></Environment>
                   <DefaultEnvironment><SystemMonitor timeout="1min" /></DefaultEnvironment>
                 </EnvironmentMonitor>
@@ -481,7 +481,7 @@ namespace MadWizard.Desomnia.Tests
 
             pipeline.Start();
 
-            // priority resolves the conflict, even under onConflict="error"
+            // priority resolves the conflict, even under conflictStrategy="error"
             Assert.Equal("5min", BuildConfiguration(pipeline)["timeout"]);
         }
 

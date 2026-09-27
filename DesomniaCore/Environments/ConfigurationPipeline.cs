@@ -343,7 +343,7 @@ namespace MadWizard.Desomnia.Environments
             var result = EnvironmentParser.Parse(file.Root.Document!);
 
             // the version the (possibly migrated) document actually declares - already validated
-            var settings = new EnvironmentSettings(file.Version, result.Debounce, result.OnConflict,
+            var settings = new EnvironmentSettings(file.Version, result.Debounce, result.ConflictStrategy,
                 ResolveOutputPath(result.WriteEffectiveXML),
                 ResolveOutputPath(result.WriteEffectiveConfiguration));
 

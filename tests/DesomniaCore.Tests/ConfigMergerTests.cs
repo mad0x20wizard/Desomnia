@@ -24,8 +24,8 @@ namespace MadWizard.Desomnia.Tests
         private static ConfigNode Merge(params EnvironmentBlock[] blocks)
             => ConfigMerger.Merge(blocks, Collections, ConflictResolution.Last);
 
-        private static ConfigNode Merge(ConflictResolution onConflict, params EnvironmentBlock[] blocks)
-            => ConfigMerger.Merge(blocks, Collections, onConflict);
+        private static ConfigNode Merge(ConflictResolution conflictStrategy, params EnvironmentBlock[] blocks)
+            => ConfigMerger.Merge(blocks, Collections, conflictStrategy);
 
         private static string? Attribute(ConfigNode node, string name)
             => node.Children.FirstOrDefault(child => child.Kind == ConfigNodeKind.Attribute && child.HasName(name))?.Value;
@@ -169,7 +169,7 @@ namespace MadWizard.Desomnia.Tests
         }
 
         [Fact]
-        public void OnConflictFirst_KeepsTheEarlierValue()
+        public void ConflictStrategyFirst_KeepsTheEarlierValue()
         {
             var result = Merge(ConflictResolution.First,
                 Block("a", """<SystemMonitor onUsage="sleepless" />"""),
@@ -179,7 +179,7 @@ namespace MadWizard.Desomnia.Tests
         }
 
         [Fact]
-        public void OnConflictError_ThrowsOnEqualPriorityConflicts()
+        public void ConflictStrategyError_ThrowsOnEqualPriorityConflicts()
         {
             Assert.Throws<ConfigurationValueException>(() => Merge(ConflictResolution.Error,
                 Block("a", """<SystemMonitor onUsage="sleepless" />"""),
@@ -187,7 +187,7 @@ namespace MadWizard.Desomnia.Tests
         }
 
         [Fact]
-        public void OnConflictError_AcceptsConflictsResolvedByPriority()
+        public void ConflictStrategyError_AcceptsConflictsResolvedByPriority()
         {
             var result = Merge(ConflictResolution.Error,
                 Block("a", """<SystemMonitor onUsage="sleepless" />"""),
@@ -197,7 +197,7 @@ namespace MadWizard.Desomnia.Tests
         }
 
         [Fact]
-        public void OnConflictError_AcceptsIdenticalValues()
+        public void ConflictStrategyError_AcceptsIdenticalValues()
         {
             var result = Merge(ConflictResolution.Error,
                 Block("a", """<SystemMonitor onUsage="sleepless" />"""),
@@ -210,7 +210,7 @@ namespace MadWizard.Desomnia.Tests
         public void BareElementPresence_NeverConflictsWithARealValue()
         {
             // a bare <Sleep/> reasserts the node, it does not empty it - no conflict,
-            // even under onConflict="error"
+            // even under conflictStrategy="error"
             var result = Merge(ConflictResolution.Error,
                 Block("a", """<SystemMonitor><Sleep>5min</Sleep></SystemMonitor>"""),
                 Block("b", """<SystemMonitor><Sleep /></SystemMonitor>"""));

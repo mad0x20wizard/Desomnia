@@ -15,7 +15,7 @@ namespace MadWizard.Desomnia.Environments
     /// the priority rules decide the value).
     ///
     /// Conflicting values are decided by the blocks' priority - higher supersedes,
-    /// regardless of document order. Between EQUAL priorities the onConflict setting
+    /// regardless of document order. Between EQUAL priorities the conflictStrategy setting
     /// applies: the later block wins (default), the earlier keeps its value, or the
     /// conflict aborts startup. Every merged node is annotated with its origin
     /// (block priority + name), since annotations are what makes this decidable
@@ -28,7 +28,7 @@ namespace MadWizard.Desomnia.Environments
         /// <summary>Provenance of a merged value: which environment set it, at which priority.</summary>
         private sealed record MergeOrigin(int Priority, string Environment);
 
-        public static ConfigNode Merge(IEnumerable<EnvironmentBlock> blocks, CollectionElements collections, ConflictResolution onConflict)
+        public static ConfigNode Merge(IEnumerable<EnvironmentBlock> blocks, CollectionElements collections, ConflictResolution conflictStrategy)
         {
             ConfigNode? result = null;
 
@@ -39,15 +39,15 @@ namespace MadWizard.Desomnia.Environments
                 if (result is null)
                     result = Annotate(block.Content.Clone(), origin);
                 else
-                    MergeNode(result, block.Content, origin, collections, onConflict);
+                    MergeNode(result, block.Content, origin, collections, conflictStrategy);
             }
 
             return result ?? new ConfigNode(EnvironmentParser.SYSTEM_MONITOR_ELEMENT, ConfigNodeKind.Element);
         }
 
-        private static void MergeNode(ConfigNode target, ConfigNode source, MergeOrigin origin, CollectionElements collections, ConflictResolution onConflict)
+        private static void MergeNode(ConfigNode target, ConfigNode source, MergeOrigin origin, CollectionElements collections, ConflictResolution conflictStrategy)
         {
-            MergeValue(target, source, origin, onConflict);
+            MergeValue(target, source, origin, conflictStrategy);
 
             foreach (var child in source.Children)
             {
@@ -72,13 +72,13 @@ namespace MadWizard.Desomnia.Environments
                 if (match is null)
                     target.Children.Add(Annotate(child.Clone(), origin));
                 else
-                    MergeNode(match, child, origin, collections, onConflict);
+                    MergeNode(match, child, origin, collections, conflictStrategy);
             }
         }
 
         /// <summary>Merges the node's own value - an attribute's value and an element's text
         /// content alike (in the abstract representation both are just the value).</summary>
-        private static void MergeValue(ConfigNode target, ConfigNode source, MergeOrigin origin, ConflictResolution onConflict)
+        private static void MergeValue(ConfigNode target, ConfigNode source, MergeOrigin origin, ConflictResolution conflictStrategy)
         {
             if (source.Value is not string value)
                 return;
@@ -110,7 +110,7 @@ namespace MadWizard.Desomnia.Environments
             if (value.Length == 0)
                 return;
 
-            if (existing.Length == 0 || Resolve(target, origin, onConflict, Describe(target), existing, value))
+            if (existing.Length == 0 || Resolve(target, origin, conflictStrategy, Describe(target), existing, value))
             {
                 target.Value = value;
 
@@ -118,8 +118,8 @@ namespace MadWizard.Desomnia.Environments
             }
         }
 
-        /// <summary>Decides a value conflict: higher priority always wins; equal priorities resolve per onConflict.</summary>
-        private static bool Resolve(ConfigNode existing, MergeOrigin origin, ConflictResolution onConflict, string subject, string oldValue, string newValue)
+        /// <summary>Decides a value conflict: higher priority always wins; equal priorities resolve per conflictStrategy.</summary>
+        private static bool Resolve(ConfigNode existing, MergeOrigin origin, ConflictResolution conflictStrategy, string subject, string oldValue, string newValue)
         {
             var current = OriginOf(existing);
 
@@ -138,7 +138,7 @@ namespace MadWizard.Desomnia.Environments
                 return false;
             }
 
-            switch (onConflict)
+            switch (conflictStrategy)
             {
                 case ConflictResolution.Last:
                     Logger.Warn($"{subject} overridden by environment '{origin.Environment}' ('{oldValue}' -> '{newValue}')");
@@ -154,7 +154,7 @@ namespace MadWizard.Desomnia.Environments
                 default:
                     throw new ConfigurationValueException($"{subject} has conflicting values from environments " +
                         $"'{current.Environment}' ('{oldValue}') and '{origin.Environment}' ('{newValue}') with equal priority. " +
-                        $"Set different priorities or change {EnvironmentParser.ONCONFLICT_ATTRIBUTE}.");
+                        $"Set different priorities or change {EnvironmentParser.CONFLICT_STRATEGY_ATTRIBUTE}.");
             }
         }
 
