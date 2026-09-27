@@ -1,11 +1,65 @@
 Demand detection
 ================
 
-When a Moonlight client attempts to connect to an instance that is not yet running, Desomnia can intercept that connection attempt and start the instance for you. Two modes are available:
+When a Moonlight client tries to reach an instance that is not running,
+Desomnia can start it through ``onInstanceDemand="start"``. This incoming
+request is separate from the periodic activity checks that decide when an
+instance is idle.
 
-- **Packet capturing** (recommended): Desomnia uses the NetworkMonitor's passive packet capturing ability to detect incoming TCP connection attempts on each instance's base port. This requires Npcap to be installed, which is a dependency of the NetworkMonitor and will be present on any system where the full Desomnia setup is in use.
-- **TCP listener fallback**: If Npcap is not available, Desomnia opens a lightweight TCP listener on each instance's base port instead. When a connection arrives, the listener closes and the instance is started. Once the instance is up, Desomnia uses native Windows API calls to monitor active connections and detect when no clients remain.
+The examples below start instances on demand and stop them when idle. They
+also put the physical machine to sleep when all configured monitors are idle.
+Add other monitors if the machine runs additional workloads that should keep
+it awake. Remove ``onIdle="sleep"`` from ``SystemMonitor`` to manage only
+the Duo instances.
 
-  .. note::
+Packet capture
+--------------
 
-     In fallback mode, incoming connections on the instance base ports must be permitted by the Windows Firewall. Desomnia adds the required inbound rules automatically when it starts and removes them again when it shuts down.
+With a ``NetworkMonitor`` configured, Desomnia uses packet capture to observe
+connection attempts to each instance's service. Npcap must be installed and the
+network monitor must cover the interface carrying the client's traffic.
+
+.. code:: xml
+
+   <SystemMonitor version="2" timeout="5min" onUsage="sleepless" onIdle="sleep">
+     <SessionMonitor />
+     <NetworkMonitor />
+     <DuoSessionMonitor onInstanceDemand="start" onInstanceIdle="stop" />
+   </SystemMonitor>
+
+Capture also supports ``minInstanceStreamTraffic`` and per-instance
+``minStreamTraffic`` thresholds. These settings cannot be used in listener
+mode.
+
+Per-instance :ref:`HostFilterRule <duo-instance-host-filter-rule>` and
+:ref:`HostRangeFilterRule <duo-instance-host-range-filter-rule>` elements can
+restrict which clients contribute network demand and streaming activity.
+
+TCP listeners
+-------------
+
+Without a ``NetworkMonitor``, or with ``useListener="true"`` on
+``DuoSessionMonitor``, Desomnia listens on the base ports of stopped
+instances. It releases the listener when the instance starts and resumes
+listening when it stops. Active connections are observed through Windows.
+
+.. code:: xml
+
+   <SystemMonitor version="2" timeout="5min" onUsage="sleepless" onIdle="sleep">
+     <SessionMonitor />
+     <DuoSessionMonitor useListener="true"
+                        onInstanceDemand="start" onInstanceIdle="stop" />
+   </SystemMonitor>
+
+Listener mode is unavailable for sandboxed instances. It also cannot measure
+streaming byte rates, so configuring a streaming-traffic threshold causes an
+error. Input and process metrics remain available through the session monitor.
+
+Instance host and host-range filters also require packet capture and are
+rejected in listener mode.
+
+Desomnia adds the required Windows Firewall inbound rules while the listeners
+are in use and removes them when it shuts down.
+
+See :doc:`config` for activity settings and
+:doc:`/guides/troubleshooting` if instances do not start or stop as expected.

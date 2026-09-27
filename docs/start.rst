@@ -1,7 +1,7 @@
 Getting started
 ===============
 
-Desomnia needs to be runs as a background service with elevated privileges, so that it can monitor system activity and control sleep behaviour. 
+Desomnia needs to run as a background service with elevated privileges, so that it can monitor system activity and control sleep behaviour.
 
 Available installation methods
 ------------------------------
@@ -11,7 +11,7 @@ To install Desomnia, pick the method that fits your platform and preferences:
 :doc:`Interactive installer </installation/installer>` – 🪟 Windows
   | Installs required dependencies, registers the service, and creates an initial configuration.
 :doc:`Homebrew </installation/homebrew>` – 🐧 Linux, 🍎 macOS
-  | Native deployment, with all features available. Installs required dependencies, helps with service registration.
+  | Direct installation, with the features supported by your operating system. Installs required dependencies, helps with service registration.
   | Update to newer versions easily.
 :doc:`Native packages </installation/packages>` – 🐧 Linux
   | Native ``.deb`` / ``.rpm`` deployment for Debian, Ubuntu, Raspberry Pi OS, Fedora and openSUSE, with all features available except runtime plugin loading. Bundles the low-memory native build; no .NET runtime required.
@@ -26,12 +26,12 @@ To install Desomnia, pick the method that fits your platform and preferences:
 What to read next
 -----------------
 
-Once Desomnia is installed, you have to choose how you want to operate Desomnia primarily on that system, since there are individual guides written for each style. However, since Desomnia has a unified codebase, both modes of operation can also be used together.
+Once Desomnia is installed, you have to choose how you want to operate Desomnia primarily on that system, since there are individual guides written for each style. However, since Desomnia has a unified codebase, these roles can also be used together.
 
 Local Sleep Management
 ++++++++++++++++++++++
 
-:OS: 🪟 *Windows* 🐧 *Linux*
+:OS: 🪟 *Windows* 🐧 *Linux* 🍎 *macOS*
 
 If you want to **replace the built-in power management** with Desomnias configurable monitoring, the :doc:`/guides/sleep` guide is the best place to start. You can use the automatic Wake-on-LAN feature here as well.
 
@@ -49,4 +49,13 @@ If you want to reach sleeping hosts from **outside your local network**, read th
 
 .. note::
 
-  If anything does not behave as expected, consult the :doc:`troubleshooting </modules/network/troubleshooting>` page. Enabling :doc:`logging </concepts/logging>` is usually the first step — Desomnias output is minimal by default and a log file will usually reveal what's going on inside.
+  If anything does not behave as expected, consult :doc:`/guides/troubleshooting` first, then :doc:`network troubleshooting </modules/network/troubleshooting>` for connection problems. Enabling :doc:`logging </concepts/logging>` is usually the first step — Desomnias output is minimal by default and a log file will usually reveal what's going on inside.
+
+Configuration topics
+--------------------
+
+Use :doc:`/guides/activity` to choose which workloads keep the machine awake,
+:doc:`/modules/display/monitor` for display and lid rules, and
+:doc:`/concepts/environments` to change settings automatically on different
+networks or power sources. When upgrading an existing installation, start with
+:doc:`/concepts/version`.

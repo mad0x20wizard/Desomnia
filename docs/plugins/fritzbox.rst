@@ -113,20 +113,35 @@ declaring one is intent enough; the flag only governs the active lookup.
 
 Combined with a ``<ForeignHostFilterRule>`` or ``<EveryHostFilterRule>`` — which
 :doc:`automatically enables proxy wake-up </modules/network/router>` on the discovered routers —
-this yields a fully zero-config remote-access setup: a FRITZ!Box on the network and a filter rule
-are enough.
+this removes manual router discovery from the proxy configuration. You still need a working
+remote-access route (for example a VPN), suitable filters, and Wake-on-LAN support on the
+sleeping host. See :doc:`/guides/remote-access` for the complete setup.
 
 fritz:// actions
 ----------------
 
 Any action attribute accepts a ``fritz://`` URL that addresses a configured box by
-name — the structure decides the kind, no special attribute is needed::
+name. This complete example increases a router port's speed while Moonlight runs
+and lowers it five minutes after the process exits. Replace the router
+credentials, port identifier, and process pattern with those for your setup:
 
-   <ProcessMonitor>
-     <Process name="Moonlight"
-              onStart="fritz://heimdail/ports/eth0?maxspeed=1000"
-              onStop="fritz://heimdail/ports/eth0?maxspeed=100+5min"/>
-   </ProcessMonitor>
+.. code:: xml
+
+   <SystemMonitor version="2">
+     <NetworkMonitor>
+       <FRITZBoxRouter name="fritz.box" username="desomnia" password="replace-me" />
+     </NetworkMonitor>
+     <ProcessMonitor>
+       <Process name="Moonlight"
+                onStart="fritz://fritz.box/ports/eth0?maxspeed=1000"
+                onStop="fritz://fritz.box/ports/eth0?maxspeed=100+5min">Moonlight</Process>
+     </ProcessMonitor>
+   </SystemMonitor>
+
+The process element's text is the executable-name pattern; ``name`` is only
+its label. The router name in the URL must match the configured router.
+When combining query parameters inside XML, write ``&amp;``, for example
+``?maxspeed=1000&amp;eee_mode=1``.
 
 The grammar is ``fritz://<box>/<resource>/<id>?<prop>=<value>&…``; the only resource
 today is ``ports`` with a required numeric ``maxspeed`` (Mbit) and an optional

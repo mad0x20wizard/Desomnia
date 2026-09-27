@@ -1,1 +1,0 @@
-This event is triggered when a remote client tries to connect to a Duo instance, that is not started.

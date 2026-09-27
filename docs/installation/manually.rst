@@ -64,12 +64,13 @@ Create a systemd service unit to manage automatic start and stop:
         [Install]
         WantedBy=multi-user.target
 
-    The ``ExecStartPre`` statement clears the log folder on each start, which is useful for debugging.
+    Adjust the executable path to its installed location. The ``-a`` option enables
+    automatic configuration reload. Logs are retained across restarts for troubleshooting.
 
 Starting and stopping
 +++++++++++++++++++++
 
-After creating or modifying the configuration file, reload systemd with ``systemctl daemon-reload``. To start Desomnia automatically with the system, enable it with ``systemctl enable desomnia``. Start the service with ``systemctl start desomnia`` and stop it gracefully with ``systemctl stop desomnia``.
+After creating or modifying the service unit, reload systemd with ``systemctl daemon-reload``. Changes to ``monitor.xml`` are reloaded by Desomnia when ``-a`` is enabled; startup settings in ``<?system ...?>`` still require restarting the service. To start Desomnia automatically with the system, enable it with ``systemctl enable desomnia``. Start the service with ``systemctl start desomnia`` and stop it gracefully with ``systemctl stop desomnia``.
 
 Journal
 +++++++

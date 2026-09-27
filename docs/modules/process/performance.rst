@@ -43,7 +43,7 @@ Process *exits*, unlike starts, need no polling at all. macOS will report those 
 Graphics processor accounting
 -----------------------------
 
-:OS: macOS
+:OS: 🍎 *macOS*
 
 .. include:: attributes/gpu.rst
 

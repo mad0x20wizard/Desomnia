@@ -31,7 +31,7 @@ The availability of pre-built bottles can be checked `here <https://github.com/m
 
 .. note::
 
-   Homebrew installs the full-featured build with all plugins included. On a 64-bit Linux device — such as an always-on :doc:`Wake-on-LAN proxy </guides/wol-proxy>`, or wherever a minimal footprint matters more than plugins — consider the self-contained **native build** instead. It needs no .NET runtime and uses far less memory, but drops runtime plugin loading. It is not distributed through Homebrew; obtain it from the release archive (see :doc:`manual installation </installation/manually>`) or as the ``-native`` :doc:`Docker image </installation/docker>`. See :doc:`/modules/network/performance` for the trade-offs.
+   Homebrew installs the standard build with the bundled plugins supported by that operating system. On a 64-bit Linux device — such as an always-on :doc:`Wake-on-LAN proxy </guides/wol-proxy>`, or wherever a minimal footprint matters more than plugins — consider the self-contained **native build** instead. It needs no .NET runtime and uses far less memory, but drops runtime plugin loading. It is not distributed through Homebrew; obtain it from the release archive (see :doc:`manual installation </installation/manually>`) or as the ``-native`` :doc:`Docker image </installation/docker>`. See :doc:`/modules/network/performance` for the trade-offs.
 
 Filesystem layout
 -----------------
@@ -80,7 +80,7 @@ To stop the service and remove it from auto-start:
 Plugins included
 ----------------
 
-Desomnia installed via Homebrew includes all plugins from the main repository. To install additional plugins, place the ZIP file in ``.../var/lib/desomnia/plugins``. The file must follow the naming convention ``plugin-*.zip``, with an optional version specifier separated from the name by ``_``.
+Homebrew installations include the bundled plugins supported on Linux/macOS, including Firewall Knock Operator and FRITZ!Box. Windows-only integrations such as Duo and Hyper-V are not available on these platforms. To install additional plugins, place the ZIP file in ``.../var/lib/desomnia/plugins``. The file must follow the naming convention ``plugin-*.zip``, with an optional version specifier separated from the name by ``_``.
 
 Logging
 -------

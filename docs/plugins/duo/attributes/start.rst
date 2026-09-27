@@ -1,1 +1,0 @@
-This event is triggered once the Duo instance has fully started.

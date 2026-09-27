@@ -1,14 +1,14 @@
 Local Sleep Management
 ======================
 
-:OS: 🪟 Windows 🐧 Linux
+:OS: 🪟 *Windows* 🐧 *Linux* 🍎 *macOS*
 
-Where are built-in the limits?
-------------------------------
+Why use Desomnia?
+-----------------
 
-Both Windows and Linux include an idle detection mechanism that can suspend the system automatically. For an interactive desktop machine this is usually sufficient — a laptop that sleeps after ten minutes with no keyboard or mouse activity. Headless servers and home lab machines live in a different world: they need to stay alive for a client in another room, wake up the moment a connection arrives, and go back to sleep when the last client disconnects. Neither platform's built-in approach was designed to be used like this effectively.
+Windows, Linux, and macOS include an idle detection mechanism that can suspend the system automatically. For an interactive desktop machine this is usually sufficient — a laptop that sleeps after ten minutes with no keyboard or mouse activity. Headless servers and home lab machines live in a different world: they need to stay alive for a client in another room, wake up the moment a connection arrives, and go back to sleep when the last client disconnects. Desomnia lets you define the activity that matters to these workloads.
 
-The core shortcomings are the same on both:
+Typical reasons to customize sleep management include:
 
 - There is no awareness of network connections — a file server can stay awake all night serving nobody, or suspend in the middle of a transfer.
 - The system cannot distinguish between a process that is doing meaningful work and one that is simply running in the background.
@@ -88,10 +88,16 @@ The most common use on the ``<SystemMonitor>`` is the ``sleepless`` action, whic
 
     Configuring both ``onIdle`` and ``onUsage`` together is the recommended setup when using Desomnia as a full replacement for the built-in power management.
 
-Start from here
----------------
+Configuration examples
+----------------------
 
-A good starting point is to configure Desomnia to replicate the behaviour of the built-in power management system, then refine it from there:
+Session and SMB monitoring
+++++++++++++++++++++++++++
+
+:OS: 🪟 *Windows*
+
+This configuration monitors user sessions, SMB access, and application power
+requests, which resembles the behaviour of the built-in power management:
 
 .. code:: xml
 
@@ -104,7 +110,34 @@ A good starting point is to configure Desomnia to replicate the behaviour of the
 
     </SystemMonitor>
 
-The built-in power management monitors these same sources by default, so this configuration should produce roughly the same behaviour as before. From here you can add rules and filters to accommodate specific requirements, and bring in additional monitors that the built-in system does not support at all.
+Service monitoring
+++++++++++++++++++
+
+:OS: 🐧 *Linux* 🍎 *macOS*
+
+This configuration monitors power requests and SSH activity. Windows session
+and SMB monitors are unavailable on these platforms:
+
+.. code:: xml
+
+    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onUsage="sleepless">
+      <PowerRequestMonitor />
+      <NetworkMonitor>
+        <Service name="SSH" port="22" />
+      </NetworkMonitor>
+    </SystemMonitor>
+
+This example counts application power requests and SSH activity. Change the
+service list for your machine. Linux requires working systemd-logind integration
+for inhibitor monitoring; on macOS, Desomnia watches power assertions.
+
+A sleep request from Desomnia can bypass application sleep inhibitors on Linux
+and macOS. Include the power-request monitor and filter it deliberately if those
+requests should influence Desomnia's decision.
+
+Add process rules using :doc:`activity`, display rules using
+:doc:`/modules/display/monitor`, or settings that adapt to battery and network
+changes using :doc:`/concepts/environments`.
 
 Exploring the core modules
 --------------------------
@@ -124,7 +157,7 @@ Keeps the system awake while any process or driver has an active power request o
 ProcessMonitor
 ++++++++++++++
 
-The built-in power management has no concept of process presence — a process cannot keep the system awake simply by running. This monitor fills that gap. See :doc:`/modules/process/monitor` to learn how to watch individual processes or process groups, set CPU thresholds for activity detection, and effectively grant any process the ability to issue power requests.
+The built-in power management has no concept of process presence — a process cannot keep the system awake simply by running. This monitor fills that gap. See :doc:`/modules/process/monitor` to learn how to watch individual processes or process groups, combine CPU, GPU, disk, and network thresholds for activity detection, and effectively grant any process the ability to issue power requests.
 
 NetworkMonitor
 ++++++++++++++

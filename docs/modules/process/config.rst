@@ -12,8 +12,7 @@ You can configure any number of ``<Process>`` to watch OS processes or groups of
 
     <ProcessMonitor onUsage="" onIdle="">
 
-      <Process ... />
-      <Process ... />
+      <Process name="Backup" minIO="100kb/s">backup</Process>
 
     </ProcessMonitor>
 
@@ -76,6 +75,8 @@ watchChildren
 By default, this process group will only include processes with a matching image name. However, if you set ``watchChildren``, their spawned child processes will also be included. However, each individual process will only be included once. Therefore, you can safely set this for processes that spawn child processes of themselves (e.g. most of the web browsers).
 
 .. include:: attributes/cpu.rst
+
+.. include:: attributes/mingpu.rst
 
 .. include:: attributes/io.rst
 

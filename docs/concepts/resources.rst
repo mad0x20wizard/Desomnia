@@ -86,6 +86,7 @@ onIdle
 Fires when a resource has been idle for a complete timeout cycle.
 
 .. code:: xml
+
     <SystemMonitor version="2" timeout="2min" onIdle="sleep">
 
 onUsage
@@ -96,6 +97,7 @@ onUsage
 Fires on every inspection cycle in which a resource reports activity. An ``onUsage`` event marks the resource as non-idle and cancels any pending ``onIdle`` action.
 
 .. code:: xml
+
     <SystemMonitor version="2" timeout="2min" onIdle="sleep" onUsage="sleepless">
 
 With both events configured, Desomnia holds a *sleepless* power request while any monitor is active, and releases it — then puts the system to sleep — once everything goes quiet.
@@ -146,6 +148,7 @@ The system is idle only when every monitor is idle, but individual monitors and 
 For example, a user session may go idle while an open SMB connection is still keeping the system busy:
 
 .. code:: xml
+
     <SystemMonitor version="2" timeout="2min" onIdle="sleep" onUsage="sleepless">
 
         <SessionMonitor>
@@ -166,6 +169,7 @@ Actions are resolved up the tree: a resource or monitor can reference actions de
 A practical use of this is the ``exec`` action, which runs an arbitrary command. Any monitor or resource can trigger it:
 
 .. code:: xml
+
     <SystemMonitor version="2" timeout="2min" onIdle="sleep">
 
         <SessionMonitor>

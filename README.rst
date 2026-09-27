@@ -22,7 +22,7 @@ Modes of operation
 
 Desomnia can be deployed in three complementary roles and combined across multiple machines:
 
-1. **Local Sleep Management** – 🪟 *Windows* 🐧 *Linux*
+1. **Local Sleep Management** – 🪟 *Windows* 🐧 *Linux* 🍎 *macOS*
 
    Replaces the OS's built-in sleep management. Desomnia holds the system awake while any monitored resource is used — a user session, a running process, an open SMB share, an incoming network connection — and sends it to sleep once everything goes quiet.
 
@@ -49,11 +49,11 @@ The following activities can be tracked out of the box:
 
 -  **Processes** – 🪐 *platform-independent*
 
-   Watches running processes by name, with an optional CPU threshold to distinguish real activity from idle background processes. On Windows, Desomnia uses Event Trace for Windows (ETW) for near-instant start and stop notifications with no polling overhead; on other platforms it polls at a configurable interval.
+   Watches running processes by name, with CPU, GPU, storage I/O, and network thresholds where supported, combined through configurable activity rules. On Windows, Desomnia uses Event Trace for Windows (ETW) for near-instant start and stop notifications with no polling overhead; on Linux and macOS it uses efficient native polling for new processes and notifications for process exits.
 
--  **Power requests** – 🪟 *Windows* 🐧 *Linux*
+-  **Power requests** – 🪟 *Windows* 🐧 *Linux* 🍎 *macOS*
 
-   Tracks and filters native power requests / inhibitor locks registered by processes and drivers — giving you selective control over which of these should be allowed to prevent the system from sleep.
+   Tracks and filters native power requests, inhibitor locks, and macOS power assertions registered by processes and drivers — giving you selective control over which of these should be allowed to prevent the system from sleep.
 
 -  **SMB sessions** – 🪟 *Windows*
 
@@ -63,13 +63,25 @@ The following activities can be tracked out of the box:
 
    Tracks the activity of Windows user sessions, including Remote Desktop connections. Sessions can be filtered by user account, have individual idle thresholds, and trigger actions — lock, disconnect, logout, or run a script — when they start to idle.
 
-Configuration examples
-----------------------
+-  **Displays** – 🪟 *Windows* 🍎 *macOS*
+
+   Treat selected external displays as activity, react to display and laptop-lid events, and control display connections (only on macOS).
+
+Configuration
+-------------
+
+Adaptive configuration
+++++++++++++++++++++++
+
+Environment rules can change settings automatically according to the network, power source, or laptop lid state. For example, use shorter idle times on battery or enable home-network services only while at home. See the `environment guide <https://desomnia.readthedocs.io/en/latest/concepts/environments.html>`__ for examples and platform support.
+
+Examples
+++++++++
 
 The following examples illustrate how you would configure the software for a selection of use cases, and should give you an idea of how Desomnia works. `Read the docs`_ to find out more about the available use-cases.
 
 Wake-on-LAN proxy
-+++++++++++++++++
+~~~~~~~~~~~~~~~~~
 
 Use this on an always-on device. Any client on the local network that tries to reach the server via RDP or SSH while it's suspended will trigger a Magic Packet automatically. On startup, IPv4 addresses will be resolved automatically via hostname resolution:
 
@@ -90,7 +102,7 @@ Use this on an always-on device. Any client on the local network that tries to r
 Desomnia will automatically detect and temporarily claim the sleeping hosts IP address in order to filter incoming connection attempts. After a successful wake, the connection will be handed off to the target, transparently.
 
 Server and VM sleep automation
-++++++++++++++++++++++++++++++
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This configuration could be used to automatically suspend a physical system unless there is an open SSH connection or a running backup plan. Additionally Desomnia will watch connections to a local VM named ``dev``, running in bridged network mode:
 
@@ -100,7 +112,7 @@ This configuration could be used to automatically suspend a physical system unle
    <SystemMonitor version="2" timeout="2min" onIdle="sleep+20min" onUsage="sleepless">
 
      <NetworkMonitor>
-       <Service name="SSH" port="22">
+       <Service name="SSH" port="22" />
 
        <VirtualHost name="dev" IPv4="192.168.1.10" onDemand="start" onIdle="suspend+10min">
          <Service name="SSH" port="22" />
@@ -108,13 +120,13 @@ This configuration could be used to automatically suspend a physical system unle
        </VirtualHost>
      </NetworkMonitor>
 
-     <PowerRequestManager>
+     <PowerRequestMonitor>
        <RequestFilterRule type="Must" name="Backup">CBBackupPlan</RequestFilterRule>
-     </PowerRequestManager>
+     </PowerRequestMonitor>
 
    </SystemMonitor>
 
-The VM starts automatically on the first SSH or HTTP connection. Any live TCP or UDP connection to one of its services — from anywhere on the network — count as activity and keeps it running. Ten minutes after the last connection closes, the VM will be suspended. The physical host will also be suspended, once neither the VM or any of its own services are needed.
+VM actions require a supported hypervisor plugin, such as Hyper-V on Windows. The VM starts automatically on the first SSH or HTTP connection. Any live TCP or UDP connection to one of its services — from anywhere on the network — count as activity and keeps it running. Ten minutes after the last connection closes, the VM will be suspended. The physical host will also be suspended, once neither the VM or any of its own services are needed.
 
 Additional Features
 -------------------
@@ -177,7 +189,7 @@ Native ``.deb`` / ``.rpm`` packages ship the low-memory **native build** (no .NE
    curl -1sLf 'https://dl.cloudsmith.io/public/mad0x20wizard/tools/setup.rpm.sh' | sudo -E bash
    sudo dnf install desomnia
 
-The package starts Desomnia as a zero-configuration Sleep Proxy out of the box. See the `package installation guide <https://desomnia.readthedocs.io/en/latest/installation/packages.html>`__ for supported platforms and the constraints of the native build.
+On first installation, packages choose a Sleep Proxy configuration for always-on devices or a local-monitoring configuration for machines that can suspend and wake over the network. Local sleep actions remain opt-in. See the `package installation guide <https://desomnia.readthedocs.io/en/latest/installation/packages.html>`__ for supported platforms and the constraints of the native build.
 
 Package repository hosting is graciously provided by `Cloudsmith <https://cloudsmith.io/~mad0x20wizard/repos/tools/packages/>`__. Cloudsmith is the only fully hosted, cloud-native, universal package management solution, that enables your organization to create, store and share packages in any format, to any place, with total confidence.
 
