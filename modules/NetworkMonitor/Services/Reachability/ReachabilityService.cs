@@ -27,11 +27,11 @@ namespace MadWizard.Desomnia.Network.Reachability
             {
                 if (ip.PayloadPacket is TransportPacket transport)
                 {
-                    Notify(host, ip.SourceAddress, IPPort.SourceOf(transport));
+                    Notify(host, packet.SourceHardwareAddress, ip.SourceAddress, IPPort.SourceOf(transport));
                 }
                 else
                 {
-                    Notify(host, ip.SourceAddress);
+                    Notify(host, packet.SourceHardwareAddress, ip.SourceAddress);
                 }
             }
         }
@@ -194,18 +194,25 @@ namespace MadWizard.Desomnia.Network.Reachability
             }
         }
 
-        public void Notify(NetworkHost host, IPAddress ip, IPPort? port = null)
+        public void Notify(NetworkHost host, PhysicalAddress mac, IPAddress ip, IPPort? port = null)
         {
-            if (Monitor[host] is RemoteHostWatch watch)
+            /**
+             * We try to filter out all IP activity, were we should see the 
+             * actual MAC address of the host as sender, but didn't.
+             */
+            if (host.PhysicalAddress is not PhysicalAddress hmac || hmac.Equals(mac) || !Network.LocalRange.Contains(ip))
             {
-                watch.LastSeen = DateTime.Now;
-            }
+                if (Monitor[host] is RemoteHostWatch watch)
+                {
+                    watch.LastSeen = DateTime.Now;
+                }
 
-            Cache.Write(ip, port, true);
+                Cache.Write(ip, port, true);
 
-            foreach (var test in _pendingTests)
-            {
-                test.NotifyReachable(ip, port);
+                foreach (var test in _pendingTests)
+                {
+                    test.NotifyReachable(ip, port);
+                }
             }
         }
 

@@ -32,7 +32,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
             {
                 if (Network[arp.SenderProtocolAddress] is NetworkHost hostByIP)
                 {
-                    AdvertiseAddress(hostByIP, arp.SenderProtocolAddress);
+                    AdvertiseAddress(hostByIP, packet.SourceHardwareAddress, arp.SenderProtocolAddress);
                 }
 
                 /**
@@ -42,7 +42,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
                 {
                     if (!arp.SenderProtocolAddress.IsEmpty()) // TODO APIPA? && !arp.SenderProtocolAddress.IsAPIPA())
                     {
-                        AdvertiseAddress(hostByMAC, arp.SenderProtocolAddress);
+                        AdvertiseAddress(hostByMAC, packet.SourceHardwareAddress, arp.SenderProtocolAddress);
                     }
                 }
             }
@@ -52,21 +52,21 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
             {
                 if (Network[ndpNeighbor.TargetAddress] is NetworkHost hostByIP)
                 {
-                    AdvertiseAddress(hostByIP, ndpNeighbor.TargetAddress);
+                    AdvertiseAddress(hostByIP, packet.SourceHardwareAddress,ndpNeighbor.TargetAddress);
                 }
                 else if (Network[ndpNeighbor.FindSourcePhysicalAddress()!] is NetworkHost hostByMAC)
                 {
                     if (!ndpNeighbor.TargetAddress.IsEmpty())
                     {
-                        AdvertiseAddress(hostByMAC, ndpNeighbor.TargetAddress);
+                        AdvertiseAddress(hostByMAC, packet.SourceHardwareAddress, ndpNeighbor.TargetAddress);
                     }
                 }
             }
         }
 
-        private void AdvertiseAddress(NetworkHost host, IPAddress ip, TimeSpan? lifetime = null)
+        private void AdvertiseAddress(NetworkHost host, PhysicalAddress mac, IPAddress ip, TimeSpan? lifetime = null)
         {
-            Reachability.Notify(host, ip);
+            Reachability.Notify(host, mac, ip);
 
             if (_hosts.TryGetValue(host, out var families) && families.Contains(ip.AddressFamily))
             {

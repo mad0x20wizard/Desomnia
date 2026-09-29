@@ -36,7 +36,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
 
                                     if (host.HasAddress(ip: ip)) // only if the IP already belongs to the host
                                     {
-                                        Reachability.Notify(host, ip);
+                                        Reachability.Notify(host, packet.SourceHardwareAddress, ip);
                                     }
 
                                     break;
