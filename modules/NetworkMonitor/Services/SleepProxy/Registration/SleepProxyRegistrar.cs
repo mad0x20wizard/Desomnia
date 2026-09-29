@@ -103,7 +103,7 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
 
                 _activeLeases[reg.PrimaryAddress] = owned;
 
-                var filterHosts = Context.CreateDynamicFilterHosts().ToList(); // the remote host may register dynamic host filters
+                var filterHosts = Context.CreateDynamicFilterHosts(ctxHost).ToList(); // the remote host may register dynamic host filters
 
                 Task.Run(async () => // this is time consuming and not relevant for the DNS response, so let's decouple it
                 {

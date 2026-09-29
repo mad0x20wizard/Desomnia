@@ -27,17 +27,46 @@ namespace MadWizard.Desomnia.Network.Context
             }
         }
 
-        internal IEnumerable<NetworkHostContext> CreateDynamicFilterHosts()
+        public async Task DiscoverDynamicFilterHosts(params FilterContext[] contexts)
         {
-            List<NetworkHostContext> created = []; // eager on purpose: callers may discard the result
-
-            var contexts = ((IEnumerable<FilterContext>)[this])
-                .Concat(_hostContexts).Concat(_hostContexts.SelectMany(ctx => ctx))
-                .Concat(_knockContexts).ToList();
-
-            foreach (var ctx in contexts)
+            foreach (var host in CreateDynamicFilterHosts(contexts))
             {
-                foreach (var host in ctx.FindMissingDynamicHosts(_hostContexts.Select(x => x.Host)).ToArray())
+                await host.DiscoverAddresses();
+            }
+        }
+
+        internal List<NetworkHostContext> CreateDynamicFilterHosts(params FilterContext[] contexts)
+        {
+            static IEnumerable<FilterContext> WithChildContexts(IEnumerable<FilterContext> contexts, bool onlyChildren = false)
+            {
+                foreach (var context in contexts)
+                {
+                    if (!onlyChildren)
+                    {
+                        yield return context;
+                    }
+
+                    if (context is IEnumerable<FilterContext> parent)
+                    {
+                        foreach (var ctx in WithChildContexts(parent, true))
+                        {
+                            yield return ctx;
+                        }
+                    }
+                }
+            }
+
+            if (contexts.Length == 0)
+            {
+                contexts = [this, .. _knockContexts];
+            }
+
+            List<NetworkHostContext> created = [];
+            foreach (var ctx in WithChildContexts(contexts))
+            {
+                var miss = ctx.FindMissingDynamicHosts(_hostContexts.Select(x => x.Host)).ToArray();
+
+                foreach (var host in miss)
                 {
                     var config = new NetworkHostInfo()
                     {

@@ -211,11 +211,11 @@ namespace MadWizard.Desomnia.Network.Context
 
         public IEnumerable<string> FindMissingDynamicHosts(IEnumerable<NetworkHost> hosts)
         {
-            foreach (HostFilterRuleInfo filter in _dynamicHostFilters)
+            foreach (string name in _dynamicHostFilters.Where(f => f.IsDynamic).Select(f => f.Name).OfType<string>().Distinct())
             {
-                if (filter.Name is not null && !hosts.Any(host => host.Name == filter.Name))
+                if (!hosts.Any(host => host.Name == name))
                 {
-                    yield return filter.Name;
+                    yield return name;
                 }
             }
         }

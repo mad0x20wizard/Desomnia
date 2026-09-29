@@ -42,7 +42,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
             WatchInstances([args.Inspectable]);
         }
 
-        private void WatchInstances(IEnumerable<DuoInstance> instances)
+        private async void WatchInstances(IEnumerable<DuoInstance> instances)
         {
             using (Context.Network.Mutex.Lock()) if (_contexts is not null)
             {
@@ -57,6 +57,8 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
                         (
                             TypedParameter.From(instance)
                         );
+
+                        await Context.DiscoverDynamicFilterHosts(context);
 
                         RegisterWatch(instance, context.Watch);
 
