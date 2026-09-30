@@ -58,7 +58,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
                             TypedParameter.From(instance)
                         );
 
-                        await Context.DiscoverDynamicFilterHosts(context);
+                        await Context.DiscoverDynamicHosts(context);
 
                         RegisterWatch(instance, context.Watch);
 
