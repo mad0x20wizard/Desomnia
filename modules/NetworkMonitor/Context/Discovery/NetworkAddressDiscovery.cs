@@ -47,7 +47,7 @@ namespace MadWizard.Desomnia.Network.Context
                 .SingleInstance()
                 .AsSelf();
 
-            RegisterTrafficFilter(builder, new UDPTrafficType(67));
+            RegisterTrafficFilter(builder, new UDPTrafficType(67)); // DHCP responses
         }
 
         internal async Task DiscoverAddresses()
@@ -118,12 +118,7 @@ namespace MadWizard.Desomnia.Network.Context
                     Logger.LogWarning("Host '{name}' has no MAC address configured.", Host.Name);
                 }
             }
-
-            // Configure traffic filters TODO maybe move into dynamic callback
-            if (Auto.HasFlag(AutoDiscoveryType.IPv4) || Host.IPv4Addresses.Any())
-                Scope.UseTrafficType(new IPv4TrafficType());
-            if (Auto.HasFlag(AutoDiscoveryType.IPv6) || Host.IPv6Addresses.Any())
-                Scope.UseTrafficType(new IPv6TrafficType());
         }
+
     }
 }

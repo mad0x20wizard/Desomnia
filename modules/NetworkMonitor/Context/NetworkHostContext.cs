@@ -6,6 +6,7 @@ using MadWizard.Desomnia.Network.Configuration.Hosts;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Configuration.Services;
 using MadWizard.Desomnia.Network.Context.Parameters;
+using MadWizard.Desomnia.Network.Context.Watch;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Manager;
 using MadWizard.Desomnia.Network.Neighborhood;
@@ -63,6 +64,8 @@ namespace MadWizard.Desomnia.Network.Context
                 RegisterHostFilters(builder, config.HostFilterRule);
                 RegisterHostRangeFilters(builder, config.HostRangeFilterRule);
 
+                RegisterTrafficFilterWatch(builder);
+
                 builder.RegisterType<LocalHostWatch>().As<NetworkHostWatch>()
                     .WithParameter(TypedParameter.From(config.MakeAdvertiseOptions(configNetwork)))
                     .WithParameter(TypedParameter.From(config.MakeHandoffOptions(configNetwork)))
@@ -93,6 +96,8 @@ namespace MadWizard.Desomnia.Network.Context
                     .AsSelf();
 
                 RegisterFilters(builder, config);
+
+                RegisterTrafficFilterWatch(builder);
 
                 builder.RegisterType<LocalVirtualHostWatch>().As<NetworkHostWatch>()
                     .WithParameter(TypedParameter.From(vm))
@@ -125,6 +130,7 @@ namespace MadWizard.Desomnia.Network.Context
                 RegisterFilters(builder, config);
 
                 RegisterTrafficFilter(builder, new ICMPEchoTrafficType()); // ping-based aliveness checks need the echo replies
+                RegisterTrafficFilterWatch(builder);
 
                 builder.RegisterType<RemoteHostWatch>().As<NetworkHostWatch>()
                     .WithParameter(TypedParameter.From(config.MakeAdvertiseOptions(configNetwork)))
@@ -160,6 +166,7 @@ namespace MadWizard.Desomnia.Network.Context
                 RegisterFilters(builder, config);
 
                 RegisterTrafficFilter(builder, new ICMPEchoTrafficType()); // ping-based aliveness checks need the echo replies
+                RegisterTrafficFilterWatch(builder);
 
                 builder.RegisterType<RemoteVirtualHostWatch>().As<NetworkHostWatch>()
                     .WithParameter(NetworkHostWatchParameter<RemoteHostWatch>.FindByHostName(configPhysical.Name))
@@ -175,6 +182,13 @@ namespace MadWizard.Desomnia.Network.Context
             });
 
             CreateStaticWatchedServices(config.Services);
+        }
+
+        private void RegisterTrafficFilterWatch(ContainerBuilder builder)
+        {
+            builder.RegisterType<TrafficFilterWatch>()
+                .WithParameter(TypedParameter.From(Auto))
+                .AutoActivate();
         }
 
         protected static void ConfigureHost(IActivatedEventArgs<NetworkHost> args, NetworkHostInfo config)

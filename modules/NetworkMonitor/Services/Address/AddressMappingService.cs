@@ -55,12 +55,12 @@ namespace MadWizard.Desomnia.Network.Address
 
         async Task INetworkService.Startup()
         {
+            Monitor.TrackingStarted += Monitor_TrackingStarted;
+            Monitor.TrackingStopped += Monitor_TrackingStopped;
+
             if (EligibleHosts.Any())
             {
                 Logger.LogDebug("Installing static mappings...");
-
-                Monitor.TrackingStarted += Monitor_TrackingStarted;
-                Monitor.TrackingStopped += Monitor_TrackingStopped;
 
                 foreach (var host in EligibleHosts)
                 {
@@ -136,6 +136,9 @@ namespace MadWizard.Desomnia.Network.Address
                     UninstallStaticMapping(host);
                 }
             }
+
+            Monitor.TrackingStarted -= Monitor_TrackingStarted;
+            Monitor.TrackingStopped -= Monitor_TrackingStopped;
         }
         #endregion
 

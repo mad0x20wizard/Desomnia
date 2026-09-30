@@ -27,7 +27,7 @@ namespace MadWizard.Desomnia.Network.Context
             }
         }
 
-        public async Task DiscoverDynamicFilterHosts(params FilterContext[] contexts)
+        public async Task DiscoverDynamicHosts(params FilterContext[] contexts)
         {
             foreach (var host in CreateDynamicFilterHosts(contexts))
             {
