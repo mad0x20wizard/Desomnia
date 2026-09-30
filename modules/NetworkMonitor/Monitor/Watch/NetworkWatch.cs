@@ -14,8 +14,23 @@ namespace MadWizard.Desomnia.Network.Watch
 
         public TransmissionThreshold? Threshold { get; set; }
 
-        internal protected virtual Task StartWatch() => Task.CompletedTask;
-        internal protected virtual Task StopWatch(bool gracefully)  => Task.CompletedTask;
+        public bool IsWatching { get; private set; }
+
+        internal protected virtual async Task StartWatch()
+        {
+            if (IsWatching)
+                throw new InvalidOperationException($"Watch has already been started.");
+
+            IsWatching = true;
+        }
+
+        internal protected virtual async Task StopWatch(bool gracefully)
+        {
+            if (!IsWatching)
+                throw new InvalidOperationException($"Watch has not been started.");
+
+            IsWatching = false;
+        }
 
         protected void ReportNetworkTraffic(long? bytes = null, PacketDirection direction = PacketDirection.Inbound)
         {

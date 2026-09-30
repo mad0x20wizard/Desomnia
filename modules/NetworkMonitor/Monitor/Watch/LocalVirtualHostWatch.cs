@@ -156,8 +156,17 @@ namespace MadWizard.Desomnia.Network.Watch
         {
             if (gracefully)
             {
-                await ReclaimWatch(true);
+                try
+                {
+                    await ReclaimWatch(true);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Could not reclaim watch of local virtual host '{host}'", Host.Name);
+                }
             }
+
+            await base.StopWatch(gracefully);
         }
 
         internal protected override async Task<PhysicalAddress?> RequestIPUnicastTrafficTo(IPAddress ip)

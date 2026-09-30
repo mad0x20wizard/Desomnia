@@ -22,11 +22,11 @@ namespace MadWizard.Desomnia.Network.Watch
         public void TriggerSuspended()  { Logger.LogDebug($"'{Host.Name}' changed state to: suspended");    Suspended.TriggerEvent(); }
         public void TriggerStopped()    { Logger.LogDebug($"'{Host.Name}' changed state to: stopped");      Stopped.TriggerEvent(); }
 
-        public NetworkServiceWatch? this[NetworkService? service] => this.Where(watch => watch.Service == service).FirstOrDefault();
+        public NetworkServiceWatch? this[NetworkService? service] => this.FirstOrDefault(watch => watch.Service == service);
 
         internal protected override async Task StartWatch()
         {
-            foreach (var service in this)
+            foreach (var service in this.Where(s => !s.IsWatching))
                 await service.StartWatch();
 
             await base.StartWatch();
@@ -52,7 +52,7 @@ namespace MadWizard.Desomnia.Network.Watch
 
         internal protected override async Task StopWatch(bool gracefully)
         {
-            foreach (var service in this)
+            foreach (var service in this.Where(s => s.IsWatching))
                 await service.StopWatch(gracefully);
 
             await base.StopWatch(gracefully);

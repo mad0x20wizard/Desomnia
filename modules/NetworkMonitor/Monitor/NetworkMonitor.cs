@@ -81,7 +81,7 @@ namespace MadWizard.Desomnia.Network
 
         internal async Task StartWatch()
         {
-            foreach (var watch in this)
+            foreach (var watch in this.Where(w => !w.IsWatching))
             {
                 await watch.StartWatch();
             }
@@ -128,6 +128,34 @@ namespace MadWizard.Desomnia.Network
             Logger.LogDebug($"Monitoring of '{Name}' has been paused.");
         }
 
+        public override bool StopTracking(NetworkHostWatch watch)
+        {
+            if (base.StopTracking(watch))
+            {
+                if (watch.IsWatching)
+                {
+                    _ = StopWatch(watch, true);
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private async Task StopWatch(NetworkHostWatch watch, bool gracefully)
+        {
+            try
+            {
+                await watch.StopWatch(gracefully);
+
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, $"Failed to stop {watch} cleanly");
+            }
+        }
+
         internal async Task StopMonitoring(NetworkShutdownReason reason)
         {
             Janitor.StopSweeping();
@@ -141,14 +169,7 @@ namespace MadWizard.Desomnia.Network
                 var gracefully = reason == NetworkShutdownReason.ApplicationShutdown
                     || reason == NetworkShutdownReason.InterfaceShutdown;
 
-                try
-                {
-                    await watch.StopWatch(gracefully);
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogError(ex, $"Failed to stop {watch} cleanly");
-                }
+                await StopWatch(watch, gracefully);
             }
 
             foreach (var service in Services.Reverse())

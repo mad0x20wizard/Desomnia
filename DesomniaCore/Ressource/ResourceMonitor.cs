@@ -63,7 +63,7 @@ namespace MadWizard.Desomnia
             return false;
         }
 
-        public virtual void StopTracking(T inspectable)
+        public virtual bool StopTracking(T inspectable)
         {
             bool removed;
 
@@ -81,6 +81,8 @@ namespace MadWizard.Desomnia
 
                 TrackingStopped?.Invoke(this, new InspectableEventArgs<T>(inspectable));
             }
+
+            return removed;
         }
 
         protected virtual bool ShouldInspectResource(T inspectable)

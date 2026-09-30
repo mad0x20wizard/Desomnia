@@ -135,9 +135,11 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
                         await host.DiscoverAddresses();
                     }
 
+                    await remote.MaybeStartWatch();
+
                     return lease;
 
-                }).ContinueWith(t => FinishRegistration(remote, t.Result));
+                }).ContinueWith(task => FinishRegistration(remote, owned, task));
             }
             catch (Exception)
             {
@@ -182,7 +184,39 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
         }
 
         #region Lease start/end validation
-        private async Task FinishRegistration(RemoteHostWatch watch, SleepProxyLease lease)
+        private async Task FinishRegistration(RemoteHostWatch watch, Owned<SleepProxyLease> registration, Task<SleepProxyLease> task)
+        {
+            SleepProxyLease lease;
+
+            try
+            {
+                lease = await task;
+            }
+            catch (Exception ex)
+            {
+                using var scope = Logger.BeginHostScope(watch.Host);
+
+                Logger.LogError(ex, "Could not configure sleep proxy registration for {Host}; releasing held resources.", watch.Host.Name);
+
+                // Setup may fail before the MAC is assigned or the lease's Ended handler is
+                // installed. Dispose the original registration directly to undo partial setup.
+                if (registration.Value is SleepProxyLease failed)
+                {
+                    using (await watch.Host.Network.Mutex.LockAsync())
+                    {
+                        _activeLeases.TryRemove(new(failed.Registration.PrimaryAddress, registration));
+
+                        registration.Dispose();
+                    }
+                }
+
+                return;
+            }
+
+            await ValidateRegistration(watch, lease);
+        }
+
+        private async Task ValidateRegistration(RemoteHostWatch watch, SleepProxyLease lease)
         {
             lease.Ended += async (sender, args) =>
             {
@@ -202,10 +236,10 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
                         owned.Dispose();
                     }
 
-                    string msg = (args.HasFailed ? "Handoff from"  : "Lease for") 
-                        + " '{Host}' has " 
-                        + (args.HasExpired ? "expired" 
-                            : args.HasFailed  ? "failed" 
+                    string msg = (args.HasFailed ? "Handoff from" : "Lease for")
+                        + " '{Host}' has "
+                        + (args.HasExpired ? "expired"
+                            : args.HasFailed ? "failed"
                             : "ended");
 
                     if (args.HasFailed && args.Timeout is TimeSpan timeout)

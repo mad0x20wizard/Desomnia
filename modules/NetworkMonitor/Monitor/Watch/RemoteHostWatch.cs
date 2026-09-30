@@ -387,6 +387,21 @@ namespace MadWizard.Desomnia.Network.Watch
         #endregion
 
         #region Triggers for Ping
+        internal async Task MaybeStartWatch()
+        {
+            if (!IsWatching)
+            {
+                await StartWatch();
+            }
+            else
+            {
+                foreach (var service in this.Where(s => !s.IsWatching))
+                {
+                    await service.StartWatch();
+                }
+            }
+        }
+
         protected internal override async Task StartWatch()
         {
             if (PingOptions.Frequency is TimeSpan interval && interval > TimeSpan.Zero)
