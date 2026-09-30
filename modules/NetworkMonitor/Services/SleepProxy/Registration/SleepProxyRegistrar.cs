@@ -158,7 +158,7 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
             {
                 hostInfo = new RemoteVirtualHostInfo() { Name = reg.Name };
 
-                var ctxPhysical = Context.FindHostContextBy(target) ?? throw new KeyNotFoundException($"Wake host with MAC = {target} not found.");
+                var ctxPhysical = Context.FindHostContextBy(target) ?? throw new InvalidOperationException($"Physical host with MAC = {target} not found.");
 
                 if (!ctxPhysical.Auto.HasFlag(AutoDiscoveryType.Host))
                     throw new NotSupportedException($"Host {ctxPhysical.Host.Name} is not configured to discover virtual hosts.");
