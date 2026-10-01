@@ -67,6 +67,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
                     _pendingStarts.Clear();
                     _sessions.Clear();
                 }
+
+                base.StopWatch();
             }
         }
 

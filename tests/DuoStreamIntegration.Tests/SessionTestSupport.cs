@@ -35,7 +35,18 @@ internal sealed class FakeSession(uint id = 1, string? clientName = "Player", st
 internal sealed class FakeSessionManager(params ISession[] sessions) : ISessionManager
 {
     private readonly Dictionary<uint, ISession> _sessions = sessions.ToDictionary(session => session.Id);
-    public ISession this[uint id] { get { lock (_sessions) return _sessions[id]; } }
+    public Action<uint>? SessionRequested { get; set; }
+    public ISession this[uint id]
+    {
+        get
+        {
+            lock (_sessions)
+            {
+                try { return _sessions[id]; }
+                finally { SessionRequested?.Invoke(id); }
+            }
+        }
+    }
     public ISession? ConsoleSession { get; set; }
     public IEnumerable<ISession> FindSessionsByUserName(string user) => this.Where(session => session.UserName == user);
     public IEnumerator<ISession> GetEnumerator()

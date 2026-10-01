@@ -45,6 +45,9 @@ namespace MadWizard.Desomnia.Service.Duo
 
         private void Watcher_SessionChanged(object? sender, InstanceSessionChangedEventArgs args)
         {
+            if (args.Instance.Session == args.Session)
+                return;
+
             args.Instance.StopTracking<SessionWatch>();
 
             if (SessionMonitor.TakeSnapshot().FirstOrDefault(w => w.Session == args.Session) is SessionWatch watch)

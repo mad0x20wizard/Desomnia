@@ -1,5 +1,8 @@
 using MadWizard.Desomnia.Service.Duo;
+using MadWizard.Desomnia.Service.Duo.Configuration;
 using MadWizard.Desomnia.Service.Duo.Manager.Watcher;
+using MadWizard.Desomnia.Session;
+using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Win32;
@@ -74,19 +77,186 @@ public sealed class RegistryWatcherTests
         using var instance = Instance();
         var sessions = new FakeSessionManager();
         using var registry = new InstanceRegistry();
-        registry.Key.SetValue("SessionId", 42);
         var watcher = registry.Watcher(sessions);
         var changes = Observe(watcher);
         using var lifetime = new CancellationTokenSource(TestTimeout);
         await watcher.StartWatch([instance], lifetime.Token);
         try
         {
+            var requested = Signal();
+            sessions.SessionRequested = _ => requested.TrySetResult();
+            registry.Key.SetValue("SessionId", 42);
+            await requested.Task.WaitAsync(TestTimeout);
+            Assert.Equal(42, registry.Key.GetValue("SessionId"));
             Assert.Null(instance.Session);
             var session = new FakeSession(42, null);
             sessions.Logon(session);
             Assert.Same(session, (await Next(changes)).Session);
         }
         finally { watcher.StopWatch(); }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("another-user")]
+    public async Task Startup_clears_stale_ids_and_preserves_matching_sessions(string? staleUser)
+    {
+        using var stale = Instance();
+        using var active = Instance("Active");
+        var validSession = new FakeSession(43, null, "PLAYER");
+        var sessions = new FakeSessionManager(validSession);
+        if (staleUser is not null) sessions.Logon(new FakeSession(42, null, staleUser));
+        using var registry = new InstanceRegistry();
+        using var activeKey = registry.CreateKey("Active");
+        registry.Key.SetValue("SessionId", 42);
+        activeKey.SetValue("SessionId", 43);
+        var watcher = registry.Watcher(sessions);
+        var changes = Observe(watcher);
+
+        await watcher.StartWatch([stale, active], CancellationToken.None);
+        try
+        {
+            Assert.Null(registry.Key.GetValue("SessionId"));
+            Assert.Equal(43, activeKey.GetValue("SessionId"));
+            var started = await Next(changes);
+            Assert.Same(active, started.Instance);
+            Assert.Same(validSession, started.Session);
+
+            // Reusing the stale ID must not revive the old association.
+            var reused = new FakeSession(42, null);
+            sessions.Logon(reused);
+            activeKey.DeleteValue("SessionId");
+            Assert.Same(active, (await Next(changes)).Instance);
+            Assert.False(changes.Reader.TryRead(out _));
+        }
+        finally { watcher.StopWatch(); }
+    }
+
+    [Fact]
+    public async Task Two_instances_with_the_same_user_cannot_claim_the_same_session()
+    {
+        using var alpha = Instance("Alpha");
+        using var beta = Instance("Beta");
+        var session = new FakeSession(42, null);
+        var sessions = new FakeSessionManager(session);
+        using var registry = new InstanceRegistry();
+        using var alphaKey = registry.CreateKey("Alpha");
+        using var betaKey = registry.CreateKey("Beta");
+        alphaKey.SetValue("SessionId", 42);
+        betaKey.SetValue("SessionId", 42);
+        var watcher = registry.Watcher(sessions);
+        var changes = Observe(watcher);
+
+        await watcher.StartWatch([alpha, beta], CancellationToken.None);
+        try
+        {
+            Assert.Same(alpha, (await Next(changes)).Instance);
+            Assert.Equal(42, alphaKey.GetValue("SessionId"));
+            Assert.Null(betaKey.GetValue("SessionId"));
+            sessions.Logoff(session);
+            var stopped = await Next(changes);
+            Assert.Same(alpha, stopped.Instance);
+            Assert.Null(stopped.Session);
+            Assert.False(changes.Reader.TryRead(out _));
+        }
+        finally { watcher.StopWatch(); }
+    }
+
+    [Fact]
+    public async Task Automated_start_rejects_a_stale_id_owned_by_a_different_user()
+    {
+        using var marc = new DuoInstance("Marc", Settings("Marc", "Marc"), new DuoInstanceWatchInfo { Name = "Marc" });
+        using var target = new DuoInstance("Test", Settings("Test", "Kevin"), new DuoInstanceWatchInfo { Name = "Test" });
+        var session = new FakeSession(31, null, "Kevin");
+        var sessions = new FakeSessionManager();
+        var config = new SessionMonitorConfig();
+        using var monitor = new SessionMonitor(config, sessions)
+        {
+            Logger = NullLogger<SessionMonitor>.Instance, Scope = null!
+        };
+        monitor.StartupFinished.Set();
+        using var sessionWatch = SessionWatch(session);
+        monitor.StartTracking(sessionWatch);
+        using var registry = new InstanceRegistry();
+        using var marcKey = registry.CreateKey("Marc");
+        using var targetKey = registry.CreateKey("Test");
+        var logger = new RecordingLogger();
+        using var watcher = new RegistryWatcher { SessionManager = sessions, Logger = logger };
+        var changes = Observe(watcher);
+        var manager = new ControlledManager
+        {
+            OnChange = (_, _, _) =>
+            {
+                sessions.Logon(session);
+                targetKey.SetValue("SessionId", 31);
+                return Task.CompletedTask;
+            }
+        };
+        using var context = new DuoServiceContext
+        {
+            Settings = new() { Port = 38299, Instances = [marc.Settings, target.Settings] },
+            Manager = manager, Watcher = watcher, Instances = [marc, target],
+            SessionMonitor = monitor, SessionMonitorConfig = config
+        };
+        await context.StartWatching(TestTimeout);
+
+        // A stale value appears before Windows announces Test's new session.
+        var requested = Signal();
+        sessions.SessionRequested = _ => requested.TrySetResult();
+        marcKey.SetValue("SessionId", 31);
+        await requested.Task.WaitAsync(TestTimeout);
+        await context.Start(target, TestTimeout);
+
+        Assert.Null(marc.Session);
+        Assert.Null(marcKey.GetValue("SessionId"));
+        Assert.Same(session, target.Session);
+        Assert.True(sessionWatch.Watch.IsYield);
+        Assert.Same(target, (await Next(changes)).Instance);
+        Assert.False(changes.Reader.TryRead(out _));
+        Assert.Empty(logger.Errors);
+    }
+
+    [Fact]
+    public async Task Failed_notification_can_be_retried_after_the_context_has_attached_the_session()
+    {
+        using var instance = Instance();
+        var session = new FakeSession(42, null);
+        var sessions = new FakeSessionManager(session);
+        var config = new SessionMonitorConfig();
+        using var monitor = new SessionMonitor(config, sessions)
+        {
+            Logger = NullLogger<SessionMonitor>.Instance, Scope = null!
+        };
+        monitor.StartupFinished.Set();
+        using var sessionWatch = SessionWatch(session);
+        monitor.StartTracking(sessionWatch);
+        using var registry = new InstanceRegistry();
+        var logger = new RecordingLogger();
+        using var watcher = new RegistryWatcher { SessionManager = sessions, Logger = logger };
+        using var context = new DuoServiceContext
+        {
+            Settings = new() { Port = 38299, Instances = [instance.Settings] },
+            Manager = new ControlledManager(), Watcher = watcher, Instances = [instance],
+            SessionMonitor = monitor, SessionMonitorConfig = config
+        };
+        await context.StartWatching(TestTimeout);
+        var delivered = Signal();
+        var attempts = 0;
+        watcher.SessionChanged += (_, _) =>
+        {
+            if (++attempts == 1) throw new InvalidOperationException("Subscriber failed");
+            delivered.TrySetResult();
+        };
+
+        registry.Key.SetValue("SessionId", 42);
+        await logger.ErrorReported.Task.WaitAsync(TestTimeout);
+        Assert.Same(session, instance.Session);
+        registry.Key.SetValue("DisplayName", "Retry");
+        await delivered.Task.WaitAsync(TestTimeout);
+
+        Assert.Equal(2, attempts);
+        Assert.Same(sessionWatch, Assert.Single(instance.OfType<SessionWatch>()));
+        Assert.Single(logger.Errors);
     }
 
     [Fact]

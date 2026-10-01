@@ -6,7 +6,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 {
     internal abstract class BaseWatcher : IDuoSessionWatcher
     {
-        bool _initialized = false;
+        protected bool HasInitialized { get; private set; } = false;
 
         public required ILogger Logger { protected get; init; }
 
@@ -16,7 +16,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 
         public virtual async Task StartWatch(IEnumerable<DuoInstance> instances, CancellationToken token)
         {
-            _initialized = true;
+            HasInitialized = true;
         }
 
         protected virtual void NotifySessionChange(DuoInstance instance, ISession? session)
@@ -25,7 +25,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 
             SessionChanged?.Invoke(this, args);
 
-            if (_initialized)
+            if (HasInitialized)
             {
                 Logger.LogInformation($"{args.Instance} is now " +
                     $"{(args.IsRunning ? "running" : "stopped")} " +
@@ -38,6 +38,9 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             }
         }
 
-        public abstract void StopWatch();
+        public virtual void StopWatch()
+        {
+            HasInitialized = false;
+        }
     }
 }

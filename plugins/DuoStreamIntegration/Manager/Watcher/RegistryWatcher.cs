@@ -39,7 +39,16 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
                     watch.Changed += (_, _) => channel.Writer.TryWrite(new(instance));
                     _watches.Add(instance, watch);
 
-                    RefreshWatch(watch);
+                    try
+                    {
+                        RefreshWatch(watch);
+                    }
+                    catch (Exception ex) when (ex is KeyNotFoundException or ArgumentException)
+                    {
+                        Logger.LogWarning(ex, "Instance '{Name}' state is invalid; removing SessionId", instance.Name);
+
+                        watch.SessionId = null; // clear stale session id
+                    }
                 }
 
                 token.ThrowIfCancellationRequested();
@@ -115,7 +124,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             {
                 NotifySessionChange(watch.Instance, watch.SessionId is uint id ? SessionManager[id] : null);
             }
-            catch (KeyNotFoundException)
+            catch (KeyNotFoundException) when (HasInitialized)
             {
                 // Wait for logon if Windows has not registered the session yet.
             }
@@ -165,6 +174,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 
         void IDisposable.Dispose()
         {
+            base.StopWatch();
+
             StopWatch();
         }
 
@@ -183,7 +194,21 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 
             internal DuoInstance Instance { get; private init; }
 
-            internal ISession? Session { get; set; }
+            internal ISession? Session
+            {
+                get; set
+                {
+                    if (value != null)
+                    {
+                        if (!string.Equals(value.UserName, Instance.Settings.UserName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new ArgumentException($"SessionId {value.Id} is invalid: '{value.UserName} != '{Instance.Settings.UserName}'");
+                        }
+                    }
+
+                    field = value;
+                }
+            }
 
             internal uint? SessionId
             {
