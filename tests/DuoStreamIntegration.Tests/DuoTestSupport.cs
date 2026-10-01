@@ -132,7 +132,7 @@ internal sealed class ControlledWatcher : StatusWatcher
     {
         if (_published.GetValueOrDefault(instance) == session) return;
         if (session is null) _published.Remove(instance); else _published[instance] = session;
-        PublishSessionChange(instance, session);
+        NotifySessionChange(instance, session);
     }
 }
 

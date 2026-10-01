@@ -1,33 +1,27 @@
 using MadWizard.Desomnia.Session.Manager;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
-using Microsoft.Win32.SafeHandles;
-using System.ComponentModel;
-using System.Runtime.InteropServices;
 using System.Threading.Channels;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 {
     internal class RegistryWatcher : BaseWatcher, IDisposable
     {
-        public required ISessionManager SessionManager { private get; init; }
+        readonly Dictionary<DuoInstance, InstanceKeyWatch> _watches = [];
 
+        // current watch session
         CancellationTokenSource? _lifetime;
-        Task? _watchTask;
         Channel<Signal>? _channel;
-
-        readonly Dictionary<DuoInstance, KeyWatch> _watches = [];
-
-        protected virtual RegistryKey OpenInstanceKey(DuoInstance instance) =>
-            Registry.LocalMachine.OpenSubKey($@"SOFTWARE\Duo\Instances\{instance.Name}", writable: true)
-                ?? throw new FileNotFoundException($"Duo instance key not found: {instance.Name}");
+        Task? _watchTask;
 
         public override Task StartWatch(IEnumerable<DuoInstance> instances, CancellationToken token)
         {
             StopWatch();
+
             token.ThrowIfCancellationRequested();
 
             _lifetime = new();
+
             _channel = Channel.CreateUnbounded<Signal>(new() { SingleReader = true });
 
             SessionManager.UserLogon += SessionManager_UserLogon;
@@ -35,16 +29,17 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 
             try
             {
+                var channel = _channel;
                 foreach (var instance in instances)
                 {
                     token.ThrowIfCancellationRequested();
 
-                    var channel = _channel;
-                    var watch = new KeyWatch(OpenInstanceKey(instance), () => channel.Writer.TryWrite(new(instance)));
+                    // create Registry watch
+                    var watch = new InstanceKeyWatch(instance);
+                    watch.Changed += (_, _) => channel.Writer.TryWrite(new(instance));
                     _watches.Add(instance, watch);
 
-                    watch.Arm();
-                    RefreshSession(instance, watch.Key);
+                    RefreshWatch(watch);
                 }
 
                 token.ThrowIfCancellationRequested();
@@ -57,42 +52,13 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             catch
             {
                 StopWatch();
+
                 throw;
             }
         }
 
-        public override void StopWatch()
-        {
-            if (_lifetime is null)
-                return;
-
-            SessionManager.UserLogon -= SessionManager_UserLogon;
-            SessionManager.UserLogoff -= SessionManager_UserLogoff;
-
-            try
-            {
-                _lifetime.Cancel();
-                _watchTask?.GetAwaiter().GetResult();
-            }
-            finally
-            {
-                foreach (var watch in _watches.Values)
-                    watch.Dispose();
-
-                _watches.Clear();
-                _channel?.Writer.TryComplete();
-                _channel = null;
-                _watchTask = null;
-                _lifetime.Dispose();
-                _lifetime = null;
-            }
-        }
-
-        private void SessionManager_UserLogon(object? sender, ISession session) =>
-            _channel?.Writer.TryWrite(new());
-
-        private void SessionManager_UserLogoff(object? sender, ISession session) =>
-            _channel?.Writer.TryWrite(new(LoggedOff: session));
+        private void SessionManager_UserLogon(object? sender, ISession session) => _channel?.Writer.TryWrite(new());
+        private void SessionManager_UserLogoff(object? sender, ISession session) => _channel?.Writer.TryWrite(new(LoggedOff: session));
 
         private async Task WatchAsync(CancellationToken token)
         {
@@ -110,28 +76,25 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
                             {
                                 // Temporary workaround: Duo currently leaves SessionId behind on logoff.
                                 // Do not erase a newer session that Duo may already have written.
+
                                 try
                                 {
-                                    if (ReadSessionId(watch.Key) == session.Id)
-                                        watch.Key.DeleteValue("SessionId", throwOnMissingValue: false);
+                                    if (watch.SessionId == session.Id)
+                                        watch.SessionId = null;
                                 }
                                 finally
                                 {
-                                    NotifySessionChanged(instance, null);
+                                    NotifySessionChange(instance, null);
                                 }
                             }
                         }
                         else if (signal.Instance is DuoInstance instance)
                         {
-                            var watch = _watches[instance];
-                            watch.Arm();
-                            RefreshSession(instance, watch.Key);
+                            RefreshWatch(_watches[instance]);
                         }
-                        else
+                        else foreach (var watch in _watches.Values)
                         {
-                            // The registry write can precede ISessionManager's logon notification.
-                            foreach (var (target, watch) in _watches)
-                                RefreshSession(target, watch.Key);
+                            RefreshWatch(watch); // FALLBACK: The registry write can precede ISessionManager's logon notification.
                         }
                     }
                     catch (Exception ex) when (!token.IsCancellationRequested)
@@ -146,21 +109,11 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             }
         }
 
-        public void Dispose() => StopWatch();
-
-        private static uint? ReadSessionId(RegistryKey key) => key.GetValue("SessionId") is int id && id >= 0 ? (uint)id : null;
-
-        private void RefreshSession(DuoInstance instance, RegistryKey key)
+        private void RefreshWatch(InstanceKeyWatch watch)
         {
-            if (ReadSessionId(key) is not uint id)
-            {
-                NotifySessionChanged(instance, null);
-                return;
-            }
-
             try
             {
-                NotifySessionChanged(instance, SessionManager[id]);
+                NotifySessionChange(watch.Instance, watch.SessionId is uint id ? SessionManager[id] : null);
             }
             catch (KeyNotFoundException)
             {
@@ -168,57 +121,86 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             }
         }
 
-        private void NotifySessionChanged(DuoInstance instance, ISession? session)
+        protected override void NotifySessionChange(DuoInstance instance, ISession? session)
         {
             var watch = _watches[instance];
 
-            if (watch.Session == session)
+            if (watch.Session != session) // only notify on actual changes
+            {
+                base.NotifySessionChange(instance, watch.Session = session);
+            }
+        }
+
+        public override void StopWatch()
+        {
+            if (_lifetime is null)
                 return;
 
-            watch.Session = session;
+            SessionManager.UserLogon -= SessionManager_UserLogon;
+            SessionManager.UserLogoff -= SessionManager_UserLogoff;
 
-            PublishSessionChange(instance, session);
+            try
+            {
+                _lifetime.Cancel();
+
+                _watchTask?.GetAwaiter().GetResult(); // wait until finish
+            }
+            finally
+            {
+                // end all Registry watches
+                foreach (var watch in _watches.Values)
+                    watch.Dispose();
+                _watches.Clear();
+
+                // close the channel
+                _channel?.Writer.TryComplete();
+                _channel = null;
+
+                _watchTask = null;
+
+                _lifetime.Dispose();
+                _lifetime = null;
+            }
+        }
+
+        void IDisposable.Dispose()
+        {
+            StopWatch();
         }
 
         private record Signal(DuoInstance? Instance = null, ISession? LoggedOff = null);
 
-        private sealed class KeyWatch : IDisposable
+        private class InstanceKeyWatch : KeyWatch
         {
-            internal RegistryKey Key { get; }
+            private static RegistryKey OpenInstanceKey(DuoInstance instance) =>
+                Registry.LocalMachine.OpenSubKey(DuoService.REG_DuoInstances + '\\' + instance.Name, writable: true)
+                    ?? throw new FileNotFoundException($"Duo instance key not found: {instance.Name}");
+
+            internal InstanceKeyWatch(DuoInstance instance) : base(OpenInstanceKey(instance))
+            {
+                Instance = instance;
+            }
+
+            internal DuoInstance Instance { get; private init; }
+
             internal ISession? Session { get; set; }
 
-            readonly AutoResetEvent _signal = new(false);
-            readonly RegisteredWaitHandle _wait;
-
-            internal KeyWatch(RegistryKey key, Action changed)
+            internal uint? SessionId
             {
-                Key = key;
-                _wait = ThreadPool.RegisterWaitForSingleObject(_signal, (_, _) => changed(),
-                    null, Timeout.Infinite, executeOnlyOnce: false);
+                get => Key.GetValue("SessionId") is int id && id >= 0 ? (uint)id : null;
+
+                set
+                {
+                    if (value != null)
+                    {
+                        Key.SetValue("SessionId", value, RegistryValueKind.DWord);
+                    }
+                    else
+                    {
+                        Key.DeleteValue("SessionId", throwOnMissingValue: false);
+                    }
+                }
             }
-
-            internal void Arm()
-            {
-                const uint REG_NOTIFY_CHANGE_LAST_SET = 0x00000004;
-                const uint REG_NOTIFY_THREAD_AGNOSTIC = 0x10000000;
-
-                int error = RegNotifyChangeKeyValue(Key.Handle, false,
-                    REG_NOTIFY_CHANGE_LAST_SET | REG_NOTIFY_THREAD_AGNOSTIC, _signal.SafeWaitHandle, true);
-
-                if (error != 0)
-                    throw new Win32Exception(error);
-            }
-
-            public void Dispose()
-            {
-                _wait.Unregister(null);
-                Key.Dispose();
-                _signal.Dispose();
-            }
-
-            [DllImport("advapi32.dll")]
-            private static extern int RegNotifyChangeKeyValue(SafeRegistryHandle key, bool subtree,
-                uint filter, SafeWaitHandle signal, bool asynchronous);
         }
     }
 }

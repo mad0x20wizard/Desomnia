@@ -266,7 +266,7 @@ public sealed class EventWatcherTests
         ((IEventSystem)instance)[nameof(DuoInstance.Started)].AddAction(new JSEventAction("test-failure"));
         var watcher = new TestEventWatcher { SessionManager = new FakeSessionManager(), Manager = new ControlledManager(), Logger = logger };
         using var lifetime = new CancellationTokenSource(TestTimeout);
-        var watching = watcher.RunEvents([instance], lifetime.Token);
+        await watcher.StartWatch([instance], lifetime.Token);
         try
         {
             await watcher.SendAsync(DuoEventID.InstanceStarted, instance.Name).WaitAsync(TestTimeout);
@@ -280,8 +280,7 @@ public sealed class EventWatcherTests
         finally
         {
             instance.Release.TrySetResult();
-            lifetime.Cancel();
-            await watching.WaitAsync(TestTimeout);
+            watcher.StopWatch();
         }
     }
 

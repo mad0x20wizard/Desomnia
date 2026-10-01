@@ -2,6 +2,7 @@ using HarmonyLib;
 using MadWizard.Desomnia.Service;
 using MadWizard.Desomnia.Service.Controller;
 using MadWizard.Desomnia.Service.Duo;
+using Microsoft.Win32;
 using System.Diagnostics.Eventing.Reader;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -37,7 +38,23 @@ internal static class WindowsMocks
         Patch(AccessTools.PropertyGetter(typeof(EventLogRecord), nameof(EventLogRecord.Id)), nameof(GetRecordId));
         Patch(AccessTools.PropertyGetter(typeof(EventLogRecord), nameof(EventLogRecord.Properties)), nameof(GetRecordProperties));
         Patch(AccessTools.Method(typeof(EventLogRecord), "Dispose", [typeof(bool)]), nameof(DisposeRecord));
+        Patch(AccessTools.Method(typeof(RegistryKey), nameof(RegistryKey.OpenSubKey), [typeof(string), typeof(bool)]), nameof(OpenDuoKey));
         return true;
+    }
+
+    private static bool OpenDuoKey(RegistryKey __instance, string __0, bool __1, ref RegistryKey? __result)
+    {
+        if (TestDuoRegistry.Current is not { } registry || __instance.Name != Registry.LocalMachine.Name)
+            return true;
+
+        if (__0.Equals(DuoService.REG_Duo, StringComparison.OrdinalIgnoreCase))
+            __result = registry.Key.OpenSubKey(string.Empty, __1);
+        else if (__0.StartsWith(DuoService.REG_Duo + "\\", StringComparison.OrdinalIgnoreCase))
+            __result = registry.Key.OpenSubKey(__0[(DuoService.REG_Duo.Length + 1)..], __1);
+        else
+            return true;
+
+        return false;
     }
 
     private static bool GetSettings(DuoService __instance, ref DuoSettings __result)
@@ -63,6 +80,12 @@ internal static class WindowsMocks
 
     private static bool GetVersion(ServiceController __0, ref Version __result)
     {
+        if (TestServiceVersion.Current is { } version && __0.GetType() == typeof(ServiceController))
+        {
+            __result = version.Version ?? throw new InvalidOperationException("This watch mode must not query the service version.");
+            return false;
+        }
+
         if (__0 is not DuoService service || !Services.TryGetValue(service, out var fake)) return true;
         __result = fake.Version;
         return false;

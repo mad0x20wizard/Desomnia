@@ -10,6 +10,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 
         public required ILogger Logger { protected get; init; }
 
+        public required ISessionManager SessionManager { protected get; init; }
+
         public event EventHandler<InstanceSessionChangedEventArgs>? SessionChanged;
 
         public virtual async Task StartWatch(IEnumerable<DuoInstance> instances, CancellationToken token)
@@ -17,7 +19,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             _initialized = true;
         }
 
-        protected void PublishSessionChange(DuoInstance instance, ISession? session)
+        protected virtual void NotifySessionChange(DuoInstance instance, ISession? session)
         {
             InstanceSessionChangedEventArgs args = new(instance, session);
 
@@ -25,11 +27,14 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 
             if (_initialized)
             {
-                Logger.LogInformation($"{args.Instance} is now {(args.IsRunning ? "running" : "stopped")} " +
+                Logger.LogInformation($"{args.Instance} is now " +
+                    $"{(args.IsRunning ? "running" : "stopped")} " +
                     $"{(args.Manually ? "(manually)" : "")}");
 
-                ((IEventSystem)args.Instance)[args.IsRunning ? nameof(DuoInstance.Started) : nameof(DuoInstance.Stopped)]
-                    .TriggerEventAsync();
+                ((IEventSystem)args.Instance)[args.IsRunning 
+                    ? nameof(DuoInstance.Started) 
+                    : nameof(DuoInstance.Stopped)]
+                        .TriggerEventAsync();
             }
         }
 

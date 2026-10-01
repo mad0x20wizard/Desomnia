@@ -57,11 +57,12 @@ public sealed class WatchExpressionIntegrationTests
     }
 
     [Fact]
-    public void Repeated_session_notifications_do_not_repeat_started_actions()
+    public async Task Repeated_session_notifications_do_not_repeat_started_actions()
     {
         using var instance = Instance("Input");
         var session = new TestSession();
-        var watcher = DuoTestSupport.Watcher(new ControlledManager());
+        using var watcher = DuoTestSupport.Watcher(new ControlledManager());
+        await watcher.StartWatch([instance], CancellationToken.None);
         var started = 0;
         instance.Started += _ => { started++; return Task.CompletedTask; };
 
@@ -299,6 +300,7 @@ public sealed class WatchExpressionIntegrationTests
     private static SessionWatch Session(TestSession session) => new(session)
     {
         Session = session,
+        WatchRemote = true, // DuoServiceContext enables inspection of associated remote sessions.
         CreateAnyProcessWatch = metrics => new AnySessionProcessWatch
         {
             Manager = session,

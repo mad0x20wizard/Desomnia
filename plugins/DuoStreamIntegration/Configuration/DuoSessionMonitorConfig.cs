@@ -8,9 +8,7 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
 
         public TimeSpan PollInterval                            { get; set; } = TimeSpan.FromSeconds(2); // deprecated
 
-        public bool UseListener                                 { get; set; } = false;
-        public bool UsePolling                                  { get; set; } = false;
-        public bool UseRegistry                                 { get; set; } = true; // UsePolling takes precedence
+        public WatchMode WatchMode                              { get; set; } = WatchMode.Auto;
 
         public ActionInfo? OnUsage                              { get; set; }
         public DelayedActionInfo? OnIdle                        { get; set; }
@@ -30,5 +28,34 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
         public IList<DuoInstanceWatchInfo> Instance { get; private set; } = [];
 
         internal DuoInstanceWatchInfo? this[string name] => Instance.FirstOrDefault(i => i.Name == name);
+
+        internal IEnumerable<WatchMode> AllowedWatchModes()
+        {
+            List<WatchMode> modes = [];
+            if (WatchMode.HasFlag(WatchMode.Registry))
+                modes.Add(WatchMode.Registry);
+            if (WatchMode.HasFlag(WatchMode.EventLog))
+                modes.Add(WatchMode.EventLog);
+            if (WatchMode.HasFlag(WatchMode.Polling))
+                modes.Add(WatchMode.Polling);
+
+            if (modes.Count > 0)
+                return modes;
+
+            return [WatchMode.Registry, WatchMode.EventLog, WatchMode.Polling]; // Auto
+        }
+    }
+
+    [Flags]
+    public enum WatchMode
+    {
+        Auto        = 0,
+
+        Polling     = 1 << 1,
+        EventLog    = 1 << 2,
+        Registry    = 1 << 3,
+
+        Listener    = 1 << 11,
+        Capture     = 1 << 12,
     }
 }

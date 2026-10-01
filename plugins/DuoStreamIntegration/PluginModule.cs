@@ -11,7 +11,6 @@ using MadWizard.Desomnia.Service.Duo.Sunshine.Listener;
 using MadWizard.Desomnia.Service.Duo.Sunshine.Watch;
 using MadWizard.Desomnia.Session;
 using MadWizard.Desomnia.Session.Configuration;
-using System.ComponentModel;
 using System.ServiceProcess;
 using System.Xml.Linq;
 using WindowsFirewallHelper;
@@ -34,9 +33,11 @@ namespace MadWizard.Desomnia.Service.Duo
 
         protected override void Load(ContainerBuilder builder, DuoConfig config)
         {
-            if (config.DuoSessionMonitor is DuoSessionMonitorConfig duo &&
-                config.SessionMonitor is SessionMonitorConfig session)
+            if (config.DuoSessionMonitor is DuoSessionMonitorConfig duo)
             {
+                if (config.SessionMonitor is not SessionMonitorConfig session)
+                    throw new FormatException("DuoSessionMonitor requires that <SessionMonitor> must be enabled");
+
                 builder.RegisterType<DuoService>().AsSelf()
                     .WithParameter(TypedParameter.From(duo.ServiceName))
                     .SingleInstance();
@@ -54,69 +55,16 @@ namespace MadWizard.Desomnia.Service.Duo
                     ((IEventSystem)args.Instance)[nameof(DuoSessionMonitor.Usage)].AddAction(duo.OnUsage);
                 });
 
-                builder.RegisterType<DuoInstance>().AsSelf()
-                    .InstancePerDependency();
-
                 builder.RegisterType<DuoServiceContext>().AsSelf()
                     .ConfigurePipeline(p => p.Use(new ContextConfiguration(config.DuoSessionMonitor)))
                     .WithParameter(new TypedParameter(typeof(SessionMonitorConfig), session))
                     .InstancePerDependency();
 
-                // the only available DuoManager right now
-                builder.RegisterType<DuoWebAPIManager>()
-                    .InstancePerOwned<DuoServiceContext>()
-                    .As<IDuoManager>().AsSelf();
+                builder.RegisterType<DuoInstance>().AsSelf()
+                    .InstancePerDependency();
 
-                if (!duo.UsePolling)
-                {
-                    if (duo.UseRegistry)
-                    {
-                        builder.RegisterType<RegistryWatcher>()
-                            .InstancePerOwned<DuoServiceContext>()
-                            .As<IDuoSessionWatcher>();
-
-                        goto skipPolling;
-                    }
-
-                    try
-                    {
-                        using var service = new ServiceController(duo.ServiceName);
-
-                        if (service.Version >= PreciseEventWatcher.MinVersion)
-                        {
-                            builder.RegisterType<PreciseEventWatcher>()
-                                .InstancePerOwned<DuoServiceContext>()
-                                .As<IDuoSessionWatcher>();
-
-                            goto skipPolling;
-                        }
-                        else if (service.Version >= EventWatcher.MinVersion)
-                        {
-                            builder.RegisterType<EventWatcher>()
-                                .InstancePerOwned<DuoServiceContext>()
-                                .As<IDuoSessionWatcher>();
-
-                            goto skipPolling;
-                        }
-                    }
-                    catch (Exception ex) when
-                        (ex is Win32Exception
-                            or FileNotFoundException
-                            or FormatException
-                            or ArgumentException   // Version.Parse on structurally odd FileVersion strings
-                            or OverflowException
-                            or InvalidDataException
-                            or InvalidOperationException)
-                    {
-                        // Duo Service is not available (or its version is unreadable)
-                    }
-                }
-
-                builder.RegisterType<PollingWatcher>().As<IDuoSessionWatcher>()
-                    .WithParameter(TypedParameter.From(duo.PollInterval))
-                    .InstancePerOwned<DuoServiceContext>();
-
-            skipPolling:
+                RegisterManager(builder);
+                RegisterSessionWatcher(builder, duo);
 
                 if (config.UseListener)
                 {
@@ -133,6 +81,55 @@ namespace MadWizard.Desomnia.Service.Duo
                 }
 
                 builder.RegisterBuildCallback(container => container.ResolveOptional<DuoSessionMonitor>()?.Startup());
+            }
+        }
+
+        void RegisterManager(ContainerBuilder builder)
+        {
+            // the only available DuoManager right now
+            builder.RegisterType<DuoWebAPIManager>()
+                .InstancePerOwned<DuoServiceContext>()
+                .As<IDuoManager>().AsSelf();
+        }
+
+        void RegisterSessionWatcher(ContainerBuilder builder, DuoSessionMonitorConfig config)
+        {
+            using var service = new ServiceController(config.ServiceName);
+
+            try
+            {
+                foreach (var mode in config.AllowedWatchModes())
+                {
+                    switch (mode)
+                    {
+                        case WatchMode.Registry:
+                            builder.RegisterType<RegistryWatcher>()
+                                .InstancePerOwned<DuoServiceContext>()
+                                .As<IDuoSessionWatcher>(); return;
+
+                        case WatchMode.EventLog when service.Version >= PreciseEventWatcher.MinVersion:
+                            builder.RegisterType<PreciseEventWatcher>()
+                                .InstancePerOwned<DuoServiceContext>()
+                                .As<IDuoSessionWatcher>(); return;
+
+                        case WatchMode.EventLog when service.Version >= EventWatcher.MinVersion:
+                            builder.RegisterType<EventWatcher>()
+                                .InstancePerOwned<DuoServiceContext>()
+                                .As<IDuoSessionWatcher>(); return;
+
+                        case WatchMode.Polling:
+                            builder.RegisterType<PollingWatcher>()
+                                .WithParameter(TypedParameter.From(config.PollInterval))
+                                .InstancePerOwned<DuoServiceContext>()
+                                .As<IDuoSessionWatcher>(); return;
+                    }
+                }
+
+                throw new NotSupportedException($"Could not satisfy WatchMode = {config.WatchMode}");
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Registration of DuoSessionWatcher failed", ex);
             }
         }
     }

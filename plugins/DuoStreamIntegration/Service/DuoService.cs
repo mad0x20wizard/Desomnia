@@ -5,29 +5,32 @@ namespace MadWizard.Desomnia.Service.Duo
 {
     internal class DuoService(string serviceName) : ObservableServiceController(serviceName)
     {
-        const string REGISTRY_KEY = "SOFTWARE\\Duo";
-        const ushort DEFAULT_PORT = 38299;
+        internal const string REG_Duo = "SOFTWARE\\Duo";
+        internal const string REG_DuoInstances = REG_Duo + "\\Instances";
+
+        internal const ushort DefaultPort = 38299;
 
         public DuoSettings Settings
         {
             get
             {
-                using var duo = Registry.LocalMachine!.OpenSubKey(REGISTRY_KEY) 
-                    ?? throw new FileNotFoundException(fileName: REGISTRY_KEY, message: "Duo registry key not found");
-                using var instances = duo.OpenSubKey("Instances")
-                    ?? throw new FileNotFoundException(fileName: REGISTRY_KEY, message: "Duo instances key not found");
+                using var duo = Registry.LocalMachine!.OpenSubKey(REG_Duo) 
+                    ?? throw new FileNotFoundException(fileName: REG_Duo, message: "Duo registry key not found");
 
                 return new DuoSettings
                 {
-                    Port = duo?["Port"] is int port ? (ushort)port : DEFAULT_PORT,
+                    Port = duo?["Port"] is int port ? (ushort)port : DefaultPort,
 
-                    Instances = [.. ReadInstanceSettings(instances)]
+                    Instances = [.. ReadInstanceSettings()]
                 };
             }
         }
 
-        private static IEnumerable<InstanceSettings> ReadInstanceSettings(RegistryKey instancesKey)
+        private static IEnumerable<InstanceSettings> ReadInstanceSettings()
         {
+            using var instancesKey = Registry.LocalMachine!.OpenSubKey(REG_DuoInstances)
+                ?? throw new FileNotFoundException(fileName: REG_DuoInstances, message: "Duo instances key not found");
+
             foreach (var name in instancesKey.GetSubKeyNames().OfType<string>())
             {
                 using var key = instancesKey.OpenSubKey(name);

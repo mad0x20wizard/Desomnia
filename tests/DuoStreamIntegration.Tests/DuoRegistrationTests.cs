@@ -16,14 +16,27 @@ namespace DuoStreamIntegration.Tests;
 public sealed class DuoRegistrationTests
 {
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void Module_resolves_an_owned_context_using_the_current_interfaces(bool polling)
+    [InlineData(WatchMode.Polling, null, typeof(PollingWatcher))]
+    [InlineData(WatchMode.Registry, null, typeof(RegistryWatcher))]
+    [InlineData(WatchMode.Auto, null, typeof(RegistryWatcher))]
+    [InlineData(WatchMode.Auto, "1.6.1", typeof(RegistryWatcher))]
+    [InlineData(WatchMode.Capture, null, typeof(RegistryWatcher))]
+    [InlineData(WatchMode.EventLog, "1.5.7", typeof(EventWatcher))]
+    [InlineData(WatchMode.EventLog, "1.6.0", typeof(EventWatcher))]
+    [InlineData(WatchMode.EventLog, "1.6.1", typeof(PreciseEventWatcher))]
+    [InlineData(WatchMode.EventLog | WatchMode.Polling, "1.5.6", typeof(PollingWatcher))]
+    [InlineData(WatchMode.EventLog | WatchMode.Polling, "1.6.1", typeof(PreciseEventWatcher))]
+    [InlineData(WatchMode.Registry | WatchMode.EventLog | WatchMode.Polling, "1.6.1", typeof(RegistryWatcher))]
+    public void Module_resolves_an_owned_context_using_the_selected_watcher(WatchMode mode, string? version, Type watcherType)
     {
+        using var serviceVersion = new TestServiceVersion(version);
         var config = new DuoConfig
         {
             SessionMonitor = new MadWizard.Desomnia.Session.Configuration.SessionMonitorConfig(),
-            DuoSessionMonitor = new DuoSessionMonitorConfig { ServiceName = "TestDuo", UsePolling = polling }
+            DuoSessionMonitor = new DuoSessionMonitorConfig
+            {
+                ServiceName = "TestDuo", WatchMode = mode, PollInterval = TimeSpan.FromSeconds(4)
+            }
         };
         config.NetworkMonitor.Add(new NetworkMonitorConfig()); // No firewall listener registration.
         var builder = new ContainerBuilder();
@@ -43,14 +56,39 @@ public sealed class DuoRegistrationTests
         using var replacement = create(new DuoSettings { Port = 38300, Instances = [Settings()] });
 
         Assert.IsType<DuoWebAPIManager>(owned.Value.Manager);
-        if (polling)
-            Assert.IsType<PollingWatcher>(owned.Value.Watcher);
-        else
-            Assert.IsType<RegistryWatcher>(owned.Value.Watcher);
+        Assert.IsType(watcherType, owned.Value.Watcher);
+        if (owned.Value.Watcher is PollingWatcher polling)
+            Assert.Equal(config.DuoSessionMonitor.PollInterval, polling.PollInterval);
         Assert.Equal("Player", Assert.Single(owned.Value.Instances).Name);
         Assert.Equal(38299u, owned.Value.Settings.Port);
         Assert.NotSame(owned.Value.Manager, replacement.Value.Manager);
         Assert.NotSame(owned.Value.Watcher, replacement.Value.Watcher);
+    }
+
+    [Fact]
+    public void EventLog_only_rejects_services_without_supported_events()
+    {
+        using var serviceVersion = new TestServiceVersion("1.5.6");
+        var config = new DuoConfig
+        {
+            SessionMonitor = new MadWizard.Desomnia.Session.Configuration.SessionMonitorConfig(),
+            DuoSessionMonitor = new DuoSessionMonitorConfig { ServiceName = "TestDuo", WatchMode = WatchMode.EventLog }
+        };
+
+        var error = Assert.Throws<Exception>(() => new TestModule().Configure(new ContainerBuilder(), config));
+        Assert.IsType<NotSupportedException>(error.InnerException);
+    }
+
+    [Fact]
+    public void Duo_monitor_requires_a_session_monitor_configuration()
+    {
+        var config = new DuoConfig
+        {
+            DuoSessionMonitor = new DuoSessionMonitorConfig { ServiceName = "TestDuo" }
+        };
+
+        var error = Assert.Throws<FormatException>(() => new TestModule().Configure(new ContainerBuilder(), config));
+        Assert.Contains("<SessionMonitor>", error.Message);
     }
 
     private sealed class TestModule : PluginModule

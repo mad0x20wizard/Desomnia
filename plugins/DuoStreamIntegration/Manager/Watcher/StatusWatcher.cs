@@ -6,7 +6,6 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
     internal abstract class StatusWatcher : BaseWatcher, IDisposable
     {
         public required IDuoManager Manager { protected get; init; }
-        public required ISessionManager SessionManager { protected get; init; }
 
         CancellationTokenSource? _lifetime;
         Task? _watchTask;
@@ -174,7 +173,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             else
                 _sessions.Remove(instance);
 
-            PublishSessionChange(instance, session);
+            NotifySessionChange(instance, session);
         }
 
         public virtual void Dispose() => StopWatch();

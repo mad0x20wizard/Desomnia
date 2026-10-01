@@ -118,7 +118,8 @@ public sealed class InstanceFilterTests
             SessionMonitor = new MadWizard.Desomnia.Session.Configuration.SessionMonitorConfig(),
             DuoSessionMonitor = new DuoSessionMonitorConfig
             {
-                ServiceName = "TestDuo", UsePolling = true, UseListener = explicitListener
+                ServiceName = "TestDuo",
+                WatchMode = WatchMode.Polling | (explicitListener ? WatchMode.Listener : WatchMode.Auto)
             }
         };
         config.DuoSessionMonitor.Instance.Add(BindFilters(range, "Must"));

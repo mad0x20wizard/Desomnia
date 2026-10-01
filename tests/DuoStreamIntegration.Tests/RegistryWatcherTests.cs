@@ -54,7 +54,7 @@ public sealed class RegistryWatcherTests
         await watcher.StartWatch([instance], lifetime.Token);
         try
         {
-            //Assert.True((await Next(changes)).Initial);
+            Assert.Same(session, (await Next(changes)).Session);
             sessions.Logoff(session);
             Assert.Null((await Next(changes)).Session);
             Assert.Null(registry.Key.GetValue("SessionId"));
@@ -173,6 +173,41 @@ public sealed class RegistryWatcherTests
         finally { watcher.StopWatch(); }
     }
 
+    [Fact]
+    public async Task Key_watch_follows_listener_lifetime()
+    {
+        using var registry = new InstanceRegistry();
+        using var watch = new KeyWatch(registry.Key.OpenSubKey(string.Empty)!);
+
+        var first = Channel.CreateUnbounded<object?>();
+        var second = Channel.CreateUnbounded<object?>();
+        EventHandler firstHandler = (sender, _) => first.Writer.TryWrite(sender);
+        EventHandler secondHandler = (sender, _) => second.Writer.TryWrite(sender);
+
+        watch.Changed += firstHandler;
+        watch.Changed += secondHandler;
+        registry.Key.SetValue("SessionId", 1);
+        Assert.Same(watch, await first.Reader.ReadAsync().AsTask().WaitAsync(TestTimeout));
+        Assert.Same(watch, await second.Reader.ReadAsync().AsTask().WaitAsync(TestTimeout));
+
+        watch.Changed -= firstHandler;
+        registry.Key.SetValue("SessionId", 2);
+        await second.Reader.ReadAsync().AsTask().WaitAsync(TestTimeout);
+        Assert.False(first.Reader.TryRead(out _));
+
+        watch.Changed -= secondHandler;
+        registry.Key.SetValue("SessionId", 3);
+        watch.Changed += firstHandler;
+        registry.Key.SetValue("SessionId", 4);
+        await first.Reader.ReadAsync().AsTask().WaitAsync(TestTimeout);
+        Assert.False(second.Reader.TryRead(out _));
+
+        watch.Dispose();
+        registry.Key.SetValue("SessionId", 5);
+        watch.Changed -= firstHandler; // Removing a listener after disposal remains harmless.
+        Assert.False(first.Reader.TryRead(out _));
+    }
+
     private static Channel<InstanceSessionChangedEventArgs> Observe(RegistryWatcher watcher)
     {
         var changes = Channel.CreateUnbounded<InstanceSessionChangedEventArgs>();
@@ -185,24 +220,18 @@ public sealed class RegistryWatcherTests
 
     private sealed class InstanceRegistry : IDisposable
     {
-        private readonly string _path = $@"Software\Desomnia.Tests\{Guid.NewGuid():N}";
+        private readonly TestDuoRegistry _registry = new();
         public RegistryKey Key { get; }
         public InstanceRegistry() => Key = CreateKey("Player");
-        public RegistryKey CreateKey(string name) => Registry.CurrentUser.CreateSubKey($@"{_path}\{name}");
-        public RegistryWatcher Watcher(ISessionManager sessions) => new TestRegistryWatcher(_path)
+        public RegistryKey CreateKey(string name) => _registry.Key.CreateSubKey($@"Instances\{name}");
+        public RegistryWatcher Watcher(ISessionManager sessions) => new()
         {
             SessionManager = sessions, Logger = NullLogger.Instance
         };
         public void Dispose()
         {
             Key.Dispose();
-            Registry.CurrentUser.DeleteSubKeyTree(_path);
+            _registry.Dispose();
         }
-    }
-
-    private sealed class TestRegistryWatcher(string path) : RegistryWatcher
-    {
-        protected override RegistryKey OpenInstanceKey(DuoInstance instance) =>
-            Registry.CurrentUser.OpenSubKey($@"{path}\{instance.Name}", writable: true)!;
     }
 }

@@ -61,6 +61,8 @@ namespace MadWizard.Desomnia.Session.Manager
                         {
                             Logger.LogWarning("WTSSession[id={ID}, name=?, state=Unknown] -> gone", missing);
 
+                            UserLogoff?.Invoke(this, scope.Value);
+
                             scope.Dispose(); // All that remains for us is to remove them
                         }
                     }
