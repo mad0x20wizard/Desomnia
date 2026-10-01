@@ -13,6 +13,7 @@ namespace MadWizard.Desomnia.NetworkSession
         protected override IEnumerable<ProxyServiceInfo> RegisterProxyServices(ResolveRequestContext context, LocalHostWatch watch)
         {
             if (context.ResolveOptional<NetworkSessionMonitor>() is not null && watch.Host is LocalHost)
+            {
                 yield return new ProxyServiceInfo(watch.AdvertiseOptions)
                 {
                     Name = "SMB",
@@ -21,6 +22,7 @@ namespace MadWizard.Desomnia.NetworkSession
                     Protocol = IPProtocol.TCP,
                     Port = 445,
                 };
+            }
         }
     }
 }
