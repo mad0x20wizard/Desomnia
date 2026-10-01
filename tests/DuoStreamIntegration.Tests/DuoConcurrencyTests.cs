@@ -16,6 +16,7 @@ public sealed class DuoConcurrencyTests
         var manager = new ControlledManager();
         var watcher = Watcher(manager);
         using var context = Context(manager, watcher, instance);
+        await context.StartWatching(TestTimeout);
         manager.OnChange = async (target, running, token) =>
         {
             if (running)
@@ -36,7 +37,7 @@ public sealed class DuoConcurrencyTests
         }
         finally { release.TrySetResult(); }
         await Task.WhenAll(first, second).WaitAsync(TestTimeout);
-        Assert.Equal(secondRunning, instance.IsRunning);
+        Assert.Equal(secondRunning, (instance.Session is not null));
         Assert.Equal(1, manager.Starts);
         Assert.Equal(secondRunning ? 0 : 1, manager.Stops);
     }
@@ -51,6 +52,7 @@ public sealed class DuoConcurrencyTests
         var manager = new ControlledManager();
         var watcher = Watcher(manager);
         using var context = Context(manager, watcher, alpha, beta);
+        await context.StartWatching(TestTimeout);
         manager.OnChange = async (target, running, token) =>
         {
             if (Interlocked.Increment(ref entered) == 2) bothEntered.TrySetResult();
@@ -58,8 +60,8 @@ public sealed class DuoConcurrencyTests
             watcher.Publish(target, running);
         };
         await Task.WhenAll(context.Start(alpha, TestTimeout), context.Start(beta, TestTimeout)).WaitAsync(TestTimeout);
-        Assert.True(alpha.IsRunning);
-        Assert.True(beta.IsRunning);
+        Assert.NotNull(alpha.Session);
+        Assert.NotNull(beta.Session);
         Assert.Equal(2, manager.Starts);
     }
 
@@ -70,11 +72,12 @@ public sealed class DuoConcurrencyTests
         var manager = new ControlledManager();
         var watcher = Watcher(manager);
         using var context = Context(manager, watcher, instance);
+        await context.StartWatching(TestTimeout);
         var started = context.Start(instance, TestTimeout);
         Task? stopped = null;
-        watcher.StatusChanged += (_, args) =>
+        watcher.SessionChanged += (_, args) =>
         {
-            if (!args.Status) return;
+            if (args.Session is null) return;
             // Hold notification dispatch while the command resumes on another thread.
             started.WaitAsync(TestTimeout).GetAwaiter().GetResult();
             stopped = context.Stop(instance, TestTimeout);
@@ -83,7 +86,7 @@ public sealed class DuoConcurrencyTests
         Assert.Equal(1, manager.Stops);
         watcher.Publish(instance, false);
         await stopped!.WaitAsync(TestTimeout);
-        Assert.False(instance.IsRunning);
+        Assert.Null(instance.Session);
     }
 
     [Fact]
@@ -100,6 +103,7 @@ public sealed class DuoConcurrencyTests
             }
         };
         using var context = Context(manager, Watcher(manager), instance);
+        await context.StartWatching(TestTimeout);
         var first = context.Start(instance, TestTimeout);
         await entered.Task.WaitAsync(TestTimeout);
         var queued = context.Start(instance, TestTimeout);

@@ -12,11 +12,23 @@ internal enum DuoEventID { ServiceStarted = 1000, InstanceStarted = 1003, Instan
 
 internal sealed class TestEventWatcher : EventWatcher
 {
+    protected override MadWizard.Desomnia.Session.Manager.ISession? FindSession(DuoInstance instance) => SessionFor(instance);
+
+    private readonly ObservedChannel<Signal> _channel = new();
+    protected override System.Threading.Channels.Channel<Signal> CreateChannel() => _channel;
+
+    private readonly Dictionary<DuoInstance, MadWizard.Desomnia.Session.Manager.ISession?> _sessions = [];
+    public MadWizard.Desomnia.Session.Manager.ISession? Session(DuoInstance instance) => _sessions.GetValueOrDefault(instance);
+
+    // Event transport tests control the worker token directly. Context tests use StartWatch/StopWatch.
+    public Task RunEvents(IEnumerable<DuoInstance> instances, CancellationToken token) => WatchAsync(instances, token);
+
     private readonly FakeEventSource _source;
     public TestEventWatcher()
     {
+        SessionChanged += (_, args) => _sessions[args.Instance] = args.Session;
         WindowsMocks.Initialize();
-        _source = new FakeEventSource(this);
+        _source = new FakeEventSource(this, _channel, typeof(Signal));
     }
 
     public TaskCompletionSource Subscribed => _source.Subscribed;
@@ -40,13 +52,11 @@ internal sealed class FakeEventSource
     public TaskCompletionSource Unsubscribed { get; } = Signal();
     public IReadOnlyList<WindowsMocks.RecordData> DeliveredRecords => _records;
 
-    public FakeEventSource(EventWatcher watcher)
+    public FakeEventSource(EventWatcher watcher, IObservedChannel channel, Type signalType)
     {
-        _native = (EventLogWatcher)AccessTools.Field(typeof(EventWatcher), "<Watcher>k__BackingField").GetValue(watcher)!;
-        var channelField = AccessTools.Field(typeof(EventWatcher), "_channel");
-        _signalType = channelField.FieldType.GetGenericArguments()[0];
-        _channel = (IObservedChannel)Activator.CreateInstance(typeof(ObservedChannel<>).MakeGenericType(_signalType))!;
-        channelField.SetValue(watcher, _channel);
+        _native = (EventLogWatcher)AccessTools.Field(typeof(EventWatcher), "_watcher").GetValue(watcher)!;
+        _signalType = signalType;
+        _channel = channel;
         WindowsMocks.EventSources.Add(_native, this);
     }
 

@@ -1,4 +1,4 @@
-﻿using Autofac;
+using Autofac;
 using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Network.Context;
 using MadWizard.Desomnia.Network.Neighborhood;
@@ -50,9 +50,6 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
                 {
                     try
                     {
-                        Logger.LogInformation($"Monitoring {instance.ToString()}:{instance.Settings.Port}" 
-                            + (instance.IsRunning == true ? " (running)" : ""));
-
                         var context = LocalHostContext.CreateWatchedService<SunshineServiceContext>
                         (
                             TypedParameter.From(instance)
@@ -63,6 +60,9 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
                         RegisterWatch(instance, context.Watch);
 
                         _contexts.Add(instance, context);
+
+                        Logger.LogInformation($"Monitoring {instance.ToString()}:{instance.Settings.Port}"
+                            + (instance.IsRunning ? " (running)" : ""));
                     }
                     catch (Exception ex)
                     {

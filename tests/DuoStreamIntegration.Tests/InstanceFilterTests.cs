@@ -115,6 +115,7 @@ public sealed class InstanceFilterTests
     {
         var config = new DuoConfig
         {
+            SessionMonitor = new MadWizard.Desomnia.Session.Configuration.SessionMonitorConfig(),
             DuoSessionMonitor = new DuoSessionMonitorConfig
             {
                 ServiceName = "TestDuo", UsePolling = true, UseListener = explicitListener

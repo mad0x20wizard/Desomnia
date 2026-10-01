@@ -12,8 +12,6 @@ namespace MadWizard.Desomnia.Service.Duo
 {
     public class DuoInstance : ResourceMonitor<Resource>
     {
-        private int _runningState = -1;
-
         internal AsyncLock Mutex { get; } = new();
 
         public DuoInstance(string name, InstanceSettings settings, DuoInstanceWatchInfo info)
@@ -39,33 +37,10 @@ namespace MadWizard.Desomnia.Service.Duo
         internal DuoInstanceWatchInfo Info { get; }
         internal WatchExpression? Watch { get; set; }
 
-        public bool? IsRunning
-        {
-            get
-            {
-                return Volatile.Read(ref _runningState) switch
-                {
-                    < 0 => false,
-                      0 => null,
-                    > 0 => true,
-                };
-            }
-
-            internal set
-            {
-                var state = value switch
-                {
-                    false   => -1,
-                    null    =>  0,
-                    true    => +1,
-                };
-
-                Interlocked.Exchange(ref _runningState, state);
-            }
-        }
-
         [EventContext]
         public ISession? Session => this.OfType<SessionWatch>().FirstOrDefault()?.Session;
+
+        public bool IsRunning => Session is not null;
 
         public event EventInvocation? Started;
         public event EventInvocation? Stopped;
@@ -78,10 +53,10 @@ namespace MadWizard.Desomnia.Service.Duo
 
         protected override bool ShouldTriggerEvent(Event @event)
         {
-            if (@event.Type == nameof(Idle) && IsRunning != true)
+            if (@event.Type == nameof(Idle) && !IsRunning)
                 return false; // only trigger "Idle" events if the instance is running
 
-            if (@event.Type == nameof(Demand) && IsRunning == true)
+            if (@event.Type == nameof(Demand) && IsRunning)
                 return false; // only trigger "Demand" events if the instance is NOT running
 
             return base.ShouldTriggerEvent(@event);

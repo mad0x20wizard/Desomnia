@@ -1,10 +1,10 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using System.Diagnostics.Eventing.Reader;
 using System.Threading.Channels;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 {
-    internal class EventWatcher : BaseWatcher, IDisposable
+    internal class EventWatcher : StatusWatcher
     {
         internal static readonly Version MinVersion = new(1, 5, 7);
 
@@ -74,9 +74,11 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             throw new KeyNotFoundException("Duo event does not identify a known instance.");
         }
 
-        public override async Task WatchAsync(IEnumerable<DuoInstance> instances, CancellationToken token)
+        protected virtual Channel<Signal> CreateChannel() => Channel.CreateUnbounded<Signal>(new() { SingleReader = true });
+
+        protected override async Task WatchAsync(IEnumerable<DuoInstance> instances, CancellationToken token)
         {
-            Channel<Signal> channel = Channel.CreateUnbounded<Signal>(new() { SingleReader = true });
+            Channel<Signal> channel = CreateChannel();
 
             _watcher.EventRecordWritten += EventRecordWritten;
 
@@ -125,10 +127,10 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
                 }
             }
 
-            _watcher.Enabled = true;
-
             try
             {
+                _watcher.Enabled = true;
+
                 await foreach (var signal in channel.Reader.ReadAllAsync(token))
                 {
                     token.ThrowIfCancellationRequested();
@@ -141,7 +143,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
                         }
                         else
                         {
-                            await base.RefreshInstances(instances, token);
+                            await RefreshInstances(instances, token);
                         }
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException || !token.IsCancellationRequested)
@@ -163,12 +165,19 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             }
         }
 
-        void IDisposable.Dispose()
+        public override void Dispose()
         {
-            _watcher.Dispose();
+            try
+            {
+                base.Dispose();
+            }
+            finally
+            {
+                _watcher.Dispose();
+            }
         }
 
-        private record class Signal
+        protected record class Signal
         {
             internal DuoInstance? Instance { get; init; }
 

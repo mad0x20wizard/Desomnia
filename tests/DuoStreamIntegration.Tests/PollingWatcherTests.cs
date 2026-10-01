@@ -25,27 +25,30 @@ public sealed class PollingWatcherTests
     }
 
     [Fact]
-    public async Task Cancellation_of_an_active_refit_query_stops_polling_normally()
+    public async Task Startup_cancellation_propagates_and_releases_session_subscriptions()
     {
         using var instance = Instance();
         using var handler = new BlockingHandler();
         using var manager = Manager(handler);
         var logger = new RecordingLogger();
-        var watcher = new PollingWatcher
+        var sessions = new FakeSessionManager();
+        using var watcher = new PollingWatcher
         {
+            SessionManager = sessions,
             Manager = manager,
             Logger = logger,
             PollInterval = TimeSpan.FromMilliseconds(20)
         };
         using var lifetime = new CancellationTokenSource(TestTimeout);
 
-        var watching = watcher.WatchAsync([instance], lifetime.Token);
+        var starting = watcher.StartWatch([instance], lifetime.Token);
         await handler.Entered.Task.WaitAsync(TestTimeout);
 
         lifetime.Cancel();
-        await watching.WaitAsync(TestTimeout);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => starting.WaitAsync(TestTimeout));
 
         Assert.Empty(logger.Errors);
+        Assert.Equal(0, sessions.LogoffSubscribers);
     }
 
     private static DuoWebAPIManager Manager(HttpMessageHandler handler) => new(new HttpClient(handler)
@@ -61,38 +64,92 @@ public sealed class PollingWatcherTests
     {
         using var instance = Instance();
         var queries = 0;
+        var session = SessionFor(instance);
+        var sessions = new FakeSessionManager(session);
         var manager = new ControlledManager
         {
-            OnQuery = (_, _) => Interlocked.Increment(ref queries) switch
+            OnQuery = (_, _) =>
             {
-                1 => Task.FromException<bool>(new TaskCanceledException("HTTP request timed out")),
-                2 => Task.FromResult(true),
-                _ => Task.FromResult(false)
+                switch (Interlocked.Increment(ref queries))
+                {
+                    case 1: return Task.FromResult(false); // initial query
+                    case 2: return Task.FromException<bool>(new TaskCanceledException("HTTP request timed out"));
+                    case 3: return Task.FromResult(true);
+                    default:
+                        sessions.Logoff(session);
+                        return Task.FromResult(false);
+                }
             }
         };
         var logger = new RecordingLogger();
-        var watcher = new PollingWatcher { Manager = manager, Logger = logger, PollInterval = TimeSpan.FromMilliseconds(20) };
+        var watcher = new PollingWatcher { SessionManager = sessions, Manager = manager, Logger = logger, PollInterval = TimeSpan.FromMilliseconds(20) };
         var changes = new List<bool>();
         var stopped = Signal();
-        watcher.StatusChanged += (_, args) =>
+        watcher.SessionChanged += (_, args) =>
         {
-            changes.Add(args.Status);
-            if (!args.Status) stopped.TrySetResult();
+            changes.Add(args.Session is not null);
+            if (args.Session is null) stopped.TrySetResult();
         };
         using var lifetime = new CancellationTokenSource(TestTimeout);
-        var watching = watcher.WatchAsync([instance], lifetime.Token);
+        await watcher.StartWatch([instance], lifetime.Token);
         try
         {
             await stopped.Task.WaitAsync(TestTimeout);
             Assert.Equal(new[] { true, false }, changes);
-            Assert.False(instance.IsRunning);
+            Assert.Null(instance.Session);
             Assert.Single(logger.Errors);
         }
         finally
         {
-            lifetime.Cancel();
-            await watching.WaitAsync(TestTimeout);
+            watcher.StopWatch();
         }
+    }
+
+    [Fact]
+    public async Task Startup_token_does_not_stop_polling_and_StopWatch_waits_for_the_active_query()
+    {
+        using var instance = Instance();
+        var entered = Signal();
+        var canceled = Signal();
+        var release = Signal();
+        var calls = 0;
+        var manager = new ControlledManager
+        {
+            OnQuery = async (_, token) =>
+            {
+                if (Interlocked.Increment(ref calls) == 1) return false;
+                entered.TrySetResult();
+                try { await Task.Delay(Timeout.InfiniteTimeSpan, token); }
+                finally
+                {
+                    canceled.TrySetResult();
+                    await release.Task;
+                }
+                return false;
+            }
+        };
+        var sessions = new FakeSessionManager();
+        using var watcher = new PollingWatcher
+        {
+            Manager = manager, SessionManager = sessions, Logger = NullLogger.Instance,
+            PollInterval = TimeSpan.FromMilliseconds(20)
+        };
+        using var startup = new CancellationTokenSource();
+        await watcher.StartWatch([instance], startup.Token);
+        await entered.Task.WaitAsync(TestTimeout);
+        startup.Cancel();
+        Assert.False(canceled.Task.IsCompleted);
+
+        var stopping = Task.Run(watcher.StopWatch);
+        try
+        {
+            await canceled.Task.WaitAsync(TestTimeout);
+            Assert.False(stopping.IsCompleted);
+        }
+        finally { release.TrySetResult(); }
+        await stopping.WaitAsync(TestTimeout);
+        Assert.Equal(0, sessions.LogoffSubscribers);
+        watcher.StopWatch();
     }
 
     private sealed class BlockingHandler : HttpMessageHandler

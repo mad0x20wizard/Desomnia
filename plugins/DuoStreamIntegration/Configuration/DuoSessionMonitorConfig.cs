@@ -10,6 +10,7 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
 
         public bool UseListener                                 { get; set; } = false;
         public bool UsePolling                                  { get; set; } = false;
+        public bool UseRegistry                                 { get; set; } = true; // UsePolling takes precedence
 
         public ActionInfo? OnUsage                              { get; set; }
         public DelayedActionInfo? OnIdle                        { get; set; }

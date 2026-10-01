@@ -2,13 +2,14 @@
 using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Service.Controller;
 using Microsoft.Extensions.Logging;
+using Nito.AsyncEx;
 using System.ServiceProcess;
 
 namespace MadWizard.Desomnia.Service.Duo
 {
     internal class DuoSessionMonitor(DuoService service) : ResourceMonitor<DuoInstance>
     {
-        private static readonly TimeSpan StartupTimeout  = TimeSpan.FromSeconds(5); // how long we wait to startup the context
+        private static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(5); // how long we wait to startup the context
         private static readonly TimeSpan ActionTimeout  = TimeSpan.FromSeconds(30); // how long we wait for start/stop actions
         private static readonly TimeSpan RetryDelay     = TimeSpan.FromSeconds(10); // delay between StartWatching attempts
 
@@ -17,6 +18,8 @@ namespace MadWizard.Desomnia.Service.Duo
         public required Func<DuoSettings, Owned<DuoServiceContext>> CreateContext { private get; init; }
 
         private Owned<DuoServiceContext>? _context;
+
+        readonly AsyncLock _lock = new();
 
         CancellationTokenSource? _startup;
 
@@ -40,7 +43,7 @@ namespace MadWizard.Desomnia.Service.Duo
         {
             try
             {
-                lock (this) if (!_disposed)
+                using (_lock.Lock()) if (!_disposed)
                 {
                     _startup?.Cancel();
                     _startup = null;
@@ -51,15 +54,18 @@ namespace MadWizard.Desomnia.Service.Duo
                             Logger.LogInformation("Service is running at: '{path}' ({version}) -> PID {pid}",
                                 service.ExecutablePath, service.Version, pid);
 
-                            _startup = new();
+                            if (service.Settings is DuoSettings settings && settings.Instances.Length > 0)
+                            {
+                                _startup = new();
 
-                            StartWatchingWithRetry(service.Settings, _startup.Token);
+                                StartWatchingWithRetry(service.Settings, _startup.Token);
+                            }
 
                             break;
 
                         case ServiceControllerStatus.Stopped when _context is not null:
                             Logger.LogInformation($"Service has stopped. Monitoring will be suspended.");
-                            StopWatching();
+                            StopWatching(acquireLock: false);
                             break;
                     }
                 }
@@ -77,7 +83,7 @@ namespace MadWizard.Desomnia.Service.Duo
             {
                 try
                 {
-                    StartWatching(settings);
+                    await StartWatching(settings);
 
                     break;
                 }
@@ -103,14 +109,15 @@ namespace MadWizard.Desomnia.Service.Duo
             }
         }
 
-        private void StartWatching(DuoSettings settings)
+        private async Task StartWatching(DuoSettings settings)
         {
-            lock (this) if (!_disposed)
+            using (await _lock.LockAsync()) if (!_disposed)
             {
                 _context?.Dispose(); // make sure to dispose any leftovers
 
                 _context = CreateContext(settings);
-                _context.Value.StartWatching(StartupTimeout);
+
+                await _context.Value.StartWatching(StartupTimeout);
 
                 foreach (var instance in _context.Value.Instances)
                 {
@@ -119,9 +126,9 @@ namespace MadWizard.Desomnia.Service.Duo
             }
         }
 
-        private void StopWatching()
+        private void StopWatching(bool acquireLock = true)
         {
-            lock (this)
+            using (acquireLock ? _lock.Lock() : null)
             {
                 if (_context is not null)
                 {

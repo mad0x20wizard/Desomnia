@@ -6,17 +6,17 @@ namespace DuoStreamIntegration.Tests;
 public sealed class DuoServiceContextTests
 {
     [Fact]
-    public void Startup_initializes_all_instances_and_disposal_stops_the_watcher()
+    public async Task Startup_initializes_all_instances_and_disposal_stops_the_watcher()
     {
         using var alpha = Instance("Alpha");
         using var beta = Instance("Beta");
         var manager = new ControlledManager { OnQuery = (instance, _) => Task.FromResult(instance == alpha) };
         var watcher = Watcher(manager);
         using var context = Context(manager, watcher, alpha, beta);
-        context.StartWatching(TestTimeout);
+        await context.StartWatching(TestTimeout);
 
-        Assert.True(alpha.IsRunning);
-        Assert.False(beta.IsRunning);
+        Assert.NotNull(alpha.Session);
+        Assert.Null(beta.Session);
         Assert.Equal(2, manager.Queries);
         Assert.True(watcher.Started);
         ((IDisposable)context).Dispose();
@@ -30,16 +30,17 @@ public sealed class DuoServiceContextTests
         var manager = new ControlledManager();
         var watcher = Watcher(manager);
         using var context = Context(manager, watcher, instance);
+        await context.StartWatching(TestTimeout);
         manager.OnChange = (target, running, _) =>
         {
             watcher.Publish(target, running);
             return Task.CompletedTask;
         };
         bool? manual = null;
-        watcher.StatusChanged += (_, args) => manual = args.Manually;
+        watcher.SessionChanged += (_, args) => manual = args.Manually;
 
         await context.Start(instance, TestTimeout);
-        Assert.True(instance.IsRunning);
+        Assert.NotNull(instance.Session);
         // A later external transition has no command waiter left.
         watcher.Publish(instance, false);
         Assert.True(manual);
@@ -53,6 +54,7 @@ public sealed class DuoServiceContextTests
         using var old = Instance();
         var manager = new ControlledManager();
         using var context = Context(manager, Watcher(manager), current);
+        await context.StartWatching(TestTimeout);
         await context.Start(old, TestTimeout);
         Assert.Equal(0, manager.Starts);
     }
@@ -64,9 +66,10 @@ public sealed class DuoServiceContextTests
         var manager = new ControlledManager();
         var watcher = Watcher(manager);
         using var context = Context(manager, watcher, instance);
+        await context.StartWatching(TestTimeout);
         await Assert.ThrowsAsync<TimeoutException>(() => context.Start(instance, TimeSpan.FromMilliseconds(50)));
         bool? manual = null;
-        watcher.StatusChanged += (_, args) => manual = args.Manually;
+        watcher.SessionChanged += (_, args) => manual = args.Manually;
         watcher.Publish(instance, true);
         Assert.True(manual);
         watcher.Publish(instance, false);
@@ -76,7 +79,7 @@ public sealed class DuoServiceContextTests
             return Task.CompletedTask;
         };
         await context.Start(instance, TestTimeout);
-        Assert.True(instance.IsRunning);
+        Assert.NotNull(instance.Session);
         Assert.Equal(2, manager.Starts);
     }
 
@@ -86,6 +89,7 @@ public sealed class DuoServiceContextTests
         using var instance = Instance();
         var manager = new ControlledManager();
         using var context = Context(manager, Watcher(manager), instance);
+        await context.StartWatching(TestTimeout);
         using (await instance.Mutex.LockAsync())
         {
             await Assert.ThrowsAsync<TimeoutException>(() => context.Start(instance, TimeSpan.FromMilliseconds(50)));
@@ -100,9 +104,10 @@ public sealed class DuoServiceContextTests
         var manager = new ControlledManager { OnChange = (_, _, _) => throw new HttpRequestException("Offline") };
         var watcher = Watcher(manager);
         using var context = Context(manager, watcher, instance);
+        await context.StartWatching(TestTimeout);
         await Assert.ThrowsAsync<HttpRequestException>(() => context.Start(instance, TestTimeout));
         bool? manual = null;
-        watcher.StatusChanged += (_, args) => manual = args.Manually;
+        watcher.SessionChanged += (_, args) => manual = args.Manually;
         watcher.Publish(instance, true);
         Assert.True(manual);
         manager.OnChange = (target, running, _) =>
@@ -111,6 +116,6 @@ public sealed class DuoServiceContextTests
             return Task.CompletedTask;
         };
         await context.Stop(instance, TestTimeout);
-        Assert.False(instance.IsRunning);
+        Assert.Null(instance.Session);
     }
 }

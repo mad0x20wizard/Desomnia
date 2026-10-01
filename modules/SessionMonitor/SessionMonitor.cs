@@ -5,6 +5,7 @@ using MadWizard.Desomnia.Session.Manager;
 using MadWizard.Desomnia.Session.Middleware;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Nito.AsyncEx;
 using System.Collections.Concurrent;
 
 namespace MadWizard.Desomnia.Session
@@ -16,6 +17,8 @@ namespace MadWizard.Desomnia.Session
         public required ILifetimeScope Scope { private get; init; }
 
         readonly ConcurrentDictionary<ISession, ILifetimeScope> _sessionScopes = [];
+
+        public AsyncManualResetEvent StartupFinished { get; private init; } = new(false);
 
         volatile bool _stopping;
 
@@ -42,10 +45,31 @@ namespace MadWizard.Desomnia.Session
             manager.UserLogoff += SessionManager_UserLogout;
 
             Logger.LogDebug("Startup complete");
+
+            StartupFinished.Set();
         }
 
         #region Session tracking
         private void TrackSession(ISession session, bool logon = false)
+        {
+            lock (_sessionScopes)
+            {
+                if (_stopping)
+                    return;
+
+                if (_sessionScopes.TryGetValue(session, out var existing))
+                {
+                    if (logon)
+                        existing.Resolve<SessionWatch>().TriggerLogon();
+
+                    return;
+                }
+
+                CreateSessionWatch(session, logon);
+            }
+        }
+
+        private void CreateSessionWatch(ISession session, bool logon)
         {
             var scope = Scope.BeginLifetimeScope("Session", builder =>
             {
@@ -100,28 +124,31 @@ namespace MadWizard.Desomnia.Session
 
         private void UnTrackSession(ISession session, bool logoff = false)
         {
-            if (_sessionScopes.Remove(session, out var scope))
+            lock (_sessionScopes)
             {
-                try
+                if (_sessionScopes.Remove(session, out var scope))
                 {
-                    if (scope.Resolve<SessionWatch>() is SessionWatch watch)
+                    try
                     {
-                        if (logoff)
+                        if (scope.Resolve<SessionWatch>() is SessionWatch watch)
                         {
-                            watch.TriggerLogout();
+                            if (logoff)
+                            {
+                                watch.TriggerLogout();
+                            }
+
+                            this.StopTracking(watch);
                         }
-
-                        this.StopTracking(watch);
                     }
-                }
-                catch (Exception ex)
-                {
-                    // a poisoned scope (failed resolve) or a WTS-vanished session must not
-                    // block the disposal below, nor escape into async-void event handlers
-                    Logger.LogError(ex, "Could not untrack session watch: {Session}", session);
-                }
+                    catch (Exception ex)
+                    {
+                        // a poisoned scope (failed resolve) or a WTS-vanished session must not
+                        // block the disposal below, nor escape into async-void event handlers
+                        Logger.LogError(ex, "Could not untrack session watch: {Session}", session);
+                    }
 
-                scope.Dispose();
+                    scope.Dispose();
+                }
             }
         }
         #endregion

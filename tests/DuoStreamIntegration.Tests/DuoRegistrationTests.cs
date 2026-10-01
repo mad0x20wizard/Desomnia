@@ -15,15 +15,24 @@ namespace DuoStreamIntegration.Tests;
 
 public sealed class DuoRegistrationTests
 {
-    [Fact]
-    public void Module_resolves_an_owned_context_using_the_current_interfaces()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Module_resolves_an_owned_context_using_the_current_interfaces(bool polling)
     {
         var config = new DuoConfig
         {
-            DuoSessionMonitor = new DuoSessionMonitorConfig { ServiceName = "TestDuo", UsePolling = true }
+            SessionMonitor = new MadWizard.Desomnia.Session.Configuration.SessionMonitorConfig(),
+            DuoSessionMonitor = new DuoSessionMonitorConfig { ServiceName = "TestDuo", UsePolling = polling }
         };
         config.NetworkMonitor.Add(new NetworkMonitorConfig()); // No firewall listener registration.
         var builder = new ContainerBuilder();
+        var sessions = new FakeSessionManager();
+        builder.RegisterInstance(sessions).As<MadWizard.Desomnia.Session.Manager.ISessionManager>();
+        builder.RegisterInstance(new MadWizard.Desomnia.Session.SessionMonitor(config.SessionMonitor, sessions)
+        {
+            Scope = null!, Logger = NullLogger<MadWizard.Desomnia.Session.SessionMonitor>.Instance
+        });
         new TestModule().Configure(builder, config);
         builder.RegisterInstance(NullLogger.Instance).As<ILogger>();
         builder.RegisterGeneric(typeof(NullLogger<>)).As(typeof(ILogger<>)).SingleInstance();
@@ -34,7 +43,10 @@ public sealed class DuoRegistrationTests
         using var replacement = create(new DuoSettings { Port = 38300, Instances = [Settings()] });
 
         Assert.IsType<DuoWebAPIManager>(owned.Value.Manager);
-        Assert.IsType<PollingWatcher>(owned.Value.Watcher);
+        if (polling)
+            Assert.IsType<PollingWatcher>(owned.Value.Watcher);
+        else
+            Assert.IsType<RegistryWatcher>(owned.Value.Watcher);
         Assert.Equal("Player", Assert.Single(owned.Value.Instances).Name);
         Assert.Equal(38299u, owned.Value.Settings.Port);
         Assert.NotSame(owned.Value.Manager, replacement.Value.Manager);

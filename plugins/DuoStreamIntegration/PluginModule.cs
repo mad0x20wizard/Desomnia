@@ -34,7 +34,8 @@ namespace MadWizard.Desomnia.Service.Duo
 
         protected override void Load(ContainerBuilder builder, DuoConfig config)
         {
-            if (config.DuoSessionMonitor is DuoSessionMonitorConfig duo)
+            if (config.DuoSessionMonitor is DuoSessionMonitorConfig duo &&
+                config.SessionMonitor is SessionMonitorConfig session)
             {
                 builder.RegisterType<DuoService>().AsSelf()
                     .WithParameter(TypedParameter.From(duo.ServiceName))
@@ -58,6 +59,7 @@ namespace MadWizard.Desomnia.Service.Duo
 
                 builder.RegisterType<DuoServiceContext>().AsSelf()
                     .ConfigurePipeline(p => p.Use(new ContextConfiguration(config.DuoSessionMonitor)))
+                    .WithParameter(new TypedParameter(typeof(SessionMonitorConfig), session))
                     .InstancePerDependency();
 
                 // the only available DuoManager right now
@@ -67,6 +69,15 @@ namespace MadWizard.Desomnia.Service.Duo
 
                 if (!duo.UsePolling)
                 {
+                    if (duo.UseRegistry)
+                    {
+                        builder.RegisterType<RegistryWatcher>()
+                            .InstancePerOwned<DuoServiceContext>()
+                            .As<IDuoSessionWatcher>();
+
+                        goto skipPolling;
+                    }
+
                     try
                     {
                         using var service = new ServiceController(duo.ServiceName);
@@ -75,7 +86,7 @@ namespace MadWizard.Desomnia.Service.Duo
                         {
                             builder.RegisterType<PreciseEventWatcher>()
                                 .InstancePerOwned<DuoServiceContext>()
-                                .As<IDuoInstanceWatcher>();
+                                .As<IDuoSessionWatcher>();
 
                             goto skipPolling;
                         }
@@ -83,7 +94,7 @@ namespace MadWizard.Desomnia.Service.Duo
                         {
                             builder.RegisterType<EventWatcher>()
                                 .InstancePerOwned<DuoServiceContext>()
-                                .As<IDuoInstanceWatcher>();
+                                .As<IDuoSessionWatcher>();
 
                             goto skipPolling;
                         }
@@ -101,27 +112,15 @@ namespace MadWizard.Desomnia.Service.Duo
                     }
                 }
 
-                builder.RegisterType<PollingWatcher>().As<IDuoInstanceWatcher>()
+                builder.RegisterType<PollingWatcher>().As<IDuoSessionWatcher>()
                     .WithParameter(TypedParameter.From(duo.PollInterval))
                     .InstancePerOwned<DuoServiceContext>();
 
             skipPolling:
 
-                if (config.SessionMonitor is SessionMonitorConfig monitorSession)
-                    builder.RegisterType<SessionWatchAdapter>()
-                        .OnlyIf(reg => reg.IsRegistered(new TypedService(typeof(SessionMonitor))))
-                        .WithParameter(new TypedParameter(typeof(SessionMonitorConfig), monitorSession))
-                        .OnActivated(ctx => ctx.Instance.Attach()).AutoActivate()
-                        .AsImplementedInterfaces()
-                        .SingleInstance();
-
                 if (config.UseListener)
                 {
-                    foreach (var instance in duo.Instance)
-                    {
-                        if (instance.HostFilterRule.Count > 0 || instance.HostRangeFilterRule.Count > 0)
-                            throw new FormatException($"Duo instance '{instance.Name}': HostFilterRule and HostRangeFilterRule require packet capture and cannot be used in listener mode.");
-                    }
+                    SunshineListenerModule.Validate(duo);
 
                     builder.RegisterModule<SunshineListenerModule>();
                 }
@@ -140,6 +139,18 @@ namespace MadWizard.Desomnia.Service.Duo
 
     internal class SunshineListenerModule : Autofac.Module
     {
+        internal static void Validate(DuoSessionMonitorConfig config)
+        {
+            foreach (var instance in config.Instance)
+            {
+                if (instance.MinStreamTraffic != null)
+                    throw new FormatException("Cannot monitor MinStreamTraffic while in Listener Mode.");
+
+                if (instance.HostFilterRule.Count > 0 || instance.HostRangeFilterRule.Count > 0)
+                    throw new FormatException($"Duo instance '{instance.Name}': HostFilterRule and HostRangeFilterRule require packet capture and cannot be used in listener mode.");
+            }
+        }
+
         protected override void Load(ContainerBuilder builder)
         {
             builder.RegisterInstance<IFirewall>(FirewallWAS.Instance).As<IFirewall>();

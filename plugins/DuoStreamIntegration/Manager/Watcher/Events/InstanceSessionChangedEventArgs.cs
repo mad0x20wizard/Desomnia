@@ -1,4 +1,4 @@
-﻿using MadWizard.Desomnia.Session.Manager;
+using MadWizard.Desomnia.Session.Manager;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 {
@@ -7,6 +7,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
         public DuoInstance Instance { get; } = instance;
 
         public ISession? Session { get; } = session;
+
+        public bool IsRunning => Session != null;
 
         public bool Manually { get; set; } = true;
     }

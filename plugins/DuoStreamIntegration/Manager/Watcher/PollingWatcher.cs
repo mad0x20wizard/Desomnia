@@ -1,12 +1,12 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 {
-    internal class PollingWatcher : BaseWatcher
+    internal class PollingWatcher : StatusWatcher
     {
         public required TimeSpan PollInterval { get; set; }
 
-        public override async Task WatchAsync(IEnumerable<DuoInstance> instances, CancellationToken stoppingToken)
+        protected override async Task WatchAsync(IEnumerable<DuoInstance> instances, CancellationToken stoppingToken)
         {
             Logger.LogDebug("Polling Duo instances every {Interval}", PollInterval);
 

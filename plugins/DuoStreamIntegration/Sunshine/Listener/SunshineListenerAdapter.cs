@@ -1,4 +1,4 @@
-﻿using MadWizard.Desomnia.Events;
+using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Ressource.Events;
 using Microsoft.Extensions.Logging;
 
@@ -20,16 +20,13 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
         {
             var instance = args.Inspectable;
 
-            if (instance.Info.MinStreamTraffic != null)
-                throw new FormatException("Cannot monitor MinStreamTraffic while in Listener Mode.");
-
             instance.Started += DuoInstance_Started;
             instance.Stopped += DuoInstance_Stopped;
 
             if (!instance.Settings.IsSandboxed)
             {
                 Logger.LogInformation($"Monitoring {instance}:{instance.Settings.Port}"
-                    + (instance.IsRunning == true ? " (running)" : "")  
+                    + (instance.IsRunning ? " (running)" : "")
                     + " -> using listener");
 
                 RegisterWatch(instance, CreateSunshineListener(instance.Service));

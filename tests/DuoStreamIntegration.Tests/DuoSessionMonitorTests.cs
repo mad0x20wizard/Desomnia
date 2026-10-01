@@ -42,13 +42,13 @@ public sealed class DuoSessionMonitorTests
             var context = contexts.Dequeue();
             return new Owned<DuoServiceContext>(context, context);
         });
-        monitor.Startup();
+        await TrackInstance(monitor, oldInstance, monitor.Startup);
         var pending = monitor.HandleActionStart(oldInstance);
         await entered.Task.WaitAsync(TestTimeout);
         var queued = monitor.HandleActionStop(oldInstance);
 
         service.Publish(ServiceControllerStatus.Stopped);
-        service.Publish(ServiceControllerStatus.Running);
+        await TrackInstance(monitor, replacement, () => service.Publish(ServiceControllerStatus.Running));
         await Task.WhenAll(pending, queued).WaitAsync(TestTimeout);
 
         Assert.True(oldWatcher.Stopped);
@@ -56,14 +56,14 @@ public sealed class DuoSessionMonitorTests
         await monitor.HandleActionStart(oldInstance); // A stale action cannot target the new API.
         Assert.Equal(0, newManager.Starts);
         await monitor.HandleActionStart(replacement);
-        Assert.True(replacement.IsRunning);
+        Assert.NotNull(replacement.Session);
         Assert.Equal(1, oldManager.Starts);
         Assert.Equal(0, oldManager.Stops);
         Assert.Equal(1, newManager.Starts);
     }
 
     [Fact]
-    public void Monitor_snapshot_tolerates_a_service_restart_during_iteration()
+    public async Task Monitor_snapshot_tolerates_a_service_restart_during_iteration()
     {
         using var oldInstance = Instance();
         using var replacement = Instance();
@@ -78,21 +78,21 @@ public sealed class DuoSessionMonitorTests
             var context = contexts.Dequeue();
             return new Owned<DuoServiceContext>(context, context);
         });
-        monitor.Startup();
+        await TrackInstance(monitor, oldInstance, monitor.Startup);
         using var iterator = ((IEnumerable<DuoInstance>)monitor.TakeSnapshot()).GetEnumerator();
         Assert.True(iterator.MoveNext());
 
         // The adapter only reads. All mutations go through the monitor's actual
         // service-status handler, between two steps of the reader's enumeration.
         service.Publish(ServiceControllerStatus.Stopped);
-        service.Publish(ServiceControllerStatus.Running);
+        await TrackInstance(monitor, replacement, () => service.Publish(ServiceControllerStatus.Running));
 
         var error = Record.Exception(() => { while (iterator.MoveNext()) { } });
         Assert.Null(error);
     }
 
     [Fact]
-    public void Service_stop_untracks_instances_and_disposes_the_owned_context()
+    public async Task Service_stop_untracks_instances_and_disposes_the_owned_context()
     {
         using var instance = Instance();
         var manager = new ControlledManager();
@@ -102,7 +102,7 @@ public sealed class DuoSessionMonitorTests
         using var monitor = Monitor(service, _ => new Owned<DuoServiceContext>(context, context));
         var removed = false;
         monitor.TrackingStopped += (_, args) => removed = args.Inspectable == instance;
-        monitor.Startup();
+        await TrackInstance(monitor, instance, monitor.Startup);
         Assert.Same(instance, Assert.Single(monitor));
 
         service.Publish(ServiceControllerStatus.Stopped);
@@ -113,7 +113,7 @@ public sealed class DuoSessionMonitorTests
     }
 
     [Fact]
-    public void Disposed_monitor_rejects_an_already_queued_running_notification()
+    public async Task Disposed_monitor_rejects_an_already_queued_running_notification()
     {
         using var instance = Instance();
         var manager = new ControlledManager();
@@ -126,7 +126,7 @@ public sealed class DuoSessionMonitorTests
             created++;
             return new Owned<DuoServiceContext>(context, context);
         });
-        monitor.Startup();
+        await TrackInstance(monitor, instance, monitor.Startup);
         var queued = service.CaptureRunningNotification();
 
         monitor.Dispose();
@@ -163,7 +163,7 @@ public sealed class DuoSessionMonitorTests
             // Production waits ten seconds before retrying; allow time for that retry.
             var recovered = await Task.WhenAny(tracked.Task, Task.Delay(TimeSpan.FromSeconds(15)));
             Assert.True(recovered == tracked.Task, "Monitoring never retried the failed initial query while Duo remained Running (issue 5).");
-            Assert.True(Assert.Single(monitor).IsRunning);
+            Assert.NotNull(Assert.Single(monitor).Session);
         }
         finally
         {
@@ -176,9 +176,15 @@ public sealed class DuoSessionMonitorTests
     public async Task Stopping_the_service_during_retry_delay_does_not_raise_an_unhandled_exception()
     {
         var service = new FakeDuoService();
-        using var monitor = Monitor(service, _ => throw new HttpRequestException("Endpoint is not ready yet"));
+        var attempted = false;
+        using var monitor = Monitor(service, _ =>
+        {
+            attempted = true;
+            throw new HttpRequestException("Endpoint is not ready yet");
+        });
         var callbacks = new QueuedSynchronizationContext();
         callbacks.Start(() => monitor.Startup());
+        Assert.Empty(await callbacks.RunUntilAsync(() => attempted, TestTimeout));
 
         service.Publish(ServiceControllerStatus.Stopped);
 
@@ -201,6 +207,7 @@ public sealed class DuoSessionMonitorTests
         });
         var callbacks = new QueuedSynchronizationContext();
         callbacks.Start(() => monitor.Startup());
+        Assert.Empty(await callbacks.RunUntilAsync(() => created == 1, TestTimeout));
 
         monitor.Dispose();
 
@@ -218,26 +225,27 @@ public sealed class DuoSessionMonitorTests
     {
         using var instance = Instance();
         var manager = new ControlledManager();
-        var watcher = new TestEventWatcher { Manager = manager, Logger = NullLogger.Instance };
+        var watcher = new TestEventWatcher { SessionManager = new FakeSessionManager(), Manager = manager, Logger = NullLogger.Instance };
         manager.OnQuery = (_, _) => Task.FromResult(initiallyRunning);
         var changes = new List<bool>();
-        watcher.StatusChanged += (_, args) => changes.Add(args.Status);
+        watcher.SessionChanged += (_, args) => changes.Add(args.Session is not null);
         using var context = Context(manager, watcher, instance);
-        context.StartWatching(TestTimeout);
+        await context.StartWatching(TestTimeout);
         await watcher.Subscribed.Task.WaitAsync(TestTimeout);
-        Assert.Equal(initiallyRunning, instance.IsRunning);
-        Assert.Empty(changes); // Loading initial state is not a start/stop transition.
+        Assert.Equal(initiallyRunning, (instance.Session is not null));
+        Assert.Equal(initiallyRunning ? new[] { true } : [], changes);
+        changes.Clear(); // Initial association is published so the adapter can acquire the watch.
 
         // Changes during the initial query/subscription handover are an accepted
         // limitation. Manual changes after startup must work in both directions.
         var first = initiallyRunning ? DuoEventID.InstanceStopped : DuoEventID.InstanceStarted;
         var second = initiallyRunning ? DuoEventID.InstanceStarted : DuoEventID.InstanceStopped;
         await watcher.SendAsync(first, instance.Name).WaitAsync(TestTimeout);
-        Assert.Equal(!initiallyRunning, instance.IsRunning);
+        Assert.Equal(!initiallyRunning, (instance.Session is not null));
         await watcher.SendAsync(first, instance.Name).WaitAsync(TestTimeout);
         Assert.Single(changes); // Repeated notifications must not repeat the transition.
         await watcher.SendAsync(second, instance.Name).WaitAsync(TestTimeout);
-        Assert.Equal(initiallyRunning, instance.IsRunning);
+        Assert.Equal(initiallyRunning, (instance.Session is not null));
         Assert.Equal(new[] { !initiallyRunning, initiallyRunning }, changes);
     }
 
@@ -247,6 +255,10 @@ public sealed class DuoSessionMonitorTests
     {
         private readonly Channel<(SendOrPostCallback Callback, object? State)> _callbacks =
             Channel.CreateUnbounded<(SendOrPostCallback, object?)>();
+        private int _operations;
+
+        public override void OperationStarted() => Interlocked.Increment(ref _operations);
+        public override void OperationCompleted() => Interlocked.Decrement(ref _operations);
 
         public override void Post(SendOrPostCallback callback, object? state) =>
             _callbacks.Writer.TryWrite((callback, state));
@@ -259,17 +271,36 @@ public sealed class DuoSessionMonitorTests
             finally { SetSynchronizationContext(previous); }
         }
 
-        public async Task<List<Exception>> RunPostedCallbacksAsync(TimeSpan timeout)
+        public Task<List<Exception>> RunPostedCallbacksAsync(TimeSpan timeout) =>
+            RunUntilAsync(() => Volatile.Read(ref _operations) == 0, timeout);
+
+        public async Task<List<Exception>> RunUntilAsync(Func<bool> completed, TimeSpan timeout)
         {
             var errors = new List<Exception>();
-            var item = await _callbacks.Reader.ReadAsync().AsTask().WaitAsync(timeout);
-            do
+            using var cancellation = new CancellationTokenSource(timeout);
+            while (!completed() || _callbacks.Reader.TryPeek(out _))
             {
-                try { item.Callback(item.State); }
+                var item = await _callbacks.Reader.ReadAsync(cancellation.Token);
+                try { Start(() => item.Callback(item.State)); }
                 catch (Exception ex) { errors.Add(ex); }
             }
-            while (_callbacks.Reader.TryRead(out item));
             return errors;
         }
+    }
+
+    private static async Task TrackInstance(DuoSessionMonitor monitor, DuoInstance instance, Action start)
+    {
+        var tracked = Signal();
+        void OnTracked(object? sender, MadWizard.Desomnia.Ressource.Events.InspectableEventArgs<DuoInstance> args)
+        {
+            if (args.Inspectable == instance) tracked.TrySetResult();
+        }
+        monitor.TrackingStarted += OnTracked;
+        try
+        {
+            start();
+            await tracked.Task.WaitAsync(TestTimeout);
+        }
+        finally { monitor.TrackingStarted -= OnTracked; }
     }
 }

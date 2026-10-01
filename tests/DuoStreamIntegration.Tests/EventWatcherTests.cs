@@ -26,14 +26,14 @@ public sealed class EventWatcherTests
         using var alpha = new DuoInstance(leftName, Settings(leftName) with { DisplayName = leftDisplayName }, new() { Name = leftName });
         using var beta = new DuoInstance(rightName, Settings(rightName) with { DisplayName = rightDisplayName }, new() { Name = rightName });
         var manager = new ControlledManager { OnQuery = (instance, _) => Task.FromResult(instance == beta) };
-        var watcher = new TestEventWatcher { Manager = manager, Logger = NullLogger.Instance };
+        var watcher = new TestEventWatcher { SessionManager = new FakeSessionManager(), Manager = manager, Logger = NullLogger.Instance };
         using var lifetime = new CancellationTokenSource(TestTimeout);
-        var watching = watcher.WatchAsync(reverseOrder ? [beta, alpha] : [alpha, beta], lifetime.Token);
+        var watching = watcher.RunEvents(reverseOrder ? [beta, alpha] : [alpha, beta], lifetime.Token);
         try
         {
             await watcher.SendAsync(DuoEventID.InstanceStarted, $"{beta.Name} ({beta.Settings.DisplayName})").WaitAsync(TestTimeout);
-            Assert.False(alpha.IsRunning);
-            Assert.True(beta.IsRunning);
+            Assert.Null(watcher.Session(alpha));
+            Assert.NotNull(watcher.Session(beta));
             Assert.Equal(2, manager.Queries);
         }
         finally
@@ -49,14 +49,14 @@ public sealed class EventWatcherTests
         using var alpha = Instance("Alpha");
         using var beta = Instance("Beta");
         var manager = new ControlledManager();
-        var watcher = new TestEventWatcher { Manager = manager, Logger = NullLogger.Instance };
+        var watcher = new TestEventWatcher { SessionManager = new FakeSessionManager(), Manager = manager, Logger = NullLogger.Instance };
         using var lifetime = new CancellationTokenSource(TestTimeout);
-        var watching = watcher.WatchAsync([alpha, beta], lifetime.Token);
+        var watching = watcher.RunEvents([alpha, beta], lifetime.Token);
         try
         {
             await watcher.SendAsync(DuoEventID.InstanceStarted, beta.Name).WaitAsync(TestTimeout);
-            Assert.False(alpha.IsRunning);
-            Assert.True(beta.IsRunning);
+            Assert.Null(watcher.Session(alpha));
+            Assert.NotNull(watcher.Session(beta));
             Assert.Equal(0, manager.Queries);
         }
         finally
@@ -70,32 +70,32 @@ public sealed class EventWatcherTests
     public async Task Cancellation_between_buffered_direct_updates_stops_before_the_next_update()
     {
         using var instance = Instance();
-        var watcher = new TestEventWatcher { Manager = new ControlledManager(), Logger = NullLogger.Instance };
+        var watcher = new TestEventWatcher { SessionManager = new FakeSessionManager(), Manager = new ControlledManager(), Logger = NullLogger.Instance };
         using var lifetime = new CancellationTokenSource(TestTimeout);
         var changes = 0;
-        watcher.StatusChanged += (_, args) =>
+        watcher.SessionChanged += (_, args) =>
         {
             changes++;
-            if (args.Status)
+            if (args.Session is not null)
             {
                 watcher.Publish(DuoEventID.InstanceStopped, instance.Name);
                 lifetime.Cancel();
             }
         };
-        var watching = watcher.WatchAsync([instance], lifetime.Token);
+        var watching = watcher.RunEvents([instance], lifetime.Token);
         watcher.Publish(DuoEventID.InstanceStarted, instance.Name);
         await watching.WaitAsync(TestTimeout);
         Assert.Equal(1, changes);
-        Assert.True(instance.IsRunning);
+        Assert.NotNull(watcher.Session(instance));
     }
 
     [Fact, Trait("Issue", "2")]
     public async Task Callback_disposes_delivered_records_including_ignored_and_unmatched_events()
     {
         using var instance = Instance();
-        var watcher = new TestEventWatcher { Manager = new ControlledManager(), Logger = NullLogger.Instance };
+        var watcher = new TestEventWatcher { SessionManager = new FakeSessionManager(), Manager = new ControlledManager(), Logger = NullLogger.Instance };
         using var lifetime = new CancellationTokenSource(TestTimeout);
-        var watching = watcher.WatchAsync([instance], lifetime.Token);
+        var watching = watcher.RunEvents([instance], lifetime.Token);
         try
         {
             await watcher.SendAsync(DuoEventID.InstanceStarted, instance.Name).WaitAsync(TestTimeout);
@@ -116,9 +116,9 @@ public sealed class EventWatcherTests
     public async Task Event_log_read_errors_are_logged()
     {
         var logger = new RecordingLogger();
-        var watcher = new TestEventWatcher { Manager = new ControlledManager(), Logger = logger };
+        var watcher = new TestEventWatcher { SessionManager = new FakeSessionManager(), Manager = new ControlledManager(), Logger = logger };
         using var lifetime = new CancellationTokenSource(TestTimeout);
-        var watching = watcher.WatchAsync([], lifetime.Token);
+        var watching = watcher.RunEvents([], lifetime.Token);
         try
         {
             var error = new InvalidOperationException("Event log unavailable");
@@ -142,16 +142,16 @@ public sealed class EventWatcherTests
             OnQuery = (_, _) => Task.FromException<bool>(new TaskCanceledException("HTTP request timed out"))
         };
         var logger = new RecordingLogger();
-        var watcher = new TestEventWatcher { Manager = manager, Logger = logger };
+        var watcher = new TestEventWatcher { SessionManager = new FakeSessionManager(), Manager = manager, Logger = logger };
         using var lifetime = new CancellationTokenSource(TestTimeout);
         var refresh = watcher.SendAsync(DuoEventID.Resuming);
-        var watching = watcher.WatchAsync([instance], lifetime.Token);
+        var watching = watcher.RunEvents([instance], lifetime.Token);
         try
         {
             await refresh.WaitAsync(TestTimeout);
             Assert.False(watching.IsCompleted, "A request timeout terminated the watcher even though its lifetime was not canceled.");
             await watcher.SendAsync(DuoEventID.InstanceStarted, instance.Name).WaitAsync(TestTimeout);
-            Assert.True(instance.IsRunning);
+            Assert.NotNull(watcher.Session(instance));
             Assert.Single(logger.Errors);
         }
         finally
@@ -175,20 +175,19 @@ public sealed class EventWatcherTests
     public async Task Stop_notification_is_applied_after_an_earlier_pending_refresh()
     {
         using var instance = Instance();
-        instance.IsRunning = true;
         var queryEntered = Signal();
         var reply = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var manager = new ControlledManager
         {
             OnQuery = (_, token) => { queryEntered.TrySetResult(); return reply.Task.WaitAsync(token); }
         };
-        var watcher = new TestEventWatcher { Manager = manager, Logger = NullLogger.Instance };
+        var watcher = new TestEventWatcher { SessionManager = new FakeSessionManager(), Manager = manager, Logger = NullLogger.Instance };
         using var lifetime = new CancellationTokenSource(TestTimeout);
         // Both records are available synchronously. A consumer that starts work without
         // awaiting it would process Stop before WatchAsync returns to the test.
         var refresh = watcher.SendAsync(DuoEventID.Resuming);
         var stop = watcher.SendAsync(DuoEventID.InstanceStopped, instance.Name);
-        var watching = watcher.WatchAsync([instance], lifetime.Token);
+        var watching = watcher.RunEvents([instance], lifetime.Token);
         try
         {
             await watcher.Subscribed.Task.WaitAsync(TestTimeout);
@@ -196,7 +195,7 @@ public sealed class EventWatcherTests
             Assert.False(stop.IsCompleted);
             reply.SetResult(true);
             await Task.WhenAll(refresh, stop).WaitAsync(TestTimeout);
-            Assert.False(instance.IsRunning);
+            Assert.Null(watcher.Session(instance));
         }
         finally
         {
@@ -221,11 +220,11 @@ public sealed class EventWatcherTests
                 finally { Interlocked.Decrement(ref active); }
             }
         };
-        var watcher = new TestEventWatcher { Manager = manager, Logger = NullLogger.Instance };
+        var watcher = new TestEventWatcher { SessionManager = new FakeSessionManager(), Manager = manager, Logger = NullLogger.Instance };
         var first = watcher.SendAsync(DuoEventID.Resuming);
         var second = watcher.SendAsync(DuoEventID.Resuming);
         using var lifetime = new CancellationTokenSource(TestTimeout);
-        var watching = watcher.WatchAsync([instance], lifetime.Token);
+        var watching = watcher.RunEvents([instance], lifetime.Token);
         try
         {
             Assert.Equal(1, manager.Queries);
@@ -248,14 +247,14 @@ public sealed class EventWatcherTests
         using var instance = Instance();
         var reply = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var manager = new ControlledManager { OnQuery = (_, _) => reply.Task };
-        var watcher = new TestEventWatcher { Manager = manager, Logger = NullLogger.Instance };
+        var watcher = new TestEventWatcher { SessionManager = new FakeSessionManager(), Manager = manager, Logger = NullLogger.Instance };
         _ = watcher.SendAsync(DuoEventID.Resuming);
         using var lifetime = new CancellationTokenSource(TestTimeout);
-        var watching = watcher.WatchAsync([instance], lifetime.Token);
+        var watching = watcher.RunEvents([instance], lifetime.Token);
         lifetime.Cancel();
         reply.SetResult(true);
         await watching.WaitAsync(TestTimeout);
-        Assert.False(instance.IsRunning);
+        Assert.Null(watcher.Session(instance));
         Assert.True(watcher.Unsubscribed.Task.IsCompleted);
     }
 
@@ -265,16 +264,16 @@ public sealed class EventWatcherTests
         using var instance = new ErrorHandlingInstance();
         var logger = new RecordingLogger();
         ((IEventSystem)instance)[nameof(DuoInstance.Started)].AddAction(new JSEventAction("test-failure"));
-        var watcher = new TestEventWatcher { Manager = new ControlledManager(), Logger = logger };
+        var watcher = new TestEventWatcher { SessionManager = new FakeSessionManager(), Manager = new ControlledManager(), Logger = logger };
         using var lifetime = new CancellationTokenSource(TestTimeout);
-        var watching = watcher.WatchAsync([instance], lifetime.Token);
+        var watching = watcher.RunEvents([instance], lifetime.Token);
         try
         {
             await watcher.SendAsync(DuoEventID.InstanceStarted, instance.Name).WaitAsync(TestTimeout);
             instance.Release.TrySetResult();
             await instance.ErrorHandled.Task.WaitAsync(TestTimeout);
             await watcher.SendAsync(DuoEventID.InstanceStopped, instance.Name).WaitAsync(TestTimeout);
-            Assert.False(instance.IsRunning);
+            Assert.Null(watcher.Session(instance));
             Assert.Single(instance.Errors);
             Assert.Empty(logger.Errors);
         }
@@ -309,9 +308,9 @@ public sealed class EventWatcherTests
                 return true;
             }
         };
-        var watcher = new TestEventWatcher { Manager = manager, Logger = NullLogger.Instance };
+        var watcher = new TestEventWatcher { SessionManager = new FakeSessionManager(), Manager = manager, Logger = NullLogger.Instance };
         using var context = Context(manager, watcher, instance);
-        context.StartWatching(TestTimeout);
+        await context.StartWatching(TestTimeout);
         await watcher.Subscribed.Task.WaitAsync(TestTimeout);
         _ = watcher.SendAsync(DuoEventID.Resuming);
         await queryEntered.Task.WaitAsync(TestTimeout);
@@ -329,7 +328,7 @@ public sealed class EventWatcherTests
             await disposal.WaitAsync(TestTimeout);
         }
         Assert.True(watcher.Unsubscribed.Task.IsCompleted);
-        Assert.False(instance.IsRunning);
+        Assert.Null(watcher.Session(instance));
         Assert.False(watcher.Publish(DuoEventID.InstanceStarted, instance.Name));
     }
 
@@ -347,9 +346,9 @@ public sealed class EventWatcherTests
                 return Task.CompletedTask;
             }
         };
-        var watcher = new TestEventWatcher { Manager = manager, Logger = NullLogger.Instance };
+        var watcher = new TestEventWatcher { SessionManager = new FakeSessionManager(), Manager = manager, Logger = NullLogger.Instance };
         using var context = Context(manager, watcher, instance);
-        context.StartWatching(TestTimeout);
+        await context.StartWatching(TestTimeout);
         instance.Started += async _ =>
         {
             await context.Stop(instance, TestTimeout);
@@ -361,7 +360,7 @@ public sealed class EventWatcherTests
         Assert.False(actionCompleted.Task.IsCompleted);
         await watcher.SendAsync(DuoEventID.InstanceStopped, instance.Name).WaitAsync(TestTimeout);
         await actionCompleted.Task.WaitAsync(TestTimeout);
-        Assert.False(instance.IsRunning);
+        Assert.Null(watcher.Session(instance));
     }
 
     [Theory, Trait("Issue", "3")]
@@ -372,14 +371,14 @@ public sealed class EventWatcherTests
         using var instance = Instance();
         var manager = new ControlledManager { OnQuery = (_, _) => throw new HttpRequestException("Offline") };
         var logger = new RecordingLogger();
-        var watcher = new TestEventWatcher { Manager = manager, Logger = logger };
+        var watcher = new TestEventWatcher { SessionManager = new FakeSessionManager(), Manager = manager, Logger = logger };
         using var lifetime = new CancellationTokenSource(TestTimeout);
-        var watching = watcher.WatchAsync([instance], lifetime.Token);
+        var watching = watcher.RunEvents([instance], lifetime.Token);
         try
         {
             await watcher.SendAsync(failedQuery ? DuoEventID.Resuming : DuoEventID.InstanceStarted, "Unknown").WaitAsync(TestTimeout);
             await watcher.SendAsync(DuoEventID.InstanceStarted, instance.Name).WaitAsync(TestTimeout);
-            Assert.True(instance.IsRunning);
+            Assert.NotNull(watcher.Session(instance));
             Assert.Single(logger.Errors);
             Assert.False(watching.IsCompleted);
         }
@@ -396,14 +395,14 @@ public sealed class EventWatcherTests
         using var alpha = Instance("Player");
         using var beta = Instance("PlayerTwo");
         var manager = new ControlledManager { OnQuery = (instance, _) => Task.FromResult(instance == beta) };
-        var watcher = new TestEventWatcher { Manager = manager, Logger = NullLogger.Instance };
+        var watcher = new TestEventWatcher { SessionManager = new FakeSessionManager(), Manager = manager, Logger = NullLogger.Instance };
         using var lifetime = new CancellationTokenSource(TestTimeout);
-        var watching = watcher.WatchAsync([alpha, beta], lifetime.Token);
+        var watching = watcher.RunEvents([alpha, beta], lifetime.Token);
         try
         {
             await watcher.SendAsync(DuoEventID.InstanceStarted, beta.Name).WaitAsync(TestTimeout);
-            Assert.False(alpha.IsRunning);
-            Assert.True(beta.IsRunning);
+            Assert.Null(watcher.Session(alpha));
+            Assert.NotNull(watcher.Session(beta));
             Assert.Equal(2, manager.Queries);
         }
         finally

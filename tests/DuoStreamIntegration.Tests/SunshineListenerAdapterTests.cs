@@ -15,7 +15,7 @@ public sealed class SunshineListenerAdapterTests
     [Theory, Trait("Issue", "6")]
     [InlineData(true)]
     [InlineData(false)]
-    public void Build_callback_starts_monitor_after_adapter_attaches_when_service_is_initially_running_or_stopped(bool initiallyRunning)
+    public async Task Build_callback_starts_monitor_after_adapter_attaches_when_service_is_initially_running_or_stopped(bool initiallyRunning)
     {
         using var instance = Instance();
         var manager = new ControlledManager();
@@ -26,6 +26,7 @@ public sealed class SunshineListenerAdapterTests
         };
         var created = new List<TestListener>();
         var startupOrder = new List<string>();
+        var tracked = Signal();
         var builder = new ContainerBuilder();
         // Use the production startup mechanisms with controlled Windows dependencies.
         builder.Register(_ =>
@@ -48,6 +49,7 @@ public sealed class SunshineListenerAdapterTests
         {
             ctx.Instance.Attach();
             startupOrder.Add("Adapter attached");
+            ctx.Context.Resolve<DuoSessionMonitor>().TrackingStarted += (_, _) => tracked.TrySetResult();
         }).AutoActivate().SingleInstance();
         builder.RegisterBuildCallback(container => container.ResolveOptional<DuoSessionMonitor>()?.Startup());
         using var container = builder.Build();
@@ -55,6 +57,7 @@ public sealed class SunshineListenerAdapterTests
         try
         {
             if (!initiallyRunning) service.Publish(ServiceControllerStatus.Running);
+            await tracked.Task.WaitAsync(TestTimeout);
 
             Assert.Equal(new[] { "Adapter attached", "Instance tracked" }, startupOrder);
             Assert.True(created.Count == 1, $"Expected one listener. Startup sequence: {string.Join(" -> ", startupOrder)}");

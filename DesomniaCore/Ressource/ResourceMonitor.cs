@@ -63,6 +63,14 @@ namespace MadWizard.Desomnia
             return false;
         }
 
+        public void StopTracking<TT>() where TT : T
+        {
+            foreach (var previous in this.TakeSnapshot().OfType<TT>())
+            {
+                this.StopTracking(previous);
+            }
+        }
+
         public virtual bool StopTracking(T inspectable)
         {
             bool removed;
