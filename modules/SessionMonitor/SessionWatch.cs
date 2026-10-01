@@ -24,6 +24,8 @@ namespace MadWizard.Desomnia.Session
 
         private WatchInputOptions? WatchInput { get; set; } = new();
 
+        public bool WatchRemote { get; set; }
+
         public event EventInvocation? Login;
         public event EventInvocation? RemoteLogin;
         public event EventInvocation? ConsoleLogin;
@@ -115,16 +117,19 @@ namespace MadWizard.Desomnia.Session
         #region Inspection
         protected override IEnumerable<UsageToken> InspectResource(TimeSpan interval)
         {
-            var usage = new SessionUsage(Session) { Metrics = CollectMetrics(interval) };
-
-            foreach (var token in base.InspectResource(interval))
+            if (!Session.IsRemoteConnected || WatchRemote) // gate RDP sessions
             {
-                usage.Tokens.Add(token);
-            }
+                var usage = new SessionUsage(Session) { Metrics = CollectMetrics(interval) };
 
-            if (Watch.IsYield || Watch.Evaluate(usage.Metrics) || usage.Tokens.Count > 0)
-            {
-                yield return usage;
+                foreach (var token in base.InspectResource(interval))
+                {
+                    usage.Tokens.Add(token);
+                }
+
+                if (Watch.IsYield || Watch.Evaluate(usage.Metrics) || usage.Tokens.Count > 0)
+                {
+                    yield return usage;
+                }
             }
         }
 
@@ -132,20 +137,22 @@ namespace MadWizard.Desomnia.Session
         {
             var metrics = new SessionMetricsUsage(CollectProcessMetrics(interval));
 
-            if (WatchInput is WatchInputOptions watch)
+            if (WatchInput is WatchInputOptions options)
             {
                 var matches = false;
 
-                if (Session.IsRemoteConnected && !watch.Remote)
+
+
+                if (Session.IsRemoteConnected && !options.Remote)
                 {
                     matches = true;
                 }
-                else if (watch.Disconnected || Session.IsConnected)
+                else if (options.Disconnected || Session.IsConnected)
                 {
                     if (Session.IdleTime is not TimeSpan time)
                         throw new InvalidOperationException("Configured session metric 'Input' cannot be read.");
 
-                    if (matches = time < (watch.MaxLastInputTime ?? interval))
+                    if (matches = time < (options.MaxLastInputTime ?? interval))
                     {
                         metrics.LastInputTime = time;
                     }

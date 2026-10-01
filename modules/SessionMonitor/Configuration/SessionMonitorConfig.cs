@@ -41,10 +41,7 @@ namespace MadWizard.Desomnia.Session.Configuration
 
     public class SessionMonitorConfig : SessionMonitorConfig<SessionMonitorConfig, SessionWatchDescriptor>
     {
-        public DelayedActionInfo? OnIdle { get; set; }
-        public DelayedActionInfo? OnUsage { get; set; }
-
-        internal bool RegisterWithSleepProxy { get; set; } = true;
+        public bool WatchRemote { get; set; } = true;
 
         #region SessionMonitor :: WatchInputOptions
         internal bool WatchInput                { get; set; } = true;
@@ -53,5 +50,8 @@ namespace MadWizard.Desomnia.Session.Configuration
 
         internal TimeSpan? MaxLastInputTime     { get; set; } = null;
         #endregion
+
+        public DelayedActionInfo? OnIdle { get; set; }
+        public DelayedActionInfo? OnUsage { get; set; }
     }
 }

@@ -1,10 +1,14 @@
 using Autofac;
 using Autofac.Core;
+using MadWizard.Desomnia.Daemon.Configuration;
+using MadWizard.Desomnia.Network.SleepProxy.Registration;
+using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
+using MadWizard.Desomnia.Session.Middleware;
 
 namespace MadWizard.Desomnia.Service
 {
-    internal class WindowsServiceModule : Desomnia.Module
+    internal class WindowsServiceModule : Desomnia.ConfigurableModule<ServiceMonitorConfig>
     {
         protected override void LoadOnce(ContainerBuilder builder)
         {
@@ -26,7 +30,12 @@ namespace MadWizard.Desomnia.Service
                 .SingleInstance();
         }
 
-        protected override void Load(ContainerBuilder builder)
+        protected override void Load(ContainerBuilder builder, ServiceMonitorConfig config)
+        {
+            RegisterSessionManager(builder, config.SessionMonitor);
+        }
+
+        private static void RegisterSessionManager(ContainerBuilder builder, SessionMonitorConfig? config)
         {
             builder.RegisterType<TerminalServicesManager>()
                 .OnlyIf(reg => reg.IsRegistered(new TypedService(typeof(WindowsService))))
@@ -35,8 +44,19 @@ namespace MadWizard.Desomnia.Service
                 .AsSelf();
 
             builder.RegisterType<TerminalServicesSession>()
-                .As<ISession>().As<IDisposable>() // NOT .As<IProcessManager>() !!!
+                .As<ISession>() // NOT .As<IProcessManager>() !!!
                 .AsSelf();
+
+            if (config?.WatchRemote ?? false)
+            {
+                // Add RDP port to SleepProxyRegistration
+                builder.ComponentRegistryBuilder.Registered += (sender, args) =>
+                {
+                    if (args.ComponentRegistration.IsLimitedTo<SleepProxyRegistration>())
+                        args.ComponentRegistration.PipelineBuilding += (_, pipeline) =>
+                            pipeline.Use(new RDPSleepProxyRegistration());
+                };
+            }
         }
     }
 }

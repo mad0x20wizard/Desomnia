@@ -1,11 +1,9 @@
 ﻿using Autofac;
 using Autofac.Core;
 using MadWizard.Desomnia.Configuration.Xml;
-using MadWizard.Desomnia.Network.SleepProxy.Registration;
 using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Configuration.Migration;
 using MadWizard.Desomnia.Session.Manager;
-using MadWizard.Desomnia.Session.Middleware;
 using System.Xml.Linq;
 
 namespace MadWizard.Desomnia.Session
@@ -34,17 +32,6 @@ namespace MadWizard.Desomnia.Session
                     .AsImplementedInterfaces()
                     .SingleInstance()
                     .AsSelf();
-
-                if (monitor.RegisterWithSleepProxy)
-                {
-                    // Add RDP port to SleepProxyRegistration
-                    builder.ComponentRegistryBuilder.Registered += (sender, args) =>
-                    {
-                        if (args.ComponentRegistration.IsLimitedTo<SleepProxyRegistration>())
-                            args.ComponentRegistration.PipelineBuilding += (_, pipeline) =>
-                                pipeline.Use(new RDPSleepProxyRegistration());
-                    };
-                }
             }
         }
     }
