@@ -59,6 +59,8 @@ namespace MadWizard.Desomnia.Service.Duo
                     OnIdle = null // handled by the DuoInstance
                 });
 
+                watch.WatchRemote = true; // Duo instances are technically remote sessions
+
                 instance.StartTracking(watch);
             }
         }
