@@ -202,7 +202,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
                     {
                         if (!string.Equals(value.UserName, Instance.Settings.UserName, StringComparison.OrdinalIgnoreCase))
                         {
-                            throw new ArgumentException($"SessionId {value.Id} is invalid: '{value.UserName} != '{Instance.Settings.UserName}'");
+                            throw new ArgumentException($"SessionId {value.Id} is invalid: '{value.UserName}' != '{Instance.Settings.UserName}'");
                         }
                     }
 
