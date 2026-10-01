@@ -13,7 +13,7 @@ namespace MadWizard.Desomnia.Session.Middleware
 
             if (context.Instance is SessionWatch watch)
             {
-                config.WatchRemote = config.WatchRemote;
+                watch.WatchRemote = config.WatchRemote;
 
                 config.Configure(watch.Session, watch.ApplyConfiguration);
             }
