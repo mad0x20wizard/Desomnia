@@ -28,40 +28,19 @@ internal static class DuoTestSupport
     public static DuoInstance Instance(string name = "Player") =>
         new(name, Settings(name), new DuoInstanceWatchInfo { Name = name });
 
-    public static DuoServiceContext Context(IDuoManager manager, IDuoSessionWatcher watcher, params DuoInstance[] instances)
+    public static DuoServiceContext Context(IDuoManager manager, IDuoWatcher watcher, params DuoInstance[] instances)
     {
-        var monitor = new SessionMonitor(new SessionMonitorConfig(), new FakeSessionManager())
-        {
-            Logger = NullLogger<SessionMonitor>.Instance, Scope = null!
-        };
-        monitor.StartupFinished.Set();
-
-        // Supply SessionMonitor's side of the association before the real context handles it.
-        // Each new instance session gets a fresh watch, just as a Windows logon would.
-        var watches = new Dictionary<DuoInstance, SessionWatch>();
-        watcher.SessionChanged += (_, args) =>
-        {
-            lock (watches)
-            {
-                if (watches.Remove(args.Instance, out var previous))
-                {
-                    monitor.StopTracking(previous);
-                    previous.Dispose();
-                }
-                if (args.Session is not null)
-                {
-                    var watch = SessionWatch(args.Session);
-                    watches[args.Instance] = watch;
-                    monitor.StartTracking(watch);
-                }
-            }
-        };
         return new DuoServiceContext
         {
-            Settings = new DuoSettings { Port = 38299, Instances = [.. instances.Select(i => i.Settings)] },
-            Manager = manager, Watcher = watcher, Instances = instances,
-            SessionMonitor = monitor, SessionMonitorConfig = new SessionMonitorConfig()
+            Logger = NullLogger<DuoServiceContext>.Instance,
+            Manager = manager, Watcher = watcher, Instances = instances
         };
+    }
+
+    public static async Task StartContext(DuoServiceContext context)
+    {
+        await context.InitializeAsync(TestTimeout);
+        context.StartWatching();
     }
 
     public static SessionWatch SessionWatch(ISession session) => new(session)
@@ -79,7 +58,7 @@ internal static class DuoTestSupport
 
     public static ControlledWatcher Watcher(IDuoManager manager) => new()
     {
-        Manager = manager, Logger = NullLogger.Instance, SessionManager = new FakeSessionManager()
+        Manager = manager
     };
 
     public static DuoSessionMonitor Monitor(FakeDuoService service, Func<DuoSettings, Owned<DuoServiceContext>> create) => new(service.Service)
@@ -95,13 +74,15 @@ internal sealed class ControlledManager : IDuoManager
     public int Queries => Volatile.Read(ref _queries);
     public int Starts => Volatile.Read(ref _starts);
     public int Stops => Volatile.Read(ref _stops);
-    public Func<DuoInstance, CancellationToken, Task<bool>> OnQuery { get; set; } = (_, _) => Task.FromResult(false);
+    private readonly ConcurrentDictionary<DuoInstance, bool> _states = new();
+    public void SetState(DuoInstance instance, bool running) => _states[instance] = running;
+    public Func<DuoInstance, CancellationToken, Task<bool>>? OnQuery { get; set; }
     public Func<DuoInstance, bool, CancellationToken, Task> OnChange { get; set; } = (_, _, _) => Task.CompletedTask;
 
-    public Task<bool> QueryRunningState(DuoInstance instance, CancellationToken token = default)
+    public Task<bool> QueryState(DuoInstance instance, CancellationToken token = default)
     {
         Interlocked.Increment(ref _queries);
-        return OnQuery(instance, token);
+        return OnQuery?.Invoke(instance, token) ?? Task.FromResult(_states.GetValueOrDefault(instance));
     }
 
     public Task ChangeState(DuoInstance instance, bool running, CancellationToken token = default)
@@ -111,33 +92,88 @@ internal sealed class ControlledManager : IDuoManager
     }
 }
 
-internal sealed class ControlledWatcher : StatusWatcher
+// Session attachment and backend state can be varied independently.
+// PublishAsync represents a completed start/stop transition.
+internal sealed class ControlledWatcher : IDuoWatcher
 {
-    protected override ISession? FindSession(DuoInstance instance) =>
-        SessionManager.FirstOrDefault(session => session.ClientName == instance.Name) ?? DuoTestSupport.SessionFor(instance);
-
+    public required IDuoManager Manager { get; init; }
+    private readonly ObservedChannel<WatchSignal> _signals = new();
     public bool Started { get; private set; }
     public bool Stopped { get; private set; }
-    protected override async Task WatchAsync(IEnumerable<DuoInstance> instances, CancellationToken token)
+    public async IAsyncEnumerable<WatchSignal> WatchAsync(IEnumerable<DuoInstance> instances,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken token)
     {
         Started = true;
-        try { await Task.Delay(Timeout.InfiniteTimeSpan, token); }
-        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
-        finally { Stopped = true; }
+        try
+        {
+            await foreach (var signal in _signals.Reader.ReadAllAsync(token))
+                yield return signal;
+        }
+        finally
+        {
+            Stopped = true;
+            _signals.Writer.TryComplete();
+        }
     }
 
-    public void Publish(DuoInstance instance, bool running) => NotifyInstanceStatus(instance, running);
-    private readonly Dictionary<DuoInstance, ISession> _published = [];
-    public void Publish(DuoInstance instance, ISession? session)
+    public static void SetSession(DuoInstance instance, ISession? session)
     {
-        if (_published.GetValueOrDefault(instance) == session) return;
-        if (session is null) _published.Remove(instance); else _published[instance] = session;
-        NotifySessionChange(instance, session);
+        lock (instance)
+        {
+            foreach (var watch in instance.OfType<SessionWatch>().ToArray())
+            {
+                instance.StopTracking(watch);
+                watch.Dispose();
+            }
+            if (session is not null) instance.StartTracking(DuoTestSupport.SessionWatch(session));
+        }
+    }
+
+    public Task PublishAsync(DuoInstance instance, bool running)
+    {
+        if (Manager is ControlledManager manager) manager.SetState(instance, running);
+        SetSession(instance, running ? DuoTestSupport.SessionFor(instance) : null);
+        return SignalAsync(instance, running);
+    }
+
+    public Task SignalAsync(DuoInstance? instance = null, bool? running = null) =>
+        _signals.Write(new WatchSignal(instance, running)).WaitAsync(DuoTestSupport.TestTimeout);
+}
+
+// Observe the real watcher stream without interpreting or changing its signals.
+internal sealed class WatchRun : IAsyncDisposable
+{
+    private readonly CancellationTokenSource _lifetime = new();
+    private readonly System.Threading.Channels.Channel<WatchSignal> _signals =
+        System.Threading.Channels.Channel.CreateUnbounded<WatchSignal>();
+    private readonly Task _watching;
+    private bool _disposed;
+    public WatchRun(IDuoWatcher watcher, params DuoInstance[] instances) => _watching = Run(watcher, instances);
+    private async Task Run(IDuoWatcher watcher, DuoInstance[] instances)
+    {
+        try
+        {
+            await foreach (var signal in watcher.WatchAsync(instances, _lifetime.Token))
+                _signals.Writer.TryWrite(signal);
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        finally { _signals.Writer.TryComplete(); }
+    }
+    public Task<WatchSignal> Next() => _signals.Reader.ReadAsync().AsTask().WaitAsync(DuoTestSupport.TestTimeout);
+    public bool TryRead(out WatchSignal signal) => _signals.Reader.TryRead(out signal);
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _lifetime.Cancel();
+        await _watching.WaitAsync(DuoTestSupport.TestTimeout);
+        _lifetime.Dispose();
     }
 }
 
+internal sealed class RecordingLogger<T> : RecordingLogger, ILogger<T> { }
 
-internal sealed class RecordingLogger : ILogger
+internal class RecordingLogger : ILogger
 {
     public ConcurrentQueue<Exception> Errors { get; } = new();
     public TaskCompletionSource ErrorReported { get; } = DuoTestSupport.Signal();

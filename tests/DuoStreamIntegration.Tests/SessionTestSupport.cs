@@ -24,6 +24,15 @@ internal sealed class FakeSession(uint id = 1, string? clientName = "Player", st
     public IProcess LaunchProcess(ProcessStartInfo info) => throw new NotSupportedException();
     public IEnumerator<IProcess> GetEnumerator() => Enumerable.Empty<IProcess>().GetEnumerator();
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    private event EventHandler? _loggedOff;
+    public TaskCompletionSource LogoffSubscribed { get; } = DuoTestSupport.Signal();
+    public event EventHandler? LoggedOff
+    {
+        add { _loggedOff += value; LogoffSubscribed.TrySetResult(); }
+        remove { _loggedOff -= value; }
+    }
+    public int LogoffSubscribers => _loggedOff?.GetInvocationList().Length ?? 0;
+    public void RaiseLoggedOff() => _loggedOff?.Invoke(this, EventArgs.Empty);
     public event EventHandler Locked { add { } remove { } }
     public event EventHandler Unlocked { add { } remove { } }
     public event EventHandler Connected { add { } remove { } }
@@ -62,6 +71,7 @@ internal sealed class FakeSessionManager(params ISession[] sessions) : ISessionM
     public void Logoff(ISession session)
     {
         lock (_sessions) _sessions.Remove(session.Id);
+        (session as FakeSession)?.RaiseLoggedOff();
         UserLogoff?.Invoke(this, session);
     }
     public int LogoffSubscribers => UserLogoff?.GetInvocationList().Length ?? 0;

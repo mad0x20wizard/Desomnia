@@ -1,30 +1,26 @@
 # DuoStreamIntegration tests
 
-Run the complete suite from the repository root:
+Run the complete suite from the repository root on Windows:
 
 ```powershell
 dotnet test tests/DuoStreamIntegration.Tests/DuoStreamIntegration.Tests.csproj
 ```
 
-The tests use the current service context, manager/watcher interfaces, and instance model. The old generation, process-subscription, and lease tests have been replaced by tests for their current responsibilities.
+The tests follow the current ownership model:
 
-Concurrency tests use controlled query completion and notification delivery. Service and listener tests do not require Duo, registry entries, sockets, or firewall changes.
+- Watchers produce async streams of `WatchSignal`; the composite merges their signals.
+- `DuoServiceContext` queries and updates the backend running state and completes commands only when both running state and session presence match.
+- `SessionWatchAdapter` configures and attaches session watches.
+- `RegistryWatcher` binds registry session IDs, clears stale startup values, and removes retained IDs on logoff.
 
-`Instrumentation/` contains test-only Harmony patches for concrete `DuoService` objects and Windows event-log objects. Patches intercept only registered test objects; other objects retain their normal behavior. The service fixture skips the constructor that starts the Windows service observer, supplies service metadata, and uses the real managed status getter and event subscription accessors. No `IDuoService` interface or production test hooks are needed.
+Context tests cover logout gaps, session restarts without a backend transition, command serialization, timeouts, query recovery, and actions that issue commands. Watcher tests cover signal contents, ordering, cancellation, disposal, and failure isolation. Registration tests verify all compatible watchers are included in a composite scoped to each service context.
 
-`TestEventWatcher` delivers actual `EventRecordWrittenEventArgs` to the production callback and runs the production watch loop. Native subscription and record access are intercepted. An observed channel acknowledges processing when the consumer requests its next item, allowing tests to coordinate without sleeps. These fixtures intentionally depend on private fields and Windows/.NET implementation details; structural changes may require updating the instrumentation. The Harmony dependency is confined to this test project.
+Concurrency tests use controlled query completion and notification delivery. The controlled watcher acknowledges a signal after the real context finishes processing it, avoiding timing sleeps. Event-log tests deliver actual `EventRecordWrittenEventArgs` to the production callback and inspect the resulting signal stream.
 
-Regression tests have an `Issue` trait matching the review:
+`Instrumentation/` contains test-only Harmony patches for registered concrete service and Windows event-log objects. Service tests do not start Duo or the Windows service observer. Listener tests do not open sockets or change firewall settings. Native event-log subscription and record access are intercepted; a live Duo smoke test is still needed for those Windows interactions.
 
-- `2`: disposal of delivered event records, including ignored and unmatched events.
-- `3`: sequential event processing, watcher shutdown, request-timeout recovery, and actions that issue commands.
-- `5`: retry after an initial API failure, cancellation during retry, and disposal with a pending retry.
-- `6`: adapters attach during activation before the build callback starts monitoring, whether Duo is already running or starts later.
+Registry tests exercise real Windows notifications using temporary keys under `HKCU\Software\Desomnia.Tests\<unique-id>`. Test-only patches redirect Duo registry reads to these keys, which are removed on disposal. These tests require permission to create and delete the temporary keys, but do not modify the installed Duo configuration.
 
-All regressions are active, not skipped. The full suite reports failures for behavior that has not yet been fixed. To run just the event concurrency regressions, use `--filter "Issue=3"`; to run the suite excluding issues 5 and 6, use `--filter "Issue!=5&Issue!=6"`.
+Initial backend state is loaded before watching subsequent changes. Tests do not require an atomic snapshot/subscription handover. Registry updates assume the session is already known when Duo publishes its ID. Event-only monitoring has no periodic reconciliation guarantee; polling provides periodic refreshes.
 
-The startup contract is deliberately modest: load initial state, then watch subsequent changes. A manual transition during the query/subscription handover can be missed; tests do not require an atomic snapshot/event handover. Tests cover initially running and stopped instances, subsequent manual changes in both directions, and duplicate notifications. Event mode has no periodic reconciliation guarantee; polling mode refreshes periodically.
-
-Readers that can overlap service transitions use `TakeSnapshot()`. The enumeration regression tests this explicit snapshot contract; ordinary monitor enumeration does not promise a snapshot.
-
-Native Windows event-log subscription is not exercised by these tests; it still needs a live Duo smoke test.
+The fixtures depend on private Windows/.NET fields for native transport interception. Structural changes may require updating that instrumentation; no production test hooks are used.

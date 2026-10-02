@@ -6,9 +6,9 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
     {
         public required string ServiceName                      { get; set; } = "DuoService";
 
-        public TimeSpan PollInterval                            { get; set; } = TimeSpan.FromSeconds(2); // deprecated
-
         public WatchMode WatchMode                              { get; set; } = WatchMode.Auto;
+
+        public TimeSpan? PollInterval                           { get; set; }
 
         public ActionInfo? OnUsage                              { get; set; }
         public DelayedActionInfo? OnIdle                        { get; set; }
@@ -29,7 +29,7 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
 
         internal DuoInstanceWatchInfo? this[string name] => Instance.FirstOrDefault(i => i.Name == name);
 
-        internal IEnumerable<WatchMode> AllowedWatchModes()
+        internal IEnumerable<WatchMode> WatchModes()
         {
             List<WatchMode> modes = [];
             if (WatchMode.HasFlag(WatchMode.Registry))
@@ -39,10 +39,12 @@ namespace MadWizard.Desomnia.Service.Duo.Configuration
             if (WatchMode.HasFlag(WatchMode.Polling))
                 modes.Add(WatchMode.Polling);
 
-            if (modes.Count > 0)
-                return modes;
+            if (modes.Count == 0)
+            {
+                return [WatchMode.Registry, WatchMode.EventLog, WatchMode.Polling]; // use auto mode
+            }
 
-            return [WatchMode.Registry, WatchMode.EventLog, WatchMode.Polling]; // Auto
+            return modes;
         }
     }
 

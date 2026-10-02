@@ -24,53 +24,49 @@ namespace DuoStreamIntegration.Tests;
 public sealed class WatchExpressionIntegrationTests
 {
     [Fact]
-    public async Task Stop_waits_for_logoff_even_if_the_session_watch_is_detached()
+    public async Task SessionWatcher_reports_attachment_changes_without_changing_running_state()
     {
         using var instance = Instance("Input");
-        var session = new TestSession();
-        using var watch = Session(session);
-        var sessions = new FakeSessionManager(session);
-        var watcher = new ControlledWatcher
-        {
-            Manager = new ControlledManager(), SessionManager = sessions, Logger = NullLogger.Instance
-        };
-        var changes = new List<bool>();
-        using var lifetime = new CancellationTokenSource();
-        await watcher.StartWatch([instance], lifetime.Token);
-        watcher.Publish(instance, true);
+        instance.IsRunning = true;
+        using var watch = Session(new TestSession());
+        await using var run = new WatchRun(new MadWizard.Desomnia.Service.Duo.Manager.Watcher.SessionWatcher(), instance);
+
         instance.StartTracking(watch);
-        watcher.SessionChanged += (_, args) => changes.Add(args.Session is not null);
+        var attached = await run.Next();
+        Assert.Same(instance, attached.Instance);
+        Assert.Null(attached.IsRunning);
 
-        watcher.Publish(instance, false);
         instance.StopTracking(watch);
-
-        Assert.Null(instance.Session); // Watch attachment is owned by the context, not the watcher.
-        Assert.Empty(changes);
-
-        sessions.Logoff(session);
-
-        Assert.Null(instance.Session);
-        Assert.Equal(new[] { false }, changes);
-        lifetime.Cancel();
-        watcher.StopWatch();
-        Assert.Equal(0, sessions.LogoffSubscribers);
+        var detached = await run.Next();
+        Assert.Same(instance, detached.Instance);
+        Assert.Null(detached.IsRunning);
+        Assert.True(instance.IsRunning);
     }
 
     [Fact]
-    public async Task Repeated_session_notifications_do_not_repeat_started_actions()
+    public async Task Session_restart_does_not_repeat_started_actions()
     {
         using var instance = Instance("Input");
-        var session = new TestSession();
-        using var watcher = DuoTestSupport.Watcher(new ControlledManager());
-        await watcher.StartWatch([instance], CancellationToken.None);
+        var manager = new ControlledManager();
+        manager.SetState(instance, true);
+        var watcher = DuoTestSupport.Watcher(manager);
+        using var context = DuoTestSupport.Context(manager, watcher, instance);
+        await DuoTestSupport.StartContext(context);
         var started = 0;
+        var stopped = 0;
         instance.Started += _ => { started++; return Task.CompletedTask; };
+        instance.Stopped += _ => { stopped++; return Task.CompletedTask; };
 
-        watcher.Publish(instance, session);
-        watcher.Publish(instance, session);
+        ControlledWatcher.SetSession(instance, new TestSession());
+        await watcher.SignalAsync(instance);
+        ControlledWatcher.SetSession(instance, null);
+        await watcher.SignalAsync(instance);
+        ControlledWatcher.SetSession(instance, new TestSession());
+        await watcher.SignalAsync(instance);
 
-        Assert.Null(instance.Session); // Watch attachment is owned by the context, not the watcher.
-        Assert.Equal(1, started);
+        Assert.True(instance.IsRunning);
+        Assert.Equal(0, started);
+        Assert.Equal(0, stopped);
     }
 
     [Fact]
@@ -87,21 +83,35 @@ public sealed class WatchExpressionIntegrationTests
         var stopEntered = DuoTestSupport.Signal();
         var releaseStop = DuoTestSupport.Signal();
         var stateChanged = DuoTestSupport.Signal();
-        manager.OnChange = async (target, running, token) =>
+        using var sessions = new SessionMonitor(new SessionMonitorConfig(), new FakeSessionManager())
         {
-            stopEntered.TrySetResult();
-            await releaseStop.Task.WaitAsync(token);
-            watcher.Publish(target, running);
-            stateChanged.TrySetResult();
+            Logger = NullLogger<SessionMonitor>.Instance, Scope = null!
         };
         var context = DuoTestSupport.Context(manager, watcher, instance);
         using var duo = DuoTestSupport.Monitor(new FakeDuoService(), _ => new Owned<DuoServiceContext>(context, context));
+        using var adapter = new MadWizard.Desomnia.Service.Duo.Session.SessionWatchAdapter(new SessionMonitorConfig())
+        {
+            SessionMonitor = sessions, DuoSessionMonitor = duo
+        };
+        adapter.Attach();
         var tracked = DuoTestSupport.Signal();
         duo.TrackingStarted += (_, _) => tracked.TrySetResult();
         duo.Startup();
         await tracked.Task.WaitAsync(DuoTestSupport.TestTimeout);
-        watcher.Publish(instance, true);
-        var watch = Assert.Single(instance.OfType<SessionWatch>());
+        using var watch = Session(new TestSession());
+        sessions.StartTracking(watch);
+        manager.SetState(instance, true);
+        await watcher.SignalAsync(instance, true);
+        manager.OnChange = async (target, running, token) =>
+        {
+            stopEntered.TrySetResult();
+            await releaseStop.Task.WaitAsync(token);
+            manager.SetState(target, running);
+            sessions.StopTracking(watch);
+            await watcher.SignalAsync(target, running);
+            stateChanged.TrySetResult();
+        };
+
         var logout = ((IEventSystem)watch)[nameof(SessionWatch.Logout)].TriggerEventAsync();
         try
         {
@@ -115,23 +125,30 @@ public sealed class WatchExpressionIntegrationTests
         Assert.Null(instance.Session);
         Assert.DoesNotContain(watch, instance);
     }
+
     [Fact]
-    public async Task Context_uses_session_events_and_detaches_when_disposed()
+    public void Adapter_configures_session_watches_and_detaches_when_instance_is_untracked()
     {
         using var instance = Instance("Input");
-        var manager = new ControlledManager();
-        var watcher = DuoTestSupport.Watcher(manager);
-        using var context = DuoTestSupport.Context(manager, watcher, instance);
-        await context.StartWatching(DuoTestSupport.TestTimeout);
-        watcher.Publish(instance, true);
-        Assert.NotNull(instance.Session);
-        Assert.True(Assert.Single(instance.OfType<SessionWatch>()).Watch.IsYield);
+        using var sessions = new SessionMonitor(new SessionMonitorConfig(), new FakeSessionManager())
+        {
+            Logger = NullLogger<SessionMonitor>.Instance, Scope = null!
+        };
+        using var duo = DuoTestSupport.Monitor(new FakeDuoService(), _ => throw new InvalidOperationException());
+        using var adapter = new MadWizard.Desomnia.Service.Duo.Session.SessionWatchAdapter(new SessionMonitorConfig())
+        {
+            SessionMonitor = sessions, DuoSessionMonitor = duo
+        };
+        adapter.Attach();
+        duo.StartTracking(instance);
+        using var watch = Session(new TestSession());
+        sessions.StartTracking(watch);
 
-        ((IDisposable)context).Dispose();
+        Assert.NotNull(instance.Session);
+        Assert.True(watch.Watch.IsYield);
+        duo.StopTracking(instance);
         Assert.Empty(instance);
-        watcher.Publish(instance, false);
-        watcher.Publish(instance, true);
-        Assert.Empty(instance);
+        Assert.Contains(watch, sessions);
     }
     [Fact]
     public void StreamTrafficIsSuppliedOnlyByAChildNetworkServiceWatch()
@@ -346,6 +363,7 @@ public sealed class WatchExpressionIntegrationTests
         public IEnumerator<IProcess> GetEnumerator() => _processes.GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
+        public event EventHandler LoggedOff { add { } remove { } }
         public event EventHandler Locked { add { } remove { } }
         public event EventHandler Unlocked { add { } remove { } }
         public event EventHandler Connected { add { } remove { } }

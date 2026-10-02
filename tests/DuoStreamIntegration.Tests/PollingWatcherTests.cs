@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Service.Duo;
 using MadWizard.Desomnia.Service.Duo.Manager;
 using MadWizard.Desomnia.Service.Duo.Manager.Watcher;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,98 +16,72 @@ public sealed class PollingWatcherTests
         using var handler = new BlockingHandler();
         using var manager = Manager(handler);
         using var cancellation = new CancellationTokenSource(TestTimeout);
-
-        var query = manager.QueryRunningState(instance, cancellation.Token);
+        var query = manager.QueryState(instance, cancellation.Token);
         await handler.Entered.Task.WaitAsync(TestTimeout);
-
         cancellation.Cancel();
-
         await Assert.ThrowsAsync<TaskCanceledException>(() => query);
     }
 
     [Fact]
-    public async Task Startup_cancellation_propagates_and_releases_session_subscriptions()
+    public async Task Startup_timeout_is_handled_by_the_context()
     {
         using var instance = Instance();
         using var handler = new BlockingHandler();
         using var manager = Manager(handler);
-        var logger = new RecordingLogger();
-        var sessions = new FakeSessionManager();
-        using var watcher = new PollingWatcher
-        {
-            SessionManager = sessions,
-            Manager = manager,
-            Logger = logger,
-            PollInterval = TimeSpan.FromMilliseconds(20)
-        };
-        using var lifetime = new CancellationTokenSource(TestTimeout);
-
-        var starting = watcher.StartWatch([instance], lifetime.Token);
-        await handler.Entered.Task.WaitAsync(TestTimeout);
-
-        lifetime.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => starting.WaitAsync(TestTimeout));
-
-        Assert.Empty(logger.Errors);
-        Assert.Equal(0, sessions.LogoffSubscribers);
+        using var context = Context(manager, Polling(), instance);
+        await Assert.ThrowsAsync<TimeoutException>(() => context.InitializeAsync(TimeSpan.FromMilliseconds(100)));
+        Assert.True(handler.Entered.Task.IsCompleted);
+        Assert.Null(instance.IsRunning);
     }
 
-    private static DuoWebAPIManager Manager(HttpMessageHandler handler) => new(new HttpClient(handler)
+    [Fact]
+    public async Task Polling_emits_refresh_signals_and_stops_on_cancellation()
     {
-        BaseAddress = new Uri("http://localhost")
-    })
-    {
-        Logger = NullLogger<DuoWebAPIManager>.Instance
-    };
+        using var cancellation = new CancellationTokenSource(TestTimeout);
+        await using var reader = ((IDuoWatcher)Polling()).WatchAsync([], cancellation.Token).GetAsyncEnumerator();
+        Assert.True(await reader.MoveNextAsync());
+        Assert.Null(reader.Current.Instance);
+        Assert.Null(reader.Current.IsRunning);
+        Assert.True(await reader.MoveNextAsync());
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reader.MoveNextAsync().AsTask());
+    }
 
     [Fact]
-    public async Task Polling_recovers_from_a_request_timeout_and_observes_start_then_stop()
+    public async Task Context_recovers_from_a_poll_timeout_and_observes_start_then_stop()
     {
         using var instance = Instance();
-        var queries = 0;
-        var session = SessionFor(instance);
-        var sessions = new FakeSessionManager(session);
+        var calls = 0;
         var manager = new ControlledManager
         {
-            OnQuery = (_, _) =>
+            OnQuery = (_, _) => Interlocked.Increment(ref calls) switch
             {
-                switch (Interlocked.Increment(ref queries))
-                {
-                    case 1: return Task.FromResult(false); // initial query
-                    case 2: return Task.FromException<bool>(new TaskCanceledException("HTTP request timed out"));
-                    case 3: return Task.FromResult(true);
-                    default:
-                        sessions.Logoff(session);
-                        return Task.FromResult(false);
-                }
+                1 => Task.FromResult(false),
+                2 => Task.FromException<bool>(new TaskCanceledException("HTTP request timed out")),
+                3 => Task.FromResult(true),
+                _ => Task.FromResult(false)
             }
         };
-        var logger = new RecordingLogger();
-        var watcher = new PollingWatcher { SessionManager = sessions, Manager = manager, Logger = logger, PollInterval = TimeSpan.FromMilliseconds(20) };
+        var logger = new RecordingLogger<DuoServiceContext>();
+        using var context = new DuoServiceContext
+        {
+            Manager = manager, Watcher = Polling(), Instances = [instance], Logger = logger
+        };
         var changes = new List<bool>();
         var stopped = Signal();
-        watcher.SessionChanged += (_, args) =>
-        {
-            changes.Add(args.Session is not null);
-            if (args.Session is null) stopped.TrySetResult();
-        };
-        using var lifetime = new CancellationTokenSource(TestTimeout);
-        await watcher.StartWatch([instance], lifetime.Token);
-        try
-        {
-            await stopped.Task.WaitAsync(TestTimeout);
-            Assert.Equal(new[] { true, false }, changes);
-            Assert.Null(instance.Session);
-            Assert.Single(logger.Errors);
-        }
-        finally
-        {
-            watcher.StopWatch();
-        }
+        instance.Started += _ => { changes.Add(true); return Task.CompletedTask; };
+        instance.Stopped += _ => { changes.Add(false); stopped.TrySetResult(); return Task.CompletedTask; };
+        await StartContext(context);
+        await stopped.Task.WaitAsync(TestTimeout);
+        context.StopWatching();
+
+        Assert.Equal(new[] { true, false }, changes);
+        Assert.False(instance.IsRunning);
+        Assert.Single(logger.Errors);
     }
 
     [Fact]
-    public async Task Startup_token_does_not_stop_polling_and_StopWatch_waits_for_the_active_query()
+    public async Task Context_stop_waits_for_the_active_query_to_finish()
     {
         using var instance = Instance();
         var entered = Signal();
@@ -128,19 +103,10 @@ public sealed class PollingWatcherTests
                 return false;
             }
         };
-        var sessions = new FakeSessionManager();
-        using var watcher = new PollingWatcher
-        {
-            Manager = manager, SessionManager = sessions, Logger = NullLogger.Instance,
-            PollInterval = TimeSpan.FromMilliseconds(20)
-        };
-        using var startup = new CancellationTokenSource();
-        await watcher.StartWatch([instance], startup.Token);
+        using var context = Context(manager, Polling(), instance);
+        await StartContext(context);
         await entered.Task.WaitAsync(TestTimeout);
-        startup.Cancel();
-        Assert.False(canceled.Task.IsCompleted);
-
-        var stopping = Task.Run(watcher.StopWatch);
+        var stopping = Task.Run(context.StopWatching);
         try
         {
             await canceled.Task.WaitAsync(TestTimeout);
@@ -148,21 +114,28 @@ public sealed class PollingWatcherTests
         }
         finally { release.TrySetResult(); }
         await stopping.WaitAsync(TestTimeout);
-        Assert.Equal(0, sessions.LogoffSubscribers);
-        watcher.StopWatch();
     }
+
+    private static PollingWatcher Polling() => new()
+    {
+        Logger = NullLogger<PollingWatcher>.Instance, PollInterval = TimeSpan.FromMilliseconds(20)
+    };
+
+    private static DuoWebAPIManager Manager(HttpMessageHandler handler) => new(new HttpClient(handler)
+    {
+        BaseAddress = new Uri("http://localhost")
+    })
+    {
+        Logger = NullLogger<DuoWebAPIManager>.Instance
+    };
 
     private sealed class BlockingHandler : HttpMessageHandler
     {
         public TaskCompletionSource Entered { get; } = Signal();
-
-        protected override async Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request,
-            CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
         {
             Entered.TrySetResult();
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
             throw new InvalidOperationException("The request unexpectedly resumed without cancellation.");
         }
     }

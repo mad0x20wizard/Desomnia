@@ -62,7 +62,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
                         _contexts.Add(instance, context);
 
                         Logger.LogInformation($"Monitoring {instance.ToString()}:{instance.Settings.Port}"
-                            + (instance.IsRunning ? " (running)" : ""));
+                            + (instance.IsRunning == true ? " (running)" : ""));
                     }
                     catch (Exception ex)
                     {

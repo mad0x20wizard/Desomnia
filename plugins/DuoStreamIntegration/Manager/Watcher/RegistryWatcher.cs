@@ -1,187 +1,116 @@
+using MadWizard.Desomnia.Session;
 using MadWizard.Desomnia.Session.Manager;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
+using System.Reactive.Disposables;
+using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 {
-    internal class RegistryWatcher : BaseWatcher, IDisposable
+    internal class RegistryWatcher : IDuoWatcher
     {
-        readonly Dictionary<DuoInstance, InstanceKeyWatch> _watches = [];
+        const bool FixDuoSessionIdOnLogoff = true;
 
-        // current watch session
-        CancellationTokenSource? _lifetime;
-        Channel<Signal>? _channel;
-        Task? _watchTask;
+        public required ILogger<RegistryWatcher> Logger { private get; init; }
 
-        public override Task StartWatch(IEnumerable<DuoInstance> instances, CancellationToken token)
+        public required SessionMonitor SessionMonitor { private get; init; }
+
+        private ISession? ValidateSession(DuoInstance instance, uint? sid)
         {
-            StopWatch();
-
-            token.ThrowIfCancellationRequested();
-
-            _lifetime = new();
-
-            _channel = Channel.CreateUnbounded<Signal>(new() { SingleReader = true });
-
-            SessionManager.UserLogon += SessionManager_UserLogon;
-            SessionManager.UserLogoff += SessionManager_UserLogoff;
-
-            try
+            if (sid is not null)
             {
-                var channel = _channel;
-                foreach (var instance in instances)
+                if (SessionMonitor.TakeSnapshot().FirstOrDefault(w => w.Session.Id == sid) is SessionWatch watch && watch.Session is ISession session)
                 {
-                    token.ThrowIfCancellationRequested();
-
-                    // create Registry watch
-                    var watch = new InstanceKeyWatch(instance);
-                    watch.Changed += (_, _) => channel.Writer.TryWrite(new(instance));
-                    _watches.Add(instance, watch);
-
-                    try
+                    if (!string.Equals(session.UserName, instance.Settings.UserName, StringComparison.OrdinalIgnoreCase))
                     {
-                        RefreshWatch(watch);
+                        throw new ArgumentException($"Session with id = {sid} is invalid: '{session.UserName}' != '{instance.Settings.UserName}'");
                     }
-                    catch (Exception ex) when (ex is KeyNotFoundException or ArgumentException)
-                    {
-                        Logger.LogWarning(ex, "Instance '{Name}' state is invalid; removing SessionId", instance.Name);
 
-                        watch.SessionId = null; // clear stale session id
+                    lock (instance) if (instance.Session is null)
+                    {
+                        instance.StartTracking(watch); // late binding
                     }
+
+                    return session;
                 }
-
-                token.ThrowIfCancellationRequested();
-
-                _watchTask = WatchAsync(_lifetime.Token);
-                _watchTask.ThrowIfFaulted();
-
-                return base.StartWatch(instances, token);
-            }
-            catch
-            {
-                StopWatch();
-
-                throw;
-            }
-        }
-
-        private void SessionManager_UserLogon(object? sender, ISession session) => _channel?.Writer.TryWrite(new());
-        private void SessionManager_UserLogoff(object? sender, ISession session) => _channel?.Writer.TryWrite(new(LoggedOff: session));
-
-        private async Task WatchAsync(CancellationToken token)
-        {
-            try
-            {
-                await foreach (var signal in _channel!.Reader.ReadAllAsync(token))
+                else
                 {
-                    token.ThrowIfCancellationRequested();
-
-                    try
-                    {
-                        if (signal.LoggedOff is ISession session)
-                        {
-                            foreach (var (instance, watch) in _watches.Where(pair => pair.Value.Session == session))
-                            {
-                                // Temporary workaround: Duo currently leaves SessionId behind on logoff.
-                                // Do not erase a newer session that Duo may already have written.
-
-                                try
-                                {
-                                    if (watch.SessionId == session.Id)
-                                        watch.SessionId = null;
-                                }
-                                finally
-                                {
-                                    NotifySessionChange(instance, null);
-                                }
-                            }
-                        }
-                        else if (signal.Instance is DuoInstance instance)
-                        {
-                            RefreshWatch(_watches[instance]);
-                        }
-                        else foreach (var watch in _watches.Values)
-                        {
-                            RefreshWatch(watch); // FALLBACK: The registry write can precede ISessionManager's logon notification.
-                        }
-                    }
-                    catch (Exception ex) when (!token.IsCancellationRequested)
-                    {
-                        Logger.LogError(ex, "Could not update Duo instance session.");
-                    }
+                    throw new KeyNotFoundException($"Session with id = {sid} was not found");
                 }
             }
-            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            else
             {
-                // Normal context shutdown.
+                return null;
             }
         }
 
-        private void RefreshWatch(InstanceKeyWatch watch)
+        IEnumerable<InstanceKeyWatch> WatchInstances(IEnumerable<DuoInstance> instances, EventHandler handler)
         {
-            try
+            foreach (var instance in instances)
             {
-                NotifySessionChange(watch.Instance, watch.SessionId is uint id ? SessionManager[id] : null);
-            }
-            catch (KeyNotFoundException) when (HasInitialized)
-            {
-                // Wait for logon if Windows has not registered the session yet.
+                var watch = new InstanceKeyWatch(instance);
+
+                try
+                {
+                    watch.Session = ValidateSession(instance, watch.SessionId);
+                }
+                catch (Exception ex) when (ex is KeyNotFoundException or ArgumentException)
+                {
+                    Logger.LogWarning(ex, "State of instance '{Name}' is invalid; removing SessionId", instance.Name);
+
+                    watch.SessionId = null; // clear stale session id
+                }
+
+                watch.Changed += handler;
+
+                yield return watch;
             }
         }
 
-        protected override void NotifySessionChange(DuoInstance instance, ISession? session)
+        async IAsyncEnumerable<WatchSignal> IDuoWatcher.WatchAsync(IEnumerable<DuoInstance> instances, [EnumeratorCancellation] CancellationToken token)
         {
-            var watch = _watches[instance];
+            using LocalChannel<WatchSignal> channel = Channel.CreateUnbounded<WatchSignal>(new() { SingleReader = true });
 
-            if (watch.Session != session) // only notify on actual changes
+            void ChangeHandler(object? sender, EventArgs args)
             {
-                base.NotifySessionChange(instance, watch.Session = session);
+                try
+                {
+                    if (sender is InstanceKeyWatch key
+                        && key.Instance is DuoInstance instance
+                        && key.SessionId != key.Session?.Id)
+                    {
+                        key.Session = ValidateSession(instance, key.SessionId);
+
+                        /**
+                         * Duo updates the SessionId only after the instance is running.
+                         * Removing the SessionId does not necesserily coincide
+                         * with stopping the instance, which is why we ignore it here.
+                         */
+                        if (key.Session is not null)
+                        {
+                            channel.Writer.TryWrite(new(instance, true));
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Could not handle registry key update");
+                }
+            }
+
+            await SessionMonitor.StartupFinished.WaitAsync(token);
+
+            using (new CompositeDisposable(WatchInstances(instances, ChangeHandler)))
+            {
+                await foreach (var signal in channel.Reader.ReadAllAsync(token))
+                {
+                    yield return signal;
+                }
             }
         }
 
-        public override void StopWatch()
-        {
-            if (_lifetime is null)
-                return;
-
-            SessionManager.UserLogon -= SessionManager_UserLogon;
-            SessionManager.UserLogoff -= SessionManager_UserLogoff;
-
-            try
-            {
-                _lifetime.Cancel();
-
-                _watchTask?.GetAwaiter().GetResult(); // wait until finish
-            }
-            finally
-            {
-                // end all Registry watches
-                foreach (var watch in _watches.Values)
-                    watch.Dispose();
-                _watches.Clear();
-
-                // close the channel
-                _channel?.Writer.TryComplete();
-                _channel = null;
-
-                _watchTask = null;
-
-                _lifetime.Dispose();
-                _lifetime = null;
-            }
-        }
-
-        void IDisposable.Dispose()
-        {
-            base.StopWatch();
-
-            StopWatch();
-        }
-
-        private record Signal(DuoInstance? Instance = null, ISession? LoggedOff = null);
-
-        private class InstanceKeyWatch : KeyWatch
+        private class InstanceKeyWatch : RegistryKeyWatch
         {
             private static RegistryKey OpenInstanceKey(DuoInstance instance) =>
                 Registry.LocalMachine.OpenSubKey(DuoService.REG_DuoInstances + '\\' + instance.Name, writable: true)
@@ -198,21 +127,27 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             {
                 get; set
                 {
-                    if (value != null)
+                    if (FixDuoSessionIdOnLogoff)
                     {
-                        if (!string.Equals(value.UserName, Instance.Settings.UserName, StringComparison.OrdinalIgnoreCase))
-                        {
-                            throw new ArgumentException($"SessionId {value.Id} is invalid: '{value.UserName}' != '{Instance.Settings.UserName}'");
-                        }
+                        field?.LoggedOff -= Session_LoggedOff;
+                        value?.LoggedOff += Session_LoggedOff;
                     }
 
                     field = value;
                 }
             }
 
+            private void Session_LoggedOff(object? sender, EventArgs args)
+            {
+                if (SessionId == (sender as ISession)?.Id)
+                {
+                    SessionId = null;
+                }
+            }
+
             internal uint? SessionId
             {
-                get => Key.GetValue("SessionId") is int id && id >= 0 ? (uint)id : null;
+                get => Key["SessionId"] is int id && id >= 0 ? (uint)id : null;
 
                 set
                 {
@@ -225,6 +160,13 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
                         Key.DeleteValue("SessionId", throwOnMissingValue: false);
                     }
                 }
+            }
+
+            public override void Dispose()
+            {
+                Session = null;
+
+                base.Dispose();
             }
         }
     }

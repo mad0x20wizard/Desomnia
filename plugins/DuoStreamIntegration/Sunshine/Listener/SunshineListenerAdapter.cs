@@ -26,7 +26,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
             if (!instance.Settings.IsSandboxed)
             {
                 Logger.LogInformation($"Monitoring {instance}:{instance.Settings.Port}"
-                    + (instance.IsRunning ? " (running)" : "")
+                    + (instance.IsRunning == true ? " (running)" : "")
                     + " -> using listener");
 
                 RegisterWatch(instance, CreateSunshineListener(instance.Service));

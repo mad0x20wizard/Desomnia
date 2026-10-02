@@ -16,7 +16,7 @@ public sealed class DuoConcurrencyTests
         var manager = new ControlledManager();
         var watcher = Watcher(manager);
         using var context = Context(manager, watcher, instance);
-        await context.StartWatching(TestTimeout);
+        await StartContext(context);
         manager.OnChange = async (target, running, token) =>
         {
             if (running)
@@ -24,7 +24,7 @@ public sealed class DuoConcurrencyTests
                 entered.TrySetResult();
                 await release.Task.WaitAsync(token);
             }
-            watcher.Publish(target, running);
+            await watcher.PublishAsync(target, running);
         };
         var first = context.Start(instance, TestTimeout);
         await entered.Task.WaitAsync(TestTimeout);
@@ -52,12 +52,12 @@ public sealed class DuoConcurrencyTests
         var manager = new ControlledManager();
         var watcher = Watcher(manager);
         using var context = Context(manager, watcher, alpha, beta);
-        await context.StartWatching(TestTimeout);
+        await StartContext(context);
         manager.OnChange = async (target, running, token) =>
         {
             if (Interlocked.Increment(ref entered) == 2) bothEntered.TrySetResult();
             await bothEntered.Task.WaitAsync(token);
-            watcher.Publish(target, running);
+            await watcher.PublishAsync(target, running);
         };
         await Task.WhenAll(context.Start(alpha, TestTimeout), context.Start(beta, TestTimeout)).WaitAsync(TestTimeout);
         Assert.NotNull(alpha.Session);
@@ -66,29 +66,23 @@ public sealed class DuoConcurrencyTests
     }
 
     [Fact]
-    public async Task State_is_visible_before_command_completion_releases_the_next_command()
+    public async Task A_second_command_queries_backend_state_after_the_first_command()
     {
         using var instance = Instance();
         var manager = new ControlledManager();
         var watcher = Watcher(manager);
         using var context = Context(manager, watcher, instance);
-        await context.StartWatching(TestTimeout);
-        var started = context.Start(instance, TestTimeout);
-        Task? stopped = null;
-        watcher.SessionChanged += (_, args) =>
-        {
-            if (args.Session is null) return;
-            // Hold notification dispatch while the command resumes on another thread.
-            started.WaitAsync(TestTimeout).GetAwaiter().GetResult();
-            stopped = context.Stop(instance, TestTimeout);
-        };
-        await Task.Run(() => watcher.Publish(instance, true)).WaitAsync(TestTimeout);
+        await StartContext(context);
+        manager.OnChange = (target, running, _) => watcher.PublishAsync(target, running);
+
+        await context.Start(instance, TestTimeout);
+        await context.Stop(instance, TestTimeout);
+
+        Assert.Equal(1, manager.Starts);
         Assert.Equal(1, manager.Stops);
-        watcher.Publish(instance, false);
-        await stopped!.WaitAsync(TestTimeout);
+        Assert.False(instance.IsRunning);
         Assert.Null(instance.Session);
     }
-
     [Fact]
     public async Task Context_disposal_cancels_in_flight_and_queued_commands()
     {
@@ -103,7 +97,7 @@ public sealed class DuoConcurrencyTests
             }
         };
         using var context = Context(manager, Watcher(manager), instance);
-        await context.StartWatching(TestTimeout);
+        await StartContext(context);
         var first = context.Start(instance, TestTimeout);
         await entered.Task.WaitAsync(TestTimeout);
         var queued = context.Start(instance, TestTimeout);

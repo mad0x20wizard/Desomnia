@@ -76,8 +76,8 @@ public sealed class WatchModeTests
         var automatic = new DuoSessionMonitorConfig { ServiceName = "TestDuo" };
         var traffic = new DuoSessionMonitorConfig { ServiceName = "TestDuo", WatchMode = mode };
 
-        Assert.Equal(new[] { WatchMode.Registry, WatchMode.EventLog, WatchMode.Polling }, automatic.AllowedWatchModes());
-        Assert.Equal(automatic.AllowedWatchModes(), traffic.AllowedWatchModes());
+        Assert.Equal(new[] { WatchMode.Registry, WatchMode.EventLog, WatchMode.Polling }, automatic.WatchModes());
+        Assert.Equal(automatic.WatchModes(), traffic.WatchModes());
     }
 
     private static DuoConfig Config(WatchMode mode, bool network)

@@ -32,8 +32,7 @@ public sealed class DuoSessionMonitorTests
         var newContext = Context(newManager, newWatcher, replacement);
         newManager.OnChange = (target, running, _) =>
         {
-            newWatcher.Publish(target, running);
-            return Task.CompletedTask;
+            return newWatcher.PublishAsync(target, running);
         };
         var contexts = new Queue<DuoServiceContext>([oldContext, newContext]);
         var service = new FakeDuoService();
@@ -53,7 +52,7 @@ public sealed class DuoSessionMonitorTests
 
         Assert.True(oldWatcher.Stopped);
         Assert.Same(replacement, Assert.Single(monitor));
-        await monitor.HandleActionStart(oldInstance); // A stale action cannot target the new API.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => monitor.HandleActionStart(oldInstance));
         Assert.Equal(0, newManager.Starts);
         await monitor.HandleActionStart(replacement);
         Assert.NotNull(replacement.Session);
@@ -163,7 +162,7 @@ public sealed class DuoSessionMonitorTests
             // Production waits ten seconds before retrying; allow time for that retry.
             var recovered = await Task.WhenAny(tracked.Task, Task.Delay(TimeSpan.FromSeconds(15)));
             Assert.True(recovered == tracked.Task, "Monitoring never retried the failed initial query while Duo remained Running (issue 5).");
-            Assert.NotNull(Assert.Single(monitor).Session);
+            Assert.True(Assert.Single(monitor).IsRunning);
         }
         finally
         {
@@ -221,34 +220,28 @@ public sealed class DuoSessionMonitorTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Initial_state_is_loaded_and_manual_changes_after_startup_are_observed(bool initiallyRunning)
+    public async Task Initial_state_is_loaded_and_manual_changes_are_observed(bool initiallyRunning)
     {
         using var instance = Instance();
         var manager = new ControlledManager();
-        var watcher = new TestEventWatcher { SessionManager = new FakeSessionManager(), Manager = manager, Logger = NullLogger.Instance };
-        manager.OnQuery = (_, _) => Task.FromResult(initiallyRunning);
+        manager.SetState(instance, initiallyRunning);
+        var watcher = Watcher(manager);
         var changes = new List<bool>();
-        watcher.SessionChanged += (_, args) => changes.Add(args.Session is not null);
+        instance.Started += _ => { changes.Add(true); return Task.CompletedTask; };
+        instance.Stopped += _ => { changes.Add(false); return Task.CompletedTask; };
         using var context = Context(manager, watcher, instance);
-        await context.StartWatching(TestTimeout);
-        await watcher.Subscribed.Task.WaitAsync(TestTimeout);
-        Assert.Equal(initiallyRunning, (instance.Session is not null));
-        Assert.Equal(initiallyRunning ? new[] { true } : [], changes);
-        changes.Clear(); // Initial association is published so the adapter can acquire the watch.
+        await StartContext(context);
+        Assert.Equal(initiallyRunning, instance.IsRunning);
+        Assert.Empty(changes);
 
-        // Changes during the initial query/subscription handover are an accepted
-        // limitation. Manual changes after startup must work in both directions.
-        var first = initiallyRunning ? DuoEventID.InstanceStopped : DuoEventID.InstanceStarted;
-        var second = initiallyRunning ? DuoEventID.InstanceStarted : DuoEventID.InstanceStopped;
-        await watcher.SendAsync(first, instance.Name).WaitAsync(TestTimeout);
-        Assert.Equal(!initiallyRunning, (instance.Session is not null));
-        await watcher.SendAsync(first, instance.Name).WaitAsync(TestTimeout);
-        Assert.Single(changes); // Repeated notifications must not repeat the transition.
-        await watcher.SendAsync(second, instance.Name).WaitAsync(TestTimeout);
-        Assert.Equal(initiallyRunning, (instance.Session is not null));
+        await watcher.PublishAsync(instance, !initiallyRunning);
+        Assert.Equal(!initiallyRunning, instance.IsRunning);
+        await watcher.PublishAsync(instance, !initiallyRunning);
+        Assert.Single(changes);
+        await watcher.PublishAsync(instance, initiallyRunning);
+        Assert.Equal(initiallyRunning, instance.IsRunning);
         Assert.Equal(new[] { !initiallyRunning, initiallyRunning }, changes);
     }
-
     // async void reports escaped exceptions to its captured synchronization context.
     // Capture that boundary so cancellation regressions cannot crash the test host.
     private sealed class QueuedSynchronizationContext : SynchronizationContext

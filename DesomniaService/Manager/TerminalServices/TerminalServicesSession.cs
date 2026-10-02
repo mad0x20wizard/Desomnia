@@ -105,6 +105,7 @@ namespace MadWizard.Desomnia.Session.Manager
         public event EventHandler? Unlocked;
         public event EventHandler? Connected; internal void TriggerConnected() => Connected?.Invoke(this, EventArgs.Empty);
         public event EventHandler? Disconnected; internal void TriggerDisconnected() => Disconnected?.Invoke(this, EventArgs.Empty);
+        public event EventHandler? LoggedOff; internal void TriggerLoggedOff() => LoggedOff?.Invoke(this, EventArgs.Empty);
 
         internal WindowsIdentity Identity => new(Token);
         internal WindowsPrincipal Principal => new(Identity);

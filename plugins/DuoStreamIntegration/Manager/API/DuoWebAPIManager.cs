@@ -32,7 +32,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             return new ApiRequestException(request, request.Method, _settings, exception);
         }
 
-        public async Task<bool> QueryRunningState(DuoInstance instance, CancellationToken token)
+        public async Task<bool> QueryState(DuoInstance instance, CancellationToken token)
         {
             using var cancellation = token.WithTimeout(QueryTimeout);
 

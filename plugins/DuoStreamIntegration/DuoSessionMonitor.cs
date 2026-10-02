@@ -17,7 +17,7 @@ namespace MadWizard.Desomnia.Service.Duo
 
         public required Func<DuoSettings, Owned<DuoServiceContext>> CreateContext { private get; init; }
 
-        private Owned<DuoServiceContext>? _context;
+        private Owned<DuoServiceContext>? _ownedContext;
 
         readonly AsyncLock _lock = new();
 
@@ -46,6 +46,7 @@ namespace MadWizard.Desomnia.Service.Duo
                 using (_lock.Lock()) if (!_disposed)
                 {
                     _startup?.Cancel();
+                    _startup?.Dispose();
                     _startup = null;
 
                     switch (args.Status)
@@ -63,7 +64,7 @@ namespace MadWizard.Desomnia.Service.Duo
 
                             break;
 
-                        case ServiceControllerStatus.Stopped when _context is not null:
+                        case ServiceControllerStatus.Stopped when _ownedContext is not null:
                             Logger.LogInformation($"Service has stopped. Monitoring will be suspended.");
                             StopWatching(acquireLock: false);
                             break;
@@ -113,16 +114,18 @@ namespace MadWizard.Desomnia.Service.Duo
         {
             using (await _lock.LockAsync()) if (!_disposed)
             {
-                _context?.Dispose(); // make sure to dispose any leftovers
+                _ownedContext?.Dispose(); // make sure to dispose any leftovers
 
-                _context = CreateContext(settings);
+                var context = (_ownedContext = CreateContext(settings)).Value;
 
-                await _context.Value.StartWatching(StartupTimeout);
+                await context.InitializeAsync(StartupTimeout);
 
-                foreach (var instance in _context.Value.Instances)
+                foreach (var instance in context.Instances)
                 {
                     StartTracking(instance);
                 }
+
+                context.StartWatching();
             }
         }
 
@@ -130,16 +133,18 @@ namespace MadWizard.Desomnia.Service.Duo
         {
             using (acquireLock ? _lock.Lock() : null)
             {
-                if (_context is not null)
+                if (_ownedContext?.Value is DuoServiceContext context)
                 {
-                    foreach (var instance in _context.Value.Instances)
+                    context.StopWatching();
+
+                    foreach (var instance in context.Instances)
                     {
                         StopTracking(instance);
                     }
                 }
 
-                _context?.Dispose();
-                _context = null;
+                _ownedContext?.Dispose();
+                _ownedContext = null;
             }
         }
         #endregion
@@ -148,7 +153,7 @@ namespace MadWizard.Desomnia.Service.Duo
         [ActionHandler("start")]
         internal async Task HandleActionStart(DuoInstance instance)
         {
-            if (_context?.Value is DuoServiceContext ctx)
+            if (_ownedContext?.Value is DuoServiceContext ctx)
             {
                 await ctx.Start(instance, ActionTimeout);
             }
@@ -157,7 +162,7 @@ namespace MadWizard.Desomnia.Service.Duo
         [ActionHandler("stop", Detached = true)]
         internal async Task HandleActionStop(DuoInstance instance)
         {
-            if (_context?.Value is DuoServiceContext ctx)
+            if (_ownedContext?.Value is DuoServiceContext ctx)
             {
                 await ctx.Stop(instance, ActionTimeout);
             }

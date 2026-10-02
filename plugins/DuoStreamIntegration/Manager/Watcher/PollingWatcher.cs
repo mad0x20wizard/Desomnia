@@ -1,34 +1,23 @@
 using Microsoft.Extensions.Logging;
+using System.Runtime.CompilerServices;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 {
-    internal class PollingWatcher : StatusWatcher
+    internal class PollingWatcher : IDuoWatcher
     {
+        public required ILogger<PollingWatcher> Logger { protected get; init; }
+
         public required TimeSpan PollInterval { get; set; }
 
-        protected override async Task WatchAsync(IEnumerable<DuoInstance> instances, CancellationToken stoppingToken)
+        async IAsyncEnumerable<WatchSignal> IDuoWatcher.WatchAsync(IEnumerable<DuoInstance> instances, [EnumeratorCancellation] CancellationToken token)
         {
             Logger.LogDebug("Polling Duo instances every {Interval}", PollInterval);
 
-            try
+            while (!token.IsCancellationRequested)
             {
-                while (!stoppingToken.IsCancellationRequested)
-                {
-                    try
-                    {
-                        await RefreshInstances(instances, stoppingToken);
-                    }
-                    catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-                    {
-                        Logger.LogError(ex, "Error checking Duo instances.");
-                    }
+                yield return new WatchSignal();
 
-                    await Task.Delay(PollInterval, stoppingToken);
-                }
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                // Normal hosted-service shutdown.
+                await Task.Delay(PollInterval, token);
             }
         }
     }

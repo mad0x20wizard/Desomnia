@@ -16,10 +16,10 @@ namespace MadWizard.Desomnia.Service.Duo
 
         public DuoInstance(string name, InstanceSettings settings, DuoInstanceWatchInfo info)
         {
-            Name        = name;
-            Settings    = settings;
-            Service     = new SunshineService(Name, Settings.Port);
-            Info        = info;
+            Name = name;
+            Settings = settings;
+            Service = new SunshineService(Name, Settings.Port);
+            Info = info;
 
             Event(nameof(Demand)).AddAction(info.OnDemand);
             Event(nameof(Usage)).AddAction(info.OnUsage);
@@ -37,10 +37,39 @@ namespace MadWizard.Desomnia.Service.Duo
         internal DuoInstanceWatchInfo Info { get; }
         internal WatchExpression? Watch { get; set; }
 
-        [EventContext]
-        public ISession? Session => this.OfType<SessionWatch>().FirstOrDefault()?.Session;
+        public bool? IsRunning
+        {
+            get; internal set
+            {
+                bool initial = (field == null);
 
-        public bool IsRunning => Session is not null;
+                if (field != value)
+                {
+                    field = value;
+
+                    if (!initial)
+                    {
+                        if (field == true)
+                        {
+                            Started.TriggerEventAsync();
+                        }
+                        else
+                        {
+                            Stopped.TriggerEventAsync();
+                        }
+                    }
+                }
+            }
+        }
+
+        [EventContext]
+        public ISession? Session
+        {
+            get
+            {
+                lock (this) return this.OfType<SessionWatch>().FirstOrDefault()?.Session;
+            }
+        }
 
         public event EventInvocation? Started;
         public event EventInvocation? Stopped;
@@ -53,10 +82,10 @@ namespace MadWizard.Desomnia.Service.Duo
 
         protected override bool ShouldTriggerEvent(Event @event)
         {
-            if (@event.Type == nameof(Idle) && !IsRunning)
+            if (@event.Type == nameof(Idle) && IsRunning == false)
                 return false; // only trigger "Idle" events if the instance is running
 
-            if (@event.Type == nameof(Demand) && IsRunning)
+            if (@event.Type == nameof(Demand) && IsRunning == true)
                 return false; // only trigger "Demand" events if the instance is NOT running
 
             return base.ShouldTriggerEvent(@event);

@@ -1,115 +1,142 @@
-using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Service.Duo.Manager;
-using MadWizard.Desomnia.Service.Duo.Manager.Watcher;
-using MadWizard.Desomnia.Session;
-using MadWizard.Desomnia.Session.Configuration;
+using Microsoft.Extensions.Logging;
+using Nito.AsyncEx.Synchronous;
+using System.Collections.Concurrent;
 
 namespace MadWizard.Desomnia.Service.Duo
 {
     internal class DuoServiceContext : IDisposable
     {
-        public required DuoSettings Settings { get; init; }
+        public required ILogger<DuoServiceContext> Logger { protected get; init; }
 
         public required IDuoManager Manager { get; init; }
-        public required IDuoSessionWatcher Watcher { get; init; }
+        public required IDuoWatcher Watcher { get; init; }
 
         public required IEnumerable<DuoInstance> Instances { get; init; }
 
-        public required SessionMonitor SessionMonitor { private get; init; }
-        public required SessionMonitorConfig SessionMonitorConfig { private get; init; }
-
         readonly CancellationTokenSource _lifetime = new();
 
-        public async Task StartWatching(TimeSpan timeout = default)
+        readonly ConcurrentDictionary<DuoInstance, StateChangeRequest> _requests = [];
+
+        public async Task InitializeAsync(TimeSpan timeout = default)
         {
-            using var startup = _lifetime.WithTimeout(timeout);
-
-            await SessionMonitor.StartupFinished.WaitAsync(startup.Token);
-
-            SessionMonitor.InspectionFilter += SessionMonitor_InspectionFilter;
-
-            Watcher.SessionChanged += Watcher_SessionChanged;
+            using var init = _lifetime.WithTimeout(timeout);
 
             try
             {
-                await Watcher.StartWatch(Instances, startup.Token);
+                foreach (var instance in Instances)
+                {
+                    instance.IsRunning = await Manager.QueryState(instance, init.Token);
+                }
             }
             catch (OperationCanceledException ex) when (!_lifetime.IsCancellationRequested)
             {
-                throw new TimeoutException($"Timed out while starting to watch instances.", ex);
+                throw new TimeoutException($"Timed out while initializing instances.", ex);
             }
         }
 
-        // The Duo instance inspects its associated watch and supplies the final idle/usage result.
-        private bool SessionMonitor_InspectionFilter(SessionWatch watch) => !watch.IsMonitoredBy<DuoInstance>();
+        #region Watching
+        private Task? _watchTask;
 
-        private void Watcher_SessionChanged(object? sender, InstanceSessionChangedEventArgs args)
+        public void StartWatching()
         {
-            if (args.Instance.Session == args.Session)
-                return;
+            _watchTask = WatchAsync(_lifetime.Token);
+        }
 
-            args.Instance.StopTracking<SessionWatch>();
-
-            if (SessionMonitor.TakeSnapshot().FirstOrDefault(w => w.Session == args.Session) is SessionWatch watch)
+        private async Task WatchAsync(CancellationToken token)
+        {
+            try
             {
-                var instance = args.Instance;
-
-                instance.Watch = watch.Watch << instance.Info.Watch;
-
-                watch.ApplyConfiguration(SessionMonitorConfig, instance.Info with
+                await foreach (var signal in Watcher.WatchAsync(Instances, token))
                 {
-                    Watch = WatchExpression.Yield,
-                    OnIdle = null // handled by the DuoInstance
-                });
+                    foreach (var instance in signal.Instance is null ? Instances : [signal.Instance])
+                    {
+                        try
+                        {
+                            bool isRunning = signal.IsRunning ?? await Manager.QueryState(instance, token);
 
-                watch.WatchRemote = true; // Duo instances are technically remote sessions
+                            if (instance.IsRunning != isRunning)
+                            {
+                                /**
+                                 * We only want to notify about the change, 
+                                 * when both the Duo state and the session state match.
+                                 */
+                                if (isRunning == (instance.Session is not null))
+                                {
+                                    if (_requests.TryGetValue(instance, out var request))
+                                    {
+                                        request.Notify(isRunning); // maybe release request
+                                    }
 
-                instance.StartTracking(watch);
+                                    Logger.LogInformation($"{instance} is now " +
+                                        $"{(isRunning ? "running" : "stopped")} " +
+                                        $"{(request is null ? "(manually)" : "")}");
+
+                                    instance.IsRunning = isRunning;
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogError(ex, "Could not query/update instance {Name}", instance.Name);
+                        }
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                // watch has ended normally.
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Could not watch instances");
             }
         }
 
+        public void StopWatching()
+        {
+            if (!_lifetime.IsCancellationRequested)
+            {
+                _lifetime.Cancel();
+
+                _watchTask?.WaitAndUnwrapException();
+                _watchTask = null;
+            }
+        }
+        #endregion
+
+        #region StateChangeRequest handling
         public async Task Start(DuoInstance instance, TimeSpan timeout = default) =>
-            await HandleStateRequest(instance, true, timeout);
+            await HandleStateRequest(instance, new(true, timeout));
 
         public async Task Stop(DuoInstance instance, TimeSpan timeout = default) => 
-            await HandleStateRequest(instance, false, timeout);
+            await HandleStateRequest(instance, new(false, timeout));
 
-        private async Task HandleStateRequest(DuoInstance instance, bool running, TimeSpan timeout = default)
+        private async Task HandleStateRequest(DuoInstance instance, StateChangeRequest request)
         {
-            using var cancellation = _lifetime.WithTimeout(timeout);
+            if (!Instances.Contains(instance))
+                throw new InvalidOperationException($"Received request for instance '{instance.Name}' out of context.");
+
+            using var cancellation = _lifetime.WithTimeout(request.Timeout);
 
             try
             {
                 using (await instance.Mutex.LockAsync(cancellation.Token))
                 {
-                    if (Instances.Contains(instance) && instance.IsRunning != running)
+                    if (await Manager.QueryState(instance, cancellation.Token) != request.ShouldBeRunning)
                     {
-                        var semaphore = new SemaphoreSlim(0);
-
-                        void Watcher_SessionChanged(object? sender, InstanceSessionChangedEventArgs args)
+                        using (_requests[instance] = request)
                         {
-                            if (instance == args.Instance && args.IsRunning == running)
+                            try
                             {
-                                args.Manually = false;
+                                await Manager.ChangeState(instance, request.ShouldBeRunning, cancellation.Token);
 
-                                semaphore.Release();
+                                await request.WaitAsync(cancellation.Token);
                             }
-                        }
-
-                        Watcher.SessionChanged += Watcher_SessionChanged;
-
-                        try
-                        {
-                            await Manager.ChangeState(instance, running, cancellation.Token);
-
-                            if (instance.IsRunning != running)
+                            finally
                             {
-                                await semaphore.WaitAsync(cancellation.Token);
+                                _requests.Remove(instance, out _);
                             }
-                        }
-                        finally
-                        {
-                            Watcher.SessionChanged -= Watcher_SessionChanged;
                         }
                     }
                 }
@@ -118,29 +145,51 @@ namespace MadWizard.Desomnia.Service.Duo
             {
                 if (!_lifetime.IsCancellationRequested)
                 {
-                    throw new TimeoutException($"DuoInstance did not change it's state after {timeout}.");
+                    throw new TimeoutException($"Instance did not change it's state after {request.Timeout}.");
                 }
             }
         }
+        #endregion
 
         void IDisposable.Dispose()
         {
-            _lifetime.Cancel();
-
-            try
+            using (_lifetime)
             {
-                Watcher.StopWatch();
+                StopWatching();
             }
-            finally
+        }
+
+        private class StateChangeRequest : IDisposable
+        {
+            readonly SemaphoreSlim _semaphore = new(0);
+
+            internal bool ShouldBeRunning { get; init; }
+
+            internal TimeSpan Timeout { get; init; }
+
+            internal StateChangeRequest(bool running, TimeSpan timeout = default)
             {
-                Watcher.SessionChanged -= Watcher_SessionChanged;
+                ShouldBeRunning = running;
 
-                SessionMonitor.InspectionFilter -= SessionMonitor_InspectionFilter;
+                Timeout = timeout;
+            }
 
-                foreach (var instance in Instances)
+            internal async Task WaitAsync(CancellationToken token)
+            {
+                await _semaphore.WaitAsync(token);
+            }
+
+            internal void Notify(bool isRunning)
+            {
+                if (isRunning == ShouldBeRunning)
                 {
-                    instance.StopTracking<SessionWatch>();
+                    _semaphore.Release();
                 }
+            }
+
+            void IDisposable.Dispose()
+            {
+                _semaphore.Dispose();
             }
         }
     }

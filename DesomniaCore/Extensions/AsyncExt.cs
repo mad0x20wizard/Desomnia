@@ -15,6 +15,22 @@
         }
     }
 
+    namespace Channels
+    {
+        public class LocalChannel<T>(Channel<T> channel) : IDisposable
+        {
+            public ChannelReader<T> Reader => channel.Reader;
+            public ChannelWriter<T> Writer => channel.Writer;
+
+            void IDisposable.Dispose()
+            {
+                channel.Writer.TryComplete();
+            }
+
+            public static implicit operator LocalChannel<T>(Channel<T> channel) => new(channel);
+        }
+    }
+
     namespace Tasks
     {
         public static class TaskExt

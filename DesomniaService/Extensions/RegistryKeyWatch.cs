@@ -1,11 +1,10 @@
-using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 
-namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
+namespace Microsoft.Win32
 {
-    internal class KeyWatch : IDisposable
+    public class RegistryKeyWatch : IDisposable
     {
         public RegistryKey Key { get; }
 
@@ -16,12 +15,12 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
         EventHandler? _changed;
         bool _disposed;
 
-        internal KeyWatch(RegistryKey key)
+        public RegistryKeyWatch(RegistryKey key)
         {
             Key = key;
         }
 
-        internal event EventHandler Changed
+        public event EventHandler Changed
         {
             add
             {
@@ -100,7 +99,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             _signal = null;
         }
 
-        public void Dispose()
+        public virtual void Dispose()
         {
             lock (_lock)
             {

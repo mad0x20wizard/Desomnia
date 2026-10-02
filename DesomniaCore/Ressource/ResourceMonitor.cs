@@ -36,39 +36,42 @@ namespace MadWizard.Desomnia
             if (inspectable is EventMetaObject { IsEngineDisposed: true })
                 return false; // never adopt a corpse
 
-            if (ShouldTrackRessource(inspectable))
-            {
-                bool added;
+            bool added = false;
 
-                lock (_inspectables)
+            lock (_inspectables)
+            {
+                if (!_inspectables.Contains(inspectable) && ShouldTrackRessource(inspectable))
                 {
                     added = _inspectables.Add(inspectable);
                 }
+            }
 
-                if (added)
+            if (added)
+            {
+                if (inspectable is Resource res)
                 {
-                    if (inspectable is Resource res)
-                    {
-                        res.StartTrackingBy(this, adopt);
-                    }
-
-                    TrackingStarted?.Invoke(this, new InspectableEventArgs<T>(inspectable));
-
-                    return true;
+                    res.StartTrackingBy(this, adopt);
                 }
 
-                return false;
+                TrackingStarted?.Invoke(this, new InspectableEventArgs<T>(inspectable));
+
+                return true;
             }
 
             return false;
         }
 
-        public void StopTracking<TT>() where TT : T
+        public int StopTracking<TT>() where TT : T
         {
+            int removed = 0;
+
             foreach (var previous in this.TakeSnapshot().OfType<TT>())
             {
-                this.StopTracking(previous);
+                if (this.StopTracking(previous))
+                    removed++;
             }
+
+            return removed;
         }
 
         public virtual bool StopTracking(T inspectable)

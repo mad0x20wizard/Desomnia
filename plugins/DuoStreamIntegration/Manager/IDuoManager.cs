@@ -2,7 +2,7 @@
 {
     internal interface IDuoManager
     {
-        Task<bool> QueryRunningState(DuoInstance instance, CancellationToken token = default);
+        Task<bool> QueryState(DuoInstance instance, CancellationToken token = default);
 
         Task ChangeState(DuoInstance instance, bool running, CancellationToken token = default);
     }

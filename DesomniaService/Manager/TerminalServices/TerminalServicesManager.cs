@@ -61,6 +61,8 @@ namespace MadWizard.Desomnia.Session.Manager
                         {
                             Logger.LogWarning("WTSSession[id={ID}, name=?, state=Unknown] -> gone", missing);
 
+                            scope.Value.TriggerLoggedOff(); // TODO can this be merged into a "remove missing method"?
+
                             UserLogoff?.Invoke(this, scope.Value);
 
                             scope.Dispose(); // All that remains for us is to remove them
@@ -130,8 +132,8 @@ namespace MadWizard.Desomnia.Session.Manager
                         case SessionChangeReason.SessionLogoff:
                             if (Sessions.Remove(sid, out var scope))
                             {
+                                session.TriggerLoggedOff();
                                 UserLogoff?.Invoke(this, session);
-
                                 scope.Dispose();
                             }
                             break;

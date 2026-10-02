@@ -43,7 +43,7 @@ namespace MadWizard.Desomnia.Service.Duo.Tests
                 </SystemMonitor>
                 """);
 
-            ((IXConfigurationMigration)new Session.Module()).Run(document, 2);
+            ((IXConfigurationMigration)new MadWizard.Desomnia.Session.Module()).Run(document, 2);
 
             var monitor = document.Descendants("SessionMonitor").Single();
             Assert.Equal("notify", monitor.Attribute("onUsage")?.Value);

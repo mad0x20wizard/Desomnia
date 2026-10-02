@@ -1,6 +1,7 @@
 using Autofac;
 using MadWizard.Desomnia.Processes;
-using MadWizard.Desomnia.Service.Duo;
+using MadWizard.Desomnia.Service.Duo.Manager.Watcher;
+using MadWizard.Desomnia.Service.Duo.Session;
 using MadWizard.Desomnia.Session;
 using MadWizard.Desomnia.Session.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -14,7 +15,7 @@ namespace DuoStreamIntegration.Tests;
 public sealed class SessionStartupTests
 {
     [Fact]
-    public async Task Context_waits_for_session_monitor_startup_before_associating_existing_sessions()
+    public async Task Registry_waits_for_session_monitor_startup_and_adapter_configures_the_existing_watch()
     {
         using var instance = Instance();
         var session = SessionFor(instance);
@@ -29,30 +30,29 @@ public sealed class SessionStartupTests
         {
             Scope = scope, Logger = NullLogger<SessionMonitor>.Instance
         };
-        var manager = new ControlledManager { OnQuery = (_, _) => Task.FromResult(true) };
-        var watcher = Watcher(manager);
-        using var context = new DuoServiceContext
-        {
-            Settings = new() { Port = 38299, Instances = [Settings()] },
-            Manager = manager, Watcher = watcher, Instances = [instance],
-            SessionMonitor = monitor, SessionMonitorConfig = config
-        };
-
-        var starting = context.StartWatching(TestTimeout);
-        Assert.False(starting.IsCompleted);
-        Assert.False(watcher.Started);
-        Assert.Equal(0, manager.Queries);
+        using var duo = Monitor(new FakeDuoService(), _ => throw new InvalidOperationException("Not starting the service."));
+        using var adapter = new SessionWatchAdapter(config) { SessionMonitor = monitor, DuoSessionMonitor = duo };
+        adapter.Attach();
+        duo.StartTracking(instance);
+        using var registry = new TestDuoRegistry();
+        using var key = registry.Key.CreateSubKey(@"Instances\Player");
+        key.SetValue("SessionId", (int)session.Id);
+        var watcher = new RegistryWatcher { SessionMonitor = monitor, Logger = NullLogger<RegistryWatcher>.Instance };
+        await using var run = new WatchRun(watcher, instance);
+        Assert.Null(instance.Session);
+        Assert.Equal(0, session.LogoffSubscribers);
 
         await ((IHostedService)monitor).StartAsync(default);
-        await starting.WaitAsync(TestTimeout);
+        await session.LogoffSubscribed.Task.WaitAsync(TestTimeout);
         var watch = Assert.Single(monitor);
         Assert.Same(session, instance.Session);
         Assert.Contains(watch, instance);
         Assert.True(watch.Watch.IsYield);
 
-        ((IDisposable)context).Dispose();
+        duo.StopTracking(instance);
         Assert.Empty(instance);
-        Assert.True(watcher.Stopped);
+        await run.DisposeAsync();
+        Assert.Equal(0, session.LogoffSubscribers);
         await ((IHostedService)monitor).StopAsync(default);
     }
 }

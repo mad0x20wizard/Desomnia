@@ -28,6 +28,6 @@ namespace MadWizard.Desomnia.Session.Manager
         public event EventHandler Unlocked;
         public event EventHandler Connected;
         public event EventHandler Disconnected;
-
+        public event EventHandler LoggedOff;
     }
 }

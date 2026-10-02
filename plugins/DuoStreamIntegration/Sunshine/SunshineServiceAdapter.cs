@@ -8,24 +8,27 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine
 
         protected void RegisterWatch(DuoInstance instance, NetworkServiceWatch watch)
         {
-            try
+            lock (instance)
             {
-                watch.Demand += instance.NetworkServiceWatch_Demand;
-
-                if (instance.Info.WatchStreamTraffic ?? true)
+                try
                 {
-                    instance.StartTracking(watch);
-                }
-                else
-                {
-                    instance.InspectResources += Instance_Inspected; // delegate inspection event
-                }
+                    watch.Demand += instance.NetworkServiceWatch_Demand;
 
-                _watches[instance] = watch;
-            }
-            catch
-            {
-                try { UnregisterWatch(instance, watch); } catch { } throw; // clean up
+                    if (instance.Info.WatchStreamTraffic ?? true)
+                    {
+                        instance.StartTracking(watch);
+                    }
+                    else
+                    {
+                        instance.InspectResources += Instance_Inspected; // delegate inspection event
+                    }
+
+                    _watches[instance] = watch;
+                }
+                catch
+                {
+                    try { UnregisterWatch(instance, watch); } catch { } throw; // clean up
+                }
             }
         }
 
@@ -44,7 +47,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine
 
         protected void UnregisterWatch(DuoInstance instance, NetworkServiceWatch watch)
         {
-            if (_watches.Remove(instance))
+            if (_watches.Remove(instance)) lock (instance)
             {
                 watch.Demand -= instance.NetworkServiceWatch_Demand;
 
