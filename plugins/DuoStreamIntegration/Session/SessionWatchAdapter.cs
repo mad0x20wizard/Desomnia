@@ -2,7 +2,6 @@
 using MadWizard.Desomnia.Ressource.Events;
 using MadWizard.Desomnia.Session;
 using MadWizard.Desomnia.Session.Configuration;
-using MadWizard.Desomnia.Session.Manager;
 
 namespace MadWizard.Desomnia.Service.Duo.Session
 {
@@ -11,31 +10,13 @@ namespace MadWizard.Desomnia.Service.Duo.Session
         public required DuoSessionMonitor   DuoSessionMonitor   { private get; init; }
         public required SessionMonitor      SessionMonitor      { private get; init; }
 
-        bool IsConnectedTo(DuoInstance instance, ISession session)
-        {
-            if (instance.Settings.UserName == session.UserName)
-            {
-                if (session.IsRemoteConnected)
-                {
-                    return instance.Name == session.ClientName;
-                }
-                else if (session.IsHeadless)
-                {
-                    if (DuoSessionMonitor.TakeSnapshot().Count(i => i.Settings.UserName == instance.Settings.UserName) == 1)
-                    {
-                        return true; // only if the match is unambiguous
-                    }
-                }
-            }
-
-            return false;
-        }
-
+        public required IInstanceSessionStrategy Strategy       { private get; init; }
+        
         private void MultiTrackIfConnected(IEnumerable<DuoInstance> instances, IEnumerable<SessionWatch> watches)
         {
             foreach (var watch in watches)
             {
-                foreach (var instance in instances.Where(instance => IsConnectedTo(instance, watch.Session)))
+                foreach (var instance in instances.Where(instance => Strategy[instance, watch.Session]))
                 {
                     lock (instance)
                     {

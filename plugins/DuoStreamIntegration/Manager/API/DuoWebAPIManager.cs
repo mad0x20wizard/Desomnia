@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using Refit;
+using System.Diagnostics;
 
 namespace MadWizard.Desomnia.Service.Duo.Manager
 {
@@ -36,12 +37,20 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
         {
             using var cancellation = token.WithTimeout(QueryTimeout);
 
-            return await API.QueryInstance(instance.Name, cancellation.Token);
+            var watch = Stopwatch.StartNew();
+
+            var running = await API.QueryInstance(instance.Name, cancellation.Token);
+
+            Logger.LogTrace("Queried {Instance} = {State} [{Duration} ms]",
+                instance.ToString(), running ? "running" : "stopped",
+                Math.Ceiling(watch.Elapsed.TotalMilliseconds));
+
+            return running;
         }
 
         public async Task ChangeState(DuoInstance instance, bool running, CancellationToken token)
         {
-            Logger.LogInformation("{operation} {instance}...",
+            Logger.LogInformation("{Operation} {Instance}...",
                 running ? "Starting" : "Stopping",
                 instance.ToString());
 

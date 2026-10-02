@@ -17,6 +17,8 @@ namespace MadWizard.Desomnia.Service.Duo
 
         public required Func<DuoSettings, Owned<DuoServiceContext>> CreateContext { private get; init; }
 
+        public DuoServiceContext? Context => _ownedContext?.Value;
+
         private Owned<DuoServiceContext>? _ownedContext;
 
         readonly AsyncLock _lock = new();

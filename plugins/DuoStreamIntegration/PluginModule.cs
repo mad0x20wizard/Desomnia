@@ -2,12 +2,13 @@
 using Autofac.Core;
 using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Events;
-using MadWizard.Desomnia.Network.Middleware;
 using MadWizard.Desomnia.Service.Duo.Configuration;
 using MadWizard.Desomnia.Service.Duo.Configuration.Migration;
 using MadWizard.Desomnia.Service.Duo.Manager;
 using MadWizard.Desomnia.Service.Duo.Manager.Watcher;
+using MadWizard.Desomnia.Service.Duo.Middleware;
 using MadWizard.Desomnia.Service.Duo.Session;
+using MadWizard.Desomnia.Service.Duo.Session.Strategy;
 using MadWizard.Desomnia.Service.Duo.Sunshine.Listener;
 using MadWizard.Desomnia.Service.Duo.Sunshine.Watch;
 using MadWizard.Desomnia.Session.Configuration;
@@ -64,11 +65,7 @@ namespace MadWizard.Desomnia.Service.Duo
                 RegisterManager(builder);
                 RegisterWatchers(builder, duo);
 
-                builder.RegisterType<SessionWatchAdapter>()
-                    .WithParameter(new TypedParameter(typeof(SessionMonitorConfig), session))
-                    .OnActivated(ctx => ctx.Instance.Attach()).AutoActivate()
-                    .AsImplementedInterfaces()
-                    .SingleInstance();
+                RegisterSessionAdapter(builder, session);
 
                 if (config.UseListener)
                 {
@@ -88,7 +85,7 @@ namespace MadWizard.Desomnia.Service.Duo
             }
         }
 
-        void RegisterManager(ContainerBuilder builder)
+        static void RegisterManager(ContainerBuilder builder)
         {
             // the only available DuoManager right now
             builder.RegisterType<DuoWebAPIManager>()
@@ -96,7 +93,7 @@ namespace MadWizard.Desomnia.Service.Duo
                 .As<IDuoManager>().AsSelf();
         }
 
-        void RegisterWatchers(ContainerBuilder builder, DuoSessionMonitorConfig config)
+        static void RegisterWatchers(ContainerBuilder builder, DuoSessionMonitorConfig config)
         {
             using var service = new ServiceController(config.ServiceName);
 
@@ -144,6 +141,28 @@ namespace MadWizard.Desomnia.Service.Duo
             {
                 throw new Exception("Registration of DuoWatcher failed", ex);
             }
+        }
+
+        static void RegisterSessionAdapter(ContainerBuilder builder, SessionMonitorConfig config)
+        {
+            builder.RegisterType<SessionWatchAdapter>()
+                .WithParameter(new TypedParameter(typeof(SessionMonitorConfig), config))
+                .OnActivated(ctx => ctx.Instance.Attach()).AutoActivate()
+                .AsImplementedInterfaces()
+                .SingleInstance();
+
+            builder.RegisterComposite<CompositeStrategy, IInstanceSessionStrategy>()
+                .SingleInstance();
+
+            builder.RegisterType<HeadlessStrategy>()
+                .ConfigurePipeline(p => p.Use(new InstanceEnumerator()))
+                .AsImplementedInterfaces()
+                .SingleInstance();
+
+            builder.RegisterType<RemoteClientStrategy>()
+                .AsImplementedInterfaces()
+                .SingleInstance();
+
         }
     }
 

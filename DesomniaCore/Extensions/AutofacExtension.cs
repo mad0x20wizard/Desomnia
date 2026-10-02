@@ -11,6 +11,11 @@ namespace Autofac
             return (T?)context.Parameters.OfType<TypedParameter>().FirstOrDefault(p => p.Type.IsAssignableTo<T>())?.Value;
         }
 
+        public static void AddParameter<T>(this ResolveRequestContext context, T value)
+        {
+            context.ChangeParameters([.. context.Parameters, new TypedParameter(typeof(T), value)]);
+        }
+
         public static void ChangeParameterByType<T>(this ResolveRequestContext context, T value)
         {
             if (context.Parameters.OfType<TypedParameter>().FirstOrDefault(p => p.Type == typeof(T)) is TypedParameter param)

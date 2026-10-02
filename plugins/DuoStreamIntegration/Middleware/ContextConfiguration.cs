@@ -1,10 +1,9 @@
 using Autofac;
 using Autofac.Core.Resolving.Pipeline;
-using MadWizard.Desomnia.Service.Duo;
 using MadWizard.Desomnia.Service.Duo.Configuration;
 using MadWizard.Desomnia.Service.Duo.Manager;
 
-namespace MadWizard.Desomnia.Network.Middleware
+namespace MadWizard.Desomnia.Service.Duo.Middleware
 {
     public sealed class ContextConfiguration(DuoSessionMonitorConfig config) : IResolveMiddleware
     {
