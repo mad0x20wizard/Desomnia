@@ -133,7 +133,7 @@ namespace MadWizard.Desomnia.Service.Duo
 
                             try
                             {
-                                await Manager.ChangeState(instance, request.ShouldBeRunning, cancellation.Token);
+                                await Manager.RequestState(instance, request.ShouldBeRunning, cancellation.Token);
 
                                 await request.WaitAsync(cancellation.Token);
                             }

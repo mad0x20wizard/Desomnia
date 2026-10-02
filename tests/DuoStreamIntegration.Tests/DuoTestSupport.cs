@@ -85,7 +85,7 @@ internal sealed class ControlledManager : IDuoManager
         return OnQuery?.Invoke(instance, token) ?? Task.FromResult(_states.GetValueOrDefault(instance));
     }
 
-    public Task ChangeState(DuoInstance instance, bool running, CancellationToken token = default)
+    public Task RequestState(DuoInstance instance, bool running, CancellationToken token = default)
     {
         if (running) Interlocked.Increment(ref _starts); else Interlocked.Increment(ref _stops);
         return OnChange(instance, running, token);

@@ -48,7 +48,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             return running;
         }
 
-        public async Task ChangeState(DuoInstance instance, bool running, CancellationToken token)
+        public async Task RequestState(DuoInstance instance, bool running, CancellationToken token)
         {
             var watch = Stopwatch.StartNew();
 
