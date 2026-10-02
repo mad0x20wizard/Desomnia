@@ -127,6 +127,10 @@ namespace MadWizard.Desomnia.Service.Duo
                     {
                         using (_requests[instance] = request)
                         {
+                            Logger.LogInformation("{Operation} {Instance}...",
+                                request.ShouldBeRunning ? "Starting" : "Stopping",
+                                instance.ToString());
+
                             try
                             {
                                 await Manager.ChangeState(instance, request.ShouldBeRunning, cancellation.Token);

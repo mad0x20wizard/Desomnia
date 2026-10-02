@@ -50,9 +50,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
 
         public async Task ChangeState(DuoInstance instance, bool running, CancellationToken token)
         {
-            Logger.LogInformation("{Operation} {Instance}...",
-                running ? "Starting" : "Stopping",
-                instance.ToString());
+            var watch = Stopwatch.StartNew();
 
             if (running)
             {
@@ -62,6 +60,10 @@ namespace MadWizard.Desomnia.Service.Duo.Manager
             {
                 await API.StopInstance(instance.Name, token);
             }
+
+            Logger.LogTrace("Requested {Instance} -> {State} [{Duration} ms]",
+                instance.ToString(), running ? "running" : "stopped",
+                Math.Ceiling(watch.Elapsed.TotalMilliseconds));
         }
 
         void IDisposable.Dispose()
