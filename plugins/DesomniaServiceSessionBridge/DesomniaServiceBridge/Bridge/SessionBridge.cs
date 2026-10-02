@@ -85,7 +85,7 @@ namespace MadWizard.Desomnia.Service.Bridge
         {
             var minion = (SessionMinion)sender!;
 
-            Logger.LogDebug("Minion terminated: {SessionID}", minion.SessionID);
+            Logger.LogTrace("Minion terminated: {SessionID}", minion.SessionID);
         }
 
         Task IHostedService.StartAsync(CancellationToken cancellationToken)
