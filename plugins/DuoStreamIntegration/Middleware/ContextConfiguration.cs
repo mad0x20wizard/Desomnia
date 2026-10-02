@@ -41,7 +41,7 @@ namespace MadWizard.Desomnia.Service.Duo.Middleware
 
             if (ctx.FirstParameterOfType<DuoSettings>() is DuoSettings settings)
             {
-                var client = new HttpClient { BaseAddress = new Uri("http://localhost:" + settings.Port) };
+                var client = new HttpClient { BaseAddress = new Uri("http://127.0.0.1:" + settings.Port) };
 
                 IDuoManager manager = ctx.Resolve<DuoWebAPIManager>(TypedParameter.From(client));
 
