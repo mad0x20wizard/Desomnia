@@ -38,7 +38,7 @@ namespace MadWizard.Desomnia.Network.Configuration
 
         public bool             UseBPF              { get; set; } = true;
 
-        public OffloadProtocol  AllowOffload        { get; set; } = OffloadProtocol.Auto;
+        public OffloadProtocol? AllowOffload        { get; set; }
         public WakeOnLANMode?   AllowWakeOnLAN      { get; set; } = DefaultWakeOnLANMode();
 
         // Actions
@@ -211,6 +211,16 @@ namespace MadWizard.Desomnia.Network.Configuration
         public IList<ServiceFilterRuleInfo> ServiceFilterRule { get; set; } = [];
         public IList<HTTPFilterRuleInfo> HTTPFilterRule { get; set; } = [];
         public PingFilterRuleInfo? PingFilterRule { get; set; }
+
+        internal OffloadProtocol? DefaultOffload()
+        {
+            if (Handoff.HasFlag(HandoffType.SleepProxy))
+            {
+                return OffloadProtocol.None;
+            }
+
+            return null;
+        }
 
         private static WakeOnLANMode? DefaultWakeOnLANMode()
         {

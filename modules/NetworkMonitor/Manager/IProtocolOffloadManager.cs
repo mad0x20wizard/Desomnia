@@ -14,8 +14,6 @@
         IPv4 = 1 << 0, // ARP offload
         IPv6 = 1 << 1, // NS offload
 
-        IP = IPv4 | IPv6,
-
-        Auto = 0xFFFFFFF
+        IP = IPv4 | IPv6
     }
 }
