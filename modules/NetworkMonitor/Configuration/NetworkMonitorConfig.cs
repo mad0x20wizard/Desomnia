@@ -38,6 +38,7 @@ namespace MadWizard.Desomnia.Network.Configuration
 
         public bool             UseBPF              { get; set; } = true;
 
+        public OffloadProtocol  AllowOffload        { get; set; } = OffloadProtocol.Auto;
         public WakeOnLANMode?   AllowWakeOnLAN      { get; set; } = DefaultWakeOnLANMode();
 
         // Actions

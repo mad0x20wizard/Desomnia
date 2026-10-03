@@ -3,9 +3,55 @@ using Microsoft.Management.Infrastructure;
 
 namespace MadWizard.Desomnia.Network.Manager
 {
-    internal class CIMNetAdapterPowerManagement : CIMNetAdapterBase, IWakeOnLANManager
+    internal class CIMNetAdapterPowerManagement : CIMNetAdapterBase, IWakeOnLANManager, IProtocolOffloadManager
     {
         public required ILogger<CIMNetAdapterPowerManagement> Logger { private get; init; }
+
+        OffloadProtocol IProtocolOffloadManager.SupportedProtocols
+        {
+            get
+            {
+                var result = OffloadProtocol.None;
+                if (this["ArpOffload"] != null)
+                    result |= OffloadProtocol.IPv4;
+                if (this["NSOffload"] != null)
+                    result |= OffloadProtocol.IPv6;
+
+                return result;
+            }
+        }
+
+        OffloadProtocol IProtocolOffloadManager.OffloadProtocols
+        {
+            get
+            {
+                var result = OffloadProtocol.None;
+                if (this["ArpOffload"] == true)
+                    result |= OffloadProtocol.IPv4;
+                if (this["NSOffload"] == true)
+                    result |= OffloadProtocol.IPv6;
+
+                return result;
+            }
+
+            set
+            {
+                // Auto is a policy choice and must be resolved before configuring the adapter.
+                if ((value & ~OffloadProtocol.IP) != OffloadProtocol.None)
+                    throw new ArgumentOutOfRangeException(nameof(value), value, "Only IPv4 and IPv6 offloads can be configured.");
+
+                var supported = ((IProtocolOffloadManager)this).SupportedProtocols;
+                var unsupported = value & ~supported;
+
+                if (unsupported != OffloadProtocol.None)
+                    throw new NotSupportedException($"Protocol offload is not supported for {unsupported}.");
+
+                if (supported.HasFlag(OffloadProtocol.IPv4))
+                    this["ArpOffload"] = value.HasFlag(OffloadProtocol.IPv4);
+                if (supported.HasFlag(OffloadProtocol.IPv6))
+                    this["NSOffload"] = value.HasFlag(OffloadProtocol.IPv6);
+            }
+        }
 
         WakeOnLANMode IWakeOnLANManager.SupportedModes
         {
@@ -38,64 +84,64 @@ namespace MadWizard.Desomnia.Network.Manager
             {
                 this["WakeOnMagicPacket"] = value.HasFlag(WakeOnLANMode.MagicPacket);
                 this["WakeOnPattern"] = (value & Pattern) != WakeOnLANMode.None;
-
-                // TODO: Also configure ARP and NS offload? Does this matter?
             }
         }
 
         #region CIM access
-        private CimInstance? FindPowerManagementInstance()
+        private CimInstance PowerManagementInstance
         {
-            foreach (var instance in Session.EnumerateInstances(AdapterNamespace, "MSFT_NetAdapterPowerManagementSettingData"))
-                if (string.Equals((string?)instance.CimInstanceProperties["Name"]?.Value, PhysicalAdapterName, StringComparison.OrdinalIgnoreCase))
-                    return RefreshInstance(instance);
+            get
+            {
+                foreach (var instance in Session.EnumerateInstances(AdapterNamespace, "MSFT_NetAdapterPowerManagementSettingData"))
+                    if (string.Equals((string?)instance.CimInstanceProperties["Name"]?.Value, PhysicalAdapterName, StringComparison.OrdinalIgnoreCase))
+                        return RefreshInstance(instance);
 
-            return null;
+                throw new InvalidOperationException("MSFT_NetAdapterPowerManagement not found");
+            }
         }
 
         private bool? this[string propertyName]
         {
             get
             {
-                if (FindPowerManagementInstance()?.CimInstanceProperties[propertyName]?.Value is UInt32 value)
+                if (PowerManagementInstance.CimInstanceProperties[propertyName]?.Value is UInt32 value)
                 {
                     switch (value)
                     {
+                        case 0:
+                            return null;
                         case 1:
                             return false;
                         case 2:
                             return true;
 
                         default:
-                            throw new ArgumentOutOfRangeException(propertyName);
+                            throw new ArgumentOutOfRangeException(propertyName, value, "Unknown power management setting");
                     }
                 }
 
-                return null;
+                throw new InvalidOperationException($"{propertyName} is missing or has an invalid value");
             }
 
             set
             {
-                if (FindPowerManagementInstance() is CimInstance instance)
+                CimInstance instance = PowerManagementInstance;
+
+                if (instance.CimInstanceProperties[propertyName] is CimProperty property)
                 {
-                    if (instance.CimInstanceProperties[propertyName] is CimProperty property)
+                    uint target = (uint)(value ?? throw new ArgumentNullException(nameof(value)) ? 2 : 1);
+
+                    if (!property.Value.Equals(target))
                     {
-                        uint target = (uint)(value ?? throw new ArgumentNullException(nameof(value)) ? 2 : 1);
+                        property.Value = target;
 
-                        if (!property.Value.Equals(target))
-                        {
-                            property.Value = target;
+                        Session.ModifyInstance(AdapterNamespace, instance);
 
-                            Session.ModifyInstance(AdapterNamespace, instance);
-
-                            Logger.LogTrace("MSFT_NetAdapterPowerManagement.{Property} = {Value}", propertyName, value);
-                        }
+                        Logger.LogTrace("MSFT_NetAdapterPowerManagement.{Property} = {Value}", propertyName, value);
                     }
-                    else
-                        throw new InvalidOperationException($"{propertyName} not found");
                 }
                 else
-                    throw new InvalidOperationException($"MSFT_NetAdapterPowerManagement not found");
+                    throw new InvalidOperationException($"{propertyName} not found");
             }
         }
         #endregion
