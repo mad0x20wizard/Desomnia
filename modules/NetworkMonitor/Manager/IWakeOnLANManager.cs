@@ -9,17 +9,9 @@
     [Flags]
     public enum WakeOnLANMode
     {
-        None        = 0,
+        None            = 0,
 
-        PHY         = 1 << 0,
-        Unicast     = 1 << 1,
-        Multicast   = 1 << 2,
-        Broadcast   = 1 << 3,
-        ARP         = 1 << 4,
-        MagicPacket = 1 << 5,
-        SecureOn    = 1 << 6,
-        Filter      = 1 << 7,
-
-        Default     = 1 << 16
+        MagicPacket     = 1 << 0,
+        Pattern         = 1 << 1,
     }
 }

@@ -266,22 +266,20 @@ namespace MadWizard.Desomnia.Network.Context
                     }
                 }
 
-                if ((config.AllowOffload ?? config.DefaultOffload()) is OffloadProtocol offload)
+                if ((config.AllowOffload ?? config.DefaultProtocolOffload()) is OffloadProtocol offload)
                 {
                     var build = builder.RegisterType<OffloadConfigurator>()
                         .WithParameter(TypedParameter.From(offload))
-                        .AsImplementedInterfaces()
+                        .AsImplementedInterfaces().WithPriority(-1)
                         .InstancePerNetwork();
                 }
 
-                if (config.AllowWakeOnLAN is WakeOnLANMode wol)
+                if ((config.AllowWakeOnLAN ?? config.DefaultWakeOnLANMode()) is WakeOnLANMode wol)
                 {
                     var build = builder.RegisterType<WakeOnLANConfigurator>()
-                        .WithParameter(TypedParameter.From(wol & ~WakeOnLANMode.Default))
-                        .AsImplementedInterfaces()
+                        .WithParameter(TypedParameter.From(wol))
+                        .AsImplementedInterfaces().WithPriority(-1)
                         .InstancePerNetwork();
-
-                    build.OnActivated(x => x.Instance.ShouldReplace = !wol.HasFlag(WakeOnLANMode.Default));
                 }
 
                 RegisterRouterDiscovery(builder, config);

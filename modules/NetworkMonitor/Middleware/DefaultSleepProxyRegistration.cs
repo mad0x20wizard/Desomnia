@@ -2,6 +2,7 @@ using Autofac;
 using Autofac.Core.Resolving.Pipeline;
 using MadWizard.Desomnia.Network.Configuration.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
+using MadWizard.Desomnia.Network.Handoff.Registration;
 using MadWizard.Desomnia.Network.Monitor.Filter.Rules;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Neighborhood.Services;
@@ -31,7 +32,7 @@ namespace MadWizard.Desomnia.Network.Middleware
                         if (watchService.Service is not TransportNetworkService service)
                             continue;
 
-                        var info = new ProxyServiceInfo(watch.AdvertiseOptions)
+                        var info = new HandoffServiceInfo(watch.AdvertiseOptions)
                         {
                             Name = service.Name,
                             ServiceName = service.ServiceName,
@@ -57,7 +58,7 @@ namespace MadWizard.Desomnia.Network.Middleware
             }
         }
 
-        private static void ExtractFlattenFilterRules(ProxyServiceInfo info, IEnumerable<PacketFilterRule> rules)
+        private static void ExtractFlattenFilterRules(HandoffServiceInfo info, IEnumerable<PacketFilterRule> rules)
         {
             // first we map the direct host filter rules of the service, these are easy
             foreach (var rule in rules.OfType<TransportFilterRule>().Where(r => r.Type == FilterRuleType.Must && r.Port == info.Port).SelectMany(r => r.HostRules))

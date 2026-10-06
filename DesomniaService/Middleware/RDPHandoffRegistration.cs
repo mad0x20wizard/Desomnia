@@ -1,8 +1,8 @@
 ﻿using Autofac;
 using Autofac.Core.Resolving.Pipeline;
+using MadWizard.Desomnia.Network.Handoff.Registration;
 using MadWizard.Desomnia.Network.Middleware;
 using MadWizard.Desomnia.Network.Neighborhood;
-using MadWizard.Desomnia.Network.SleepProxy.Registration;
 using MadWizard.Desomnia.Network.Watch;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
@@ -11,16 +11,16 @@ using System.Security;
 
 namespace MadWizard.Desomnia.Session.Middleware
 {
-    public sealed class RDPSleepProxyRegistration : SleepProxyServiceRegistration
+    public sealed class RDPHandoffRegistration : HandoffServiceRegistration
     {
         const string REG_TerminalServerPath = @"SYSTEM\CurrentControlSet\Control\Terminal Server";
         const string REG_PolicyPath = @"SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services";
 
-        protected override IEnumerable<ProxyServiceInfo> RegisterProxyServices(ResolveRequestContext context, LocalHostWatch watch)
+        protected override IEnumerable<HandoffServiceInfo> HandoffServices(ResolveRequestContext context, LocalHostWatch watch)
         {
             if (watch.Host is LocalHost && DeterminePort(context) is ushort port)
             {
-                yield return new ProxyServiceInfo(watch.AdvertiseOptions)
+                yield return new HandoffServiceInfo(watch.AdvertiseOptions)
                 {
                     Name = "RDP",
                     ServiceName = "rdp", // use "ms-wbt-server" ??
@@ -60,12 +60,12 @@ namespace MadWizard.Desomnia.Session.Middleware
             }
             catch (FormatException ex)
             {
-                context.Resolve<ILogger<RDPSleepProxyRegistration>>()
+                context.Resolve<ILogger<RDPHandoffRegistration>>()
                     .LogWarning(ex, "Skipping RDP sleep proxy registration: {Message}", ex.Message);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
             {
-                context.Resolve<ILogger<RDPSleepProxyRegistration>>()
+                context.Resolve<ILogger<RDPHandoffRegistration>>()
                     .LogWarning(ex, "Skipping RDP sleep proxy registration: unable to read the RDP registry settings.");
             }
 

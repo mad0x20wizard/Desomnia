@@ -1,7 +1,7 @@
 using Autofac;
 using Autofac.Core;
 using MadWizard.Desomnia.Daemon.Configuration;
-using MadWizard.Desomnia.Network.SleepProxy.Registration;
+using MadWizard.Desomnia.Network.Middleware;
 using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
 using MadWizard.Desomnia.Session.Middleware;
@@ -49,12 +49,12 @@ namespace MadWizard.Desomnia.Service
 
             if (config?.WatchRemote ?? false)
             {
-                // Add RDP port to SleepProxyRegistration
+                // Add RDP port to HandoffServiceRegistration
                 builder.ComponentRegistryBuilder.Registered += (sender, args) =>
                 {
-                    if (args.ComponentRegistration.IsLimitedTo<SleepProxyRegistration>())
+                    if (args.ComponentRegistration.IsLimitedTo<HandoffServiceRegistration>())
                         args.ComponentRegistration.PipelineBuilding += (_, pipeline) =>
-                            pipeline.Use(new RDPSleepProxyRegistration());
+                            pipeline.Use(new RDPHandoffRegistration());
                 };
             }
         }

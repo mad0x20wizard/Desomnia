@@ -40,6 +40,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Options
 
         SleepProxy      = 1 << 1,
         UnMagicPacket   = 1 << 2,
+        Pattern         = 1 << 3,
 
         Mandatory       = 1 << 10,
 

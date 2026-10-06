@@ -33,21 +33,21 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
             if (_activeLeases.Count >= options.LeaseLimit)
                 throw new InvalidOperationException($"Lease pool ({_activeLeases.Count}) exhausted.");
 
-            if (!_activeLeases.TryGetValue(reg.PrimaryAddress, out var owned))
+            if (!_activeLeases.TryGetValue(reg.PhysicalAddress, out var owned))
             {
                 Logger.LogDebug("Attempt to register '{Name}' [{Sequence}] at {PhysicalAddress} with {ServiceCount} service(s) and {AddressCount} address(es)...",
-                    reg.Name, reg.Sequence, reg.PrimaryAddress.ToHexString(), reg.Services.Count, reg.IPAddresses.Count);
+                    reg.Name, reg.Sequence, reg.PhysicalAddress.ToHexString(), reg.Services.Count, reg.IPAddresses.Count);
 
                 lease = (owned = CreateLease(reg, duration)).Value;
             }
             else if ((lease = owned.Value).Registration.Sequence < reg.Sequence)
             {
                 Logger.LogDebug("Attempt to re-register '{Name}' [{NewSequence} > {OldSequence}] at {PhysicalAddress} with {ServiceCount} service(s) and {AddressCount} address(es)... ",
-                    reg.Name, reg.Sequence, owned.Value.Registration.Sequence, reg.PrimaryAddress.ToHexString(), reg.Services.Count, reg.IPAddresses.Count);
+                    reg.Name, reg.Sequence, owned.Value.Registration.Sequence, reg.PhysicalAddress.ToHexString(), reg.Services.Count, reg.IPAddresses.Count);
 
                 owned.Dispose(); owned = null;
 
-                _activeLeases.Remove(reg.PrimaryAddress, out _);
+                _activeLeases.Remove(reg.PhysicalAddress, out _);
 
                 lease = (owned = CreateLease(reg, duration)).Value;
             }
@@ -59,7 +59,7 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
                 if (!lease.Registration.Matches(reg))
                     throw new InvalidOperationException(
                         $"Registration of '{reg.Name}' [{reg.Sequence}] " +
-                        $"at {reg.PrimaryAddress.ToHexString()} " +
+                        $"at {reg.PhysicalAddress.ToHexString()} " +
                         $"conflicts with the held lease.");
 
                 return false;
@@ -67,7 +67,7 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
 
             try
             {
-                if ((Context.FindHostContextBy(reg.PrimaryAddress) ?? Context.FindHostContextBy(reg.Name)) is not NetworkHostContext ctxHost)
+                if ((Context.FindHostContextBy(reg.PhysicalAddress) ?? Context.FindHostContextBy(reg.Name)) is not NetworkHostContext ctxHost)
                 {
                     ctxHost = CreateHost(reg);
 
@@ -101,7 +101,7 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
                     throw new NotSupportedException($"Registration of services is not configured for {ctxHost.Host.Name}.");
                 }
 
-                _activeLeases[reg.PrimaryAddress] = owned;
+                _activeLeases[reg.PhysicalAddress] = owned;
 
                 var filterHosts = Context.CreateDynamicFilterHosts(ctxHost).ToList(); // the remote host may register dynamic host filters
 
@@ -109,15 +109,15 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
                 {
                     using var scope = Logger.BeginHostScope(remote.Host);
 
-                    var lease = _activeLeases[reg.PrimaryAddress].Value;
+                    var lease = _activeLeases[reg.PhysicalAddress].Value;
 
                     if (ctxHost.Auto.HasFlag(AutoDiscoveryType.MAC) && ctxHost.Host.PhysicalAddress is null) using (await Context.Network.Mutex.LockAsync())
                     {
-                        ctxHost.Host.PhysicalAddress = reg.PrimaryAddress;
+                        ctxHost.Host.PhysicalAddress = reg.PhysicalAddress;
 
-                        lease.AddInstanceForDisposal(new SleepProxyPhysicalAddressLease(ctxHost.Host, reg.PrimaryAddress));
+                        lease.AddInstanceForDisposal(new SleepProxyPhysicalAddressLease(ctxHost.Host, reg.PhysicalAddress));
 
-                        Logger.LogHostPhysicalAddressChanged(ctxHost.Host, reg.PrimaryAddress);
+                        Logger.LogHostPhysicalAddressChanged(ctxHost.Host, reg.PhysicalAddress);
                     }
 
                     foreach (var adr in reg.IPAddresses.Where(adr => adr.Key.AddressFamily.ShouldDiscover(ctxHost.Auto))) using (await Context.Network.Mutex.LockAsync())
@@ -154,7 +154,7 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
             List<Parameter> parameters = [];
 
             RemoteHostInfo hostInfo;
-            if (reg.TargetAddress is PhysicalAddress target) // is this a virtual machine?
+            if (reg.VirtualAddress is PhysicalAddress target) // is this a virtual machine?
             {
                 hostInfo = new RemoteVirtualHostInfo() { Name = reg.Name };
 
@@ -176,7 +176,7 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
             hostInfo.AutoDetect = AutoDiscoveryType.IP | AutoDiscoveryType.Host | AutoDiscoveryType.Service;
 
             hostInfo.HostName = reg.Hostname;
-            hostInfo.MAC = reg.PrimaryAddress;
+            hostInfo.MAC = reg.PhysicalAddress;
 
             hostInfo.WakePasswordBytes = reg.Password;
 
@@ -204,7 +204,7 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
                 {
                     using (await watch.Host.Network.Mutex.LockAsync())
                     {
-                        _activeLeases.TryRemove(new(failed.Registration.PrimaryAddress, registration));
+                        _activeLeases.TryRemove(new(failed.Registration.PhysicalAddress, registration));
 
                         registration.Dispose();
                     }
@@ -220,7 +220,7 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
         {
             lease.Ended += async (sender, args) =>
             {
-                if (_activeLeases.Remove(lease.Registration.PrimaryAddress, out var owned))
+                if (_activeLeases.Remove(lease.Registration.PhysicalAddress, out var owned))
                 {
                     using var scope = Logger.BeginHostScope(watch.Host);
 

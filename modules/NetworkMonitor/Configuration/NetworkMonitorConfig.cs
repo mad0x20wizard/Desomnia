@@ -12,7 +12,6 @@ using MadWizard.Desomnia.Network.SleepProxy;
 using System.ComponentModel;
 using System.Net;
 using System.Net.NetworkInformation;
-using System.Runtime.InteropServices;
 using System.Text;
 
 namespace MadWizard.Desomnia.Network.Configuration
@@ -39,7 +38,7 @@ namespace MadWizard.Desomnia.Network.Configuration
         public bool             UseBPF              { get; set; } = true;
 
         public OffloadProtocol? AllowOffload        { get; set; }
-        public WakeOnLANMode?   AllowWakeOnLAN      { get; set; } = DefaultWakeOnLANMode();
+        public WakeOnLANMode?   AllowWakeOnLAN      { get; set; }
 
         // Actions
         public DelayedActionInfo?   OnIdle          { get; set; }
@@ -212,21 +211,36 @@ namespace MadWizard.Desomnia.Network.Configuration
         public IList<HTTPFilterRuleInfo> HTTPFilterRule { get; set; } = [];
         public PingFilterRuleInfo? PingFilterRule { get; set; }
 
-        internal OffloadProtocol? DefaultOffload()
+        internal OffloadProtocol? DefaultProtocolOffload()
         {
             if (Handoff.HasFlag(HandoffType.SleepProxy))
             {
                 return OffloadProtocol.None;
             }
+            else if (Handoff.HasFlag(HandoffType.Pattern))
+            {
+                var offload = OffloadProtocol.IPv4 | OffloadProtocol.IPv6;
+
+                if (Handoff.HasFlag(HandoffType.IPv4) && !Handoff.HasFlag(HandoffType.IPv6))
+                    offload &= ~OffloadProtocol.IPv6;
+                if (Handoff.HasFlag(HandoffType.IPv6) && !Handoff.HasFlag(HandoffType.IPv4))
+                    offload &= ~OffloadProtocol.IPv4;
+
+                return offload;
+            }
 
             return null;
         }
 
-        private static WakeOnLANMode? DefaultWakeOnLANMode()
+        internal WakeOnLANMode? DefaultWakeOnLANMode()
         {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            if (Handoff.HasFlag(HandoffType.SleepProxy))
             {
-               return WakeOnLANMode.MagicPacket | WakeOnLANMode.Default; // don't replace existing modes
+                return WakeOnLANMode.MagicPacket;
+            }
+            else if (Handoff.HasFlag(HandoffType.Pattern))
+            {
+                return WakeOnLANMode.MagicPacket | WakeOnLANMode.Pattern;
             }
 
             return null;

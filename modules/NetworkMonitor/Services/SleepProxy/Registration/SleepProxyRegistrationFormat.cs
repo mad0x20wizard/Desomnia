@@ -1,4 +1,5 @@
 ﻿using MadWizard.Desomnia.Network.Configuration.Filter;
+using MadWizard.Desomnia.Network.Handoff.Registration;
 using MadWizard.Desomnia.Network.Naming.Options;
 using MadWizard.Desomnia.Network.Neighborhood.Options;
 using Makaretu.Dns;
@@ -102,7 +103,7 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
             return hostname;
         }
 
-        internal static ProxyServiceInfo ParsePTR(PTRRecord ptr)
+        internal static HandoffServiceInfo ParsePTR(PTRRecord ptr)
         {
             string serviceName = ptr.ServiceName;
 
@@ -118,10 +119,10 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
             };
         }
 
-        static IEnumerable<ProxyServiceInfo> ReadServices(IEnumerable<ResourceRecord> records, IEnumerable<EdnsOption> options)
+        static IEnumerable<HandoffServiceInfo> ReadServices(IEnumerable<ResourceRecord> records, IEnumerable<EdnsOption> options)
         {
             // Keyed by the full instance name, so multiple instances of the same type stay apart.
-            Dictionary<DomainName, ProxyServiceInfo> services = [];
+            Dictionary<DomainName, HandoffServiceInfo> services = [];
 
             foreach (var ptr in records.OfType<PTRRecord>().Where(ptr => ptr.IsServicePointer))
                 services[ptr.DomainName] = ParsePTR(ptr);
@@ -161,7 +162,7 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
             return services.Values;
         }
 
-        private static void ApplyServiceOption(ProxyServiceInfo service, EdnsServiceOption serviceOption)
+        private static void ApplyServiceOption(HandoffServiceInfo service, EdnsServiceOption serviceOption)
         {
             switch (serviceOption)
             {
@@ -290,8 +291,7 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
 
         // The TXT record carries the service's own attributes only; the friendly service name travels
         // in an EdnsServiceMetaOption, so a third-party proxy doesn't re-advertise it on the link.
-        public static IEnumerable<KeyValuePair<string, string>> ExtractServiceProperties(ProxyServiceInfo service)
-            => service.Properties;
+        public static IEnumerable<KeyValuePair<string, string>> ExtractServiceProperties(HandoffServiceInfo service) => service.Properties;
         #endregion
     }
 }

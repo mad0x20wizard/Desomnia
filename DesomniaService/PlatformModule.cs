@@ -5,7 +5,7 @@ using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Network.Bridges;
 using MadWizard.Desomnia.Network.Manager;
-using MadWizard.Desomnia.Network.SleepProxy.Registration;
+using MadWizard.Desomnia.Network.Middleware;
 using MadWizard.Desomnia.NetworkSession;
 using MadWizard.Desomnia.NetworkSession.Manager;
 using MadWizard.Desomnia.Power.Manager;
@@ -149,12 +149,12 @@ namespace MadWizard.Desomnia.Service
                 .SingleInstance()
                 .AsSelf();
 
-            // Add SMB port to SleepProxyRegistration
+            // Add SMB port to HandoffServiceRegistration
             builder.ComponentRegistryBuilder.Registered += (sender, args) =>
             {
-                if (args.ComponentRegistration.IsLimitedTo<SleepProxyRegistration>())
+                if (args.ComponentRegistration.IsLimitedTo<HandoffServiceRegistration>())
                     args.ComponentRegistration.PipelineBuilding += (_, pipeline) =>
-                        pipeline.Use(new SMBSleepProxyRegistration());
+                        pipeline.Use(new SMBHandoffRegistration());
             };
         }
 

@@ -1,12 +1,10 @@
 using MadWizard.Desomnia.Network.Configuration.Filter;
 using MadWizard.Desomnia.Network.Configuration.Options;
-using MadWizard.Desomnia.Network.Configuration.Services;
+using MadWizard.Desomnia.Network.Handoff.Registration;
 using MadWizard.Desomnia.Network.Naming.Options;
 using MadWizard.Desomnia.Network.Neighborhood;
-using MadWizard.Desomnia.Network.Neighborhood.Options;
 using Makaretu.Dns;
 using NetTools;
-using System.Net;
 using System.Net.NetworkInformation;
 
 namespace MadWizard.Desomnia.Network.SleepProxy.Registration
@@ -15,37 +13,30 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
     /// A parsed Sleep Proxy registration (a DNS UPDATE plus its EDNS0 Owner option): the records a sleeping
     /// host asked us to keep alive on its behalf, and how to wake it again.
     /// </summary>
-    public class SleepProxyRegistration
+    public class SleepProxyRegistration : HandoffRegistration
     {
         public byte             Version         { get; init; } = 0;
         /// <summary>The Owner option's sequence number (the host increments it on each registration).</summary>
         public byte             Sequence        { get; init; } = 0;
 
-        public PhysicalAddress  PrimaryAddress  { get; init; }
-        public PhysicalAddress? TargetAddress   { get; init; }
-        /// <summary>Optional SecureOn Wake-on-LAN password.</summary>
-        public byte[]?          Password        { get; init; }
+        public PhysicalAddress? VirtualAddress  { get; init; }
 
         /// <summary>Optional lease duration, from EDS0 Lease option </summary>
         public TimeSpan         RequestedLease  { get; init; }
 
         // extracted from records:
 
-        public string                                   Name        { get; init; }
-        public string                                   Hostname    { get; init; }
-        public Dictionary<IPAddress, IPAddressOptions>  IPAddresses { get; init; } = [];
-        public List<ProxyServiceInfo>                   Services    { get; init; } = [];
+        public string           Name            { get; init; }
+        public string           Hostname        { get; init; }
 
-        private SleepProxyRegistration(NetworkHost host)
+        private SleepProxyRegistration(NetworkHost host) : base(host.PhysicalAddress ?? throw new NotSupportedException($"Host {host.Name} has not MAC address configured."))
         {
             Name = host.Name;
             Hostname = host.HostName;
 
-            PrimaryAddress = host.PhysicalAddress ?? throw new NotSupportedException($"Host {host.Name} has not MAC address configured.");
-
             if (host is VirtualNetworkHost virtualHost)
             {
-                TargetAddress = virtualHost.PhysicalHost.PhysicalAddress;
+                VirtualAddress = virtualHost.PhysicalHost.PhysicalAddress;
             }
         }
 
@@ -62,7 +53,7 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
             Sequence = sequence;
         }
 
-        public SleepProxyRegistration(string name, string hostname, EdnsOwnerOption owner, EdnsLeaseOption lease)
+        public SleepProxyRegistration(string name, string hostname, EdnsOwnerOption owner, EdnsLeaseOption lease) : base(owner.PrimaryMac)
         {
             Name = name;
             Hostname = hostname;
@@ -70,8 +61,7 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
             Version = owner.Version;
             Sequence = owner.Sequence;
 
-            PrimaryAddress = owner.PrimaryMac;
-            TargetAddress = owner.WakeupMac;
+            VirtualAddress = owner.WakeupMac;
             Password = owner.Password;
 
             RequestedLease = lease.Duration;
@@ -85,8 +75,8 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
                 {
                     Version = Version,
                     Sequence = Sequence,
-                    PrimaryMac = PrimaryAddress,
-                    WakeupMac = TargetAddress,
+                    PrimaryMac = PhysicalAddress,
+                    WakeupMac = VirtualAddress,
                     Password = Password,
                 };
 
@@ -135,8 +125,8 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
         {
             return Equals(Name, other.Name)
                 && Equals(Hostname, other.Hostname)
-                && Equals(PrimaryAddress, other.PrimaryAddress)
-                && Equals(TargetAddress, other.TargetAddress)
+                && Equals(PhysicalAddress, other.PhysicalAddress)
+                && Equals(VirtualAddress, other.VirtualAddress)
                 && SamePassword(Password, other.Password)
                 && IPAddresses.Keys.ToHashSet().SetEquals(other.IPAddresses.Keys)
                 && ServiceSignatures().SetEquals(other.ServiceSignatures());
@@ -149,21 +139,5 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
 
         public static explicit operator SleepProxyRegistration(Message message) => SleepProxyRegistrationFormat.ParseUpdateMessage(message);
         public static explicit operator Message(SleepProxyRegistration reg)     => SleepProxyRegistrationFormat.BuildUpdateMessage(reg);
-
-    }
-
-    public class ProxyServiceInfo : WatchedServiceInfo
-    {
-
-        public ProxyServiceInfo()
-        {
-            AdvertiseTimeout = TimeSpan.Zero; // proxied services should be answered immediately
-        }
-
-        public ProxyServiceInfo(AdvertiseOptions options) : this()
-        {
-            AdvertiseHostTTL = options.HostTTL;
-            AdvertiseServiceTTL = options.ServiceTTL;
-        }
     }
 }
