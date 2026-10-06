@@ -36,10 +36,6 @@ namespace MadWizard.Desomnia.Network.Manager
 
             set
             {
-                // Auto is a policy choice and must be resolved before configuring the adapter.
-                if ((value & ~OffloadProtocol.IP) != OffloadProtocol.None)
-                    throw new ArgumentOutOfRangeException(nameof(value), value, "Only IPv4 and IPv6 offloads can be configured.");
-
                 var supported = ((IProtocolOffloadManager)this).SupportedProtocols;
                 var unsupported = value & ~supported;
 
