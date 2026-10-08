@@ -5,7 +5,6 @@ using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Manager;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Watch;
-using MadWizard.Desomnia.Power.Guard;
 using MadWizard.Desomnia.Ressource.Events;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
@@ -14,7 +13,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace MadWizard.Desomnia.Network
 {
-    public class NetworkMonitor : ResourceMonitor<NetworkHostWatch>, IPowerTransitionGuard
+    public class NetworkMonitor : ResourceMonitor<NetworkHostWatch>
     {
         readonly IIndex<NetworkHost, NetworkHostWatch> _index;
 
@@ -55,14 +54,18 @@ namespace MadWizard.Desomnia.Network
             }
         }
 
-        async Task IPowerTransitionGuard.BeforeTransition(PowerTransition transition)
+        internal async Task BeforeSuspend()
         {
-            if (transition == PowerTransition.Suspend)
+            await Janitor.StopSweeping();
+            try
             {
                 foreach (var service in Services)
-                {
                     await service.BeforeSuspend();
-                }
+            }
+            finally
+            {
+                // A later guard may veto suspend. Actual suspension stops the janitor again.
+                Janitor.StartSweeping();
             }
         }
 
@@ -97,14 +100,25 @@ namespace MadWizard.Desomnia.Network
             Connected.TriggerEvent();
         }
 
-        internal void ResumeMonitoring()
+        internal async Task ResumeMonitoring()
         {
             Logger.LogDebug($"Monitoring of '{Name}' will now continue...");
 
             Device.StartCapture();
 
             foreach (var service in Services)
-                service.Resume();
+            {
+                try
+                {
+                    await service.Resume();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Failed to resume {Service}", service);
+                }
+            }
+
+            Janitor.StartSweeping();
         }
 
         private void HandlePacket(object? sender, EthernetPacket packet)
@@ -118,10 +132,21 @@ namespace MadWizard.Desomnia.Network
             }
         }
 
-        internal void SuspendMonitoring()
+        internal async Task SuspendMonitoring()
         {
+            await Janitor.StopSweeping();
+
             foreach (var service in Services.Reverse())
-                service.Suspend();
+            {
+                try
+                {
+                    await service.Suspend();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Failed to suspend {Service}", service);
+                }
+            }
 
             Device.StopCapture();
 
@@ -158,7 +183,7 @@ namespace MadWizard.Desomnia.Network
 
         internal async Task StopMonitoring(NetworkShutdownReason reason)
         {
-            Janitor.StopSweeping();
+            await Janitor.StopSweeping();
 
             // per-participant teardown is guarded: one failing watch (handoff/WoL on a
             // dead interface) must not skip the remaining watches or the services'

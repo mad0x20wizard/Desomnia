@@ -16,7 +16,7 @@ public sealed class RegistryWatcherTests
     [Theory]
     [InlineData(null)]
     [InlineData("Unrelated client name")]
-    public async Task Adding_and_removing_the_value_publishes_running_and_refresh_signals(string? clientName)
+    public async Task Adding_the_value_publishes_running_but_removing_it_does_not_publish_a_signal(string? clientName)
     {
         using var instance = Instance();
         var session = new FakeSession(42, clientName);
@@ -32,10 +32,9 @@ public sealed class RegistryWatcherTests
         Assert.Same(session, instance.Session);
 
         registry.Key.DeleteValue("SessionId");
-        var refresh = await run.Next();
-        Assert.Same(instance, refresh.Instance);
-        Assert.Null(refresh.IsRunning); // Absence of a session does not imply Duo has stopped.
+        await session.LogoffUnsubscribed.Task.WaitAsync(TestTimeout);
         await run.DisposeAsync();
+        Assert.False(run.TryRead(out _)); // Registry removal does not imply Duo has stopped.
         Assert.Equal(0, session.LogoffSubscribers);
     }
 
@@ -54,7 +53,7 @@ public sealed class RegistryWatcherTests
     }
 
     [Fact]
-    public async Task Logoff_removes_the_retained_value_and_requests_a_backend_refresh()
+    public async Task Logoff_removes_the_retained_value_without_publishing_a_signal()
     {
         using var instance = Instance();
         var session = new FakeSession(42, null);
@@ -63,10 +62,9 @@ public sealed class RegistryWatcherTests
         await using var run = new WatchRun(registry.Watcher(session), instance);
 
         session.RaiseLoggedOff();
-        var signal = await run.Next();
-
-        Assert.Same(instance, signal.Instance);
-        Assert.Null(signal.IsRunning);
+        await session.LogoffUnsubscribed.Task.WaitAsync(TestTimeout);
+        await run.DisposeAsync();
+        Assert.False(run.TryRead(out _));
         Assert.Null(registry.Key.GetValue("SessionId"));
     }
 
@@ -109,9 +107,9 @@ public sealed class RegistryWatcherTests
         Assert.Same(first, alpha.Session);
         Assert.Same(second, beta.Session);
         first.RaiseLoggedOff();
-        var signal = await run.Next();
-        Assert.Same(alpha, signal.Instance);
-        Assert.Null(signal.IsRunning);
+        await first.LogoffUnsubscribed.Task.WaitAsync(TestTimeout);
+        await run.DisposeAsync();
+        Assert.False(run.TryRead(out _));
         Assert.Null(alphaKey.GetValue("SessionId"));
         Assert.Equal(43, betaKey.GetValue("SessionId"));
     }
@@ -193,7 +191,11 @@ public sealed class RegistryWatcherTests
             }
             return Task.CompletedTask;
         };
-        using var context = Context(manager, watcher, instance);
+        var composite = new CompositeWatcher([watcher, new SessionWatcher()])
+        {
+            Logger = NullLogger<CompositeWatcher>.Instance
+        };
+        using var context = Context(manager, composite, instance);
         await StartContext(context);
         await context.Start(instance, TestTimeout);
         Assert.Same(session, instance.Session);

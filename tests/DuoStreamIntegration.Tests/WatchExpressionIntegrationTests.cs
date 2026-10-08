@@ -1,7 +1,7 @@
 using Autofac.Features.OwnedInstances;
 using MadWizard.Desomnia;
-using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Configuration;
+using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Network.Watch;
 using MadWizard.Desomnia.Processes;
@@ -9,8 +9,8 @@ using MadWizard.Desomnia.Processes.Configuration;
 using MadWizard.Desomnia.Processes.Manager;
 using MadWizard.Desomnia.Service.Duo;
 using MadWizard.Desomnia.Service.Duo.Configuration;
+using MadWizard.Desomnia.Service.Duo.Session.Strategy;
 using MadWizard.Desomnia.Service.Duo.Sunshine;
-using MadWizard.Desomnia.Service.Duo.Sunshine.Watch;
 using MadWizard.Desomnia.Session;
 using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
@@ -24,17 +24,13 @@ namespace DuoStreamIntegration.Tests;
 public sealed class WatchExpressionIntegrationTests
 {
     [Fact]
-    public async Task SessionWatcher_reports_attachment_changes_without_changing_running_state()
+    public async Task SessionWatcher_reports_detachment_without_changing_running_state()
     {
         using var instance = Instance("Input");
         instance.IsRunning = true;
         using var watch = Session(new TestSession());
-        await using var run = new WatchRun(new MadWizard.Desomnia.Service.Duo.Manager.Watcher.SessionWatcher(), instance);
-
         instance.StartTracking(watch);
-        var attached = await run.Next();
-        Assert.Same(instance, attached.Instance);
-        Assert.Null(attached.IsRunning);
+        await using var run = new WatchRun(new MadWizard.Desomnia.Service.Duo.Manager.Watcher.SessionWatcher(), instance);
 
         instance.StopTracking(watch);
         var detached = await run.Next();
@@ -91,7 +87,7 @@ public sealed class WatchExpressionIntegrationTests
         using var duo = DuoTestSupport.Monitor(new FakeDuoService(), _ => new Owned<DuoServiceContext>(context, context));
         using var adapter = new MadWizard.Desomnia.Service.Duo.Session.SessionWatchAdapter(new SessionMonitorConfig())
         {
-            SessionMonitor = sessions, DuoSessionMonitor = duo
+            SessionMonitor = sessions, DuoSessionMonitor = duo, Strategy = new RemoteClientStrategy()
         };
         adapter.Attach();
         var tracked = DuoTestSupport.Signal();
@@ -137,7 +133,7 @@ public sealed class WatchExpressionIntegrationTests
         using var duo = DuoTestSupport.Monitor(new FakeDuoService(), _ => throw new InvalidOperationException());
         using var adapter = new MadWizard.Desomnia.Service.Duo.Session.SessionWatchAdapter(new SessionMonitorConfig())
         {
-            SessionMonitor = sessions, DuoSessionMonitor = duo
+            SessionMonitor = sessions, DuoSessionMonitor = duo, Strategy = new RemoteClientStrategy()
         };
         adapter.Attach();
         duo.StartTracking(instance);

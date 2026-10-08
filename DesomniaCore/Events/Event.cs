@@ -36,7 +36,9 @@
 
                 foreach (var context in snapshot.Concat(ParentContext))
                 {
-                    yield return context;
+                    // The action walk includes the source, which was already yielded above.
+                    if (!ReferenceEquals(context, Source))
+                        yield return context;
                 }
             }
         }

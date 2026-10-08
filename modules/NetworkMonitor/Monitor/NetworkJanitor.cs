@@ -15,13 +15,19 @@ namespace MadWizard.Desomnia.Network
 
         private CancellationTokenSource? _sweepCancellation;
 
-        public async void StartSweeping()
+        private Task _sweeping = Task.CompletedTask;
+
+        public void StartSweeping()
         {
             if (_sweepCancellation != null)
                 throw new Exception("Sweeping already started.");
 
-            var stoppingToken = (_sweepCancellation = new()).Token;
+            _sweepCancellation = new();
+            _sweeping = SweepUntilStopped(_sweepCancellation.Token);
+        }
 
+        private async Task SweepUntilStopped(CancellationToken stoppingToken)
+        {
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
@@ -115,13 +121,16 @@ namespace MadWizard.Desomnia.Network
             }
         }
 
-        public void StopSweeping()
+        public async Task StopSweeping()
         {
-            if (_sweepCancellation == null)
-                throw new Exception("Sweeping not yet started.");
-
-            _sweepCancellation.Cancel();
-            _sweepCancellation = null;
+            if (_sweepCancellation is not { } cancellation) return;
+            cancellation.Cancel();
+            try { await _sweeping; }
+            finally
+            {
+                _sweepCancellation = null;
+                cancellation.Dispose();
+            }
         }
     }
 }

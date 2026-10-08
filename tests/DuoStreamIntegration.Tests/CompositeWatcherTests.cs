@@ -137,8 +137,8 @@ public class CompositeWatcherTests
         builder.RegisterInstance(NullLogger<CompositeWatcher>.Instance).As<ILogger<CompositeWatcher>>();
         builder.RegisterInstance(NullLogger<PollingWatcher>.Instance).As<ILogger<PollingWatcher>>();
 
-        typeof(PluginModule).GetMethod("RegisterWatchers", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(new PluginModule(), [builder, new DuoSessionMonitorConfig
+        typeof(PluginModule).GetMethod("RegisterWatchers", BindingFlags.Static | BindingFlags.NonPublic)!
+            .Invoke(null, [builder, new DuoSessionMonitorConfig
             {
                 ServiceName = "TestDuo",
                 WatchMode = WatchMode.Polling,

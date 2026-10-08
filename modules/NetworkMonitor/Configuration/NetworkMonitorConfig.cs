@@ -3,7 +3,6 @@ using MadWizard.Desomnia.Configuration.Converter;
 using MadWizard.Desomnia.Network.Configuration.Converter;
 using MadWizard.Desomnia.Network.Configuration.Filter;
 using MadWizard.Desomnia.Network.Configuration.Hosts;
-using MadWizard.Desomnia.Network.Configuration.Interfaces;
 using MadWizard.Desomnia.Network.Configuration.Knocking;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Knocking.Secrets;
@@ -156,13 +155,11 @@ namespace MadWizard.Desomnia.Network.Configuration
 
         #region Network :: WatchOptions
         internal WatchMode          WatchMode                   { get; set; } = WatchMode.Normal;
-        internal TimeSpan?          WatchTimeout                { get; set; } = null; // capturing should be stable now
         internal ushort?            WatchUDPPort                { get; set; } = null;
 
         public WatchOptions MakeWatchOptions() => new()
         {
             Mode = this.WatchMode,
-            Timeout = this.WatchTimeout,
             UDPPorts = this.WatchUDPPort != null ? [this.WatchUDPPort.Value] : [],
         };
         #endregion
@@ -185,12 +182,6 @@ namespace MadWizard.Desomnia.Network.Configuration
         /// sensible default for an otherwise-unconfigured router (zero-config remote access).</summary>
 
         #endregion
-
-        /// <summary>
-        /// Interfaces to keep blocked while this network is being monitored — the blocks are
-        /// lifted when this monitor shuts down. See <see cref="NetworkInterfaceBlockInfo"/>.
-        /// </summary>
-        public IList<NetworkInterfaceBlockInfo> NetworkInterfaceBlock { get; private set; } = [];
 
         // Hosts
         public LocalHostInfo?                   LocalHost   { get; private set; }

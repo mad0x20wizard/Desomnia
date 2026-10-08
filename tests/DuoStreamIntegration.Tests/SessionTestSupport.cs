@@ -26,10 +26,11 @@ internal sealed class FakeSession(uint id = 1, string? clientName = "Player", st
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     private event EventHandler? _loggedOff;
     public TaskCompletionSource LogoffSubscribed { get; } = DuoTestSupport.Signal();
+    public TaskCompletionSource LogoffUnsubscribed { get; } = DuoTestSupport.Signal();
     public event EventHandler? LoggedOff
     {
         add { _loggedOff += value; LogoffSubscribed.TrySetResult(); }
-        remove { _loggedOff -= value; }
+        remove { _loggedOff -= value; LogoffUnsubscribed.TrySetResult(); }
     }
     public int LogoffSubscribers => _loggedOff?.GetInvocationList().Length ?? 0;
     public void RaiseLoggedOff() => _loggedOff?.Invoke(this, EventArgs.Empty);

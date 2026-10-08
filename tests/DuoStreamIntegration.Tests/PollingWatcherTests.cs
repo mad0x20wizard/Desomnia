@@ -54,12 +54,15 @@ public sealed class PollingWatcherTests
         var calls = 0;
         var manager = new ControlledManager
         {
-            OnQuery = (_, _) => Interlocked.Increment(ref calls) switch
+            OnQuery = (target, _) =>
             {
-                1 => Task.FromResult(false),
-                2 => Task.FromException<bool>(new TaskCanceledException("HTTP request timed out")),
-                3 => Task.FromResult(true),
-                _ => Task.FromResult(false)
+                var call = Interlocked.Increment(ref calls);
+                if (call == 2)
+                    return Task.FromException<bool>(new TaskCanceledException("HTTP request timed out"));
+
+                var running = call == 3;
+                ControlledWatcher.SetSession(target, running ? SessionFor(target) : null);
+                return Task.FromResult(running);
             }
         };
         var logger = new RecordingLogger<DuoServiceContext>();

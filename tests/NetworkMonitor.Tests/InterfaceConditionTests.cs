@@ -1,6 +1,6 @@
 using MadWizard.Desomnia.Configuration.Binding;
-using MadWizard.Desomnia.Network.Bridges;
 using MadWizard.Desomnia.Network.Environments;
+using MadWizard.Desomnia.Network.Interface;
 using MadWizard.Desomnia.Network.Manager;
 using System.Net.NetworkInformation;
 using Xunit;

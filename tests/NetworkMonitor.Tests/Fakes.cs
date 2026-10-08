@@ -1,9 +1,30 @@
 using MadWizard.Desomnia.Network.Manager;
 using System.Net;
 using System.Net.NetworkInformation;
+using MadWizard.Desomnia.Power.Manager;
+using MadWizard.Desomnia.Power.Source;
+using MadWizard.Desomnia.Network.Interface;
 
 namespace MadWizard.Desomnia.Network.Tests
 {
+    internal sealed class FakePowerManager : IPowerManager
+    {
+        public PowerSource Source => PowerSource.Unknown;
+        public event EventHandler? Suspended;
+        public event EventHandler? ResumeSuspended;
+        public void RaiseSuspended() => Suspended?.Invoke(this, EventArgs.Empty);
+        public void RaiseResumed() => ResumeSuspended?.Invoke(this, EventArgs.Empty);
+        public Task Suspend() => Task.CompletedTask;
+        public Task Hibernate() => Task.CompletedTask;
+        public Task Shutdown(TimeSpan? timeout = null, string? message = null, bool force = false) => Task.CompletedTask;
+        public Task Reboot(TimeSpan? timeout = null, string? message = null, bool force = false) => Task.CompletedTask;
+        public Task<IPowerRequest> CreateRequest(PowerRequestType type, string reason) => throw new NotSupportedException();
+        public async IAsyncEnumerator<IPowerRequest> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+    }
     /// <summary>Just enough <see cref="INetworkInterface"/> for matchers and planning —
     /// an id-keyed handle with settable observations and inert intent flags.</summary>
     internal class FakeNetworkInterface(string id) : INetworkInterface
@@ -28,9 +49,22 @@ namespace MadWizard.Desomnia.Network.Tests
 
         public virtual string? SSID { get; set; }
 
-        public bool ShouldBeDisabled { get; set; }
-
-        public bool EnforceDisabled { get; set; }
+        public bool FailDisabledRead { get; set; }
+        public bool IsDisabled
+        {
+            get => FailDisabledRead ? throw new InvalidOperationException("Cannot read administrative state") : field;
+            set;
+        }
+        public bool? ShouldBeDisabled
+        {
+            get;
+            set
+            {
+                field = value;
+                IsDisabled = value ?? false;
+                if (value is not null) Status = IsDisabled ? OperationalStatus.Down : OperationalStatus.Up;
+            }
+        }
 
         public override string ToString() => Name;
     }

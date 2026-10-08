@@ -67,7 +67,7 @@ namespace MadWizard.Desomnia.Network.Naming
         /// deregisters our records silently (no goodbyes), so caches keep whatever they hold until
         /// TTL -- a fresh cache-flush announcement puts us back in charge of them.
         /// </summary>
-        public override void Resume() => AnnounceServices();
+        public override async Task Resume() => AnnounceServices();
 
         private void AnnounceServices()
         {

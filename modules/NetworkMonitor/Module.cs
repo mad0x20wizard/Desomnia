@@ -1,9 +1,8 @@
-﻿using Autofac;
+using Autofac;
 using Autofac.Core;
 using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Environments;
 using MadWizard.Desomnia.Network.Address;
-using MadWizard.Desomnia.Network.Bridges;
 using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Interfaces;
 using MadWizard.Desomnia.Network.Configuration.Migration;
@@ -15,6 +14,7 @@ using MadWizard.Desomnia.Network.Demand.Detector;
 using MadWizard.Desomnia.Network.Environments;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Handoff;
+using MadWizard.Desomnia.Network.Interface;
 using MadWizard.Desomnia.Network.Knocking;
 using MadWizard.Desomnia.Network.Knocking.Methods;
 using MadWizard.Desomnia.Network.Logging;
@@ -22,7 +22,6 @@ using MadWizard.Desomnia.Network.Manager;
 using MadWizard.Desomnia.Network.Manager.Guard;
 using MadWizard.Desomnia.Network.Middleware;
 using MadWizard.Desomnia.Network.Reachability;
-using MadWizard.Desomnia.Power.Guard;
 using NLog;
 using NLog.Config;
 using System.ComponentModel;
@@ -33,13 +32,14 @@ namespace MadWizard.Desomnia.Network
     public class Module : ConfigurableModule<ModuleConfig<NetworkMonitorConfig>>, IXConfigurationMigration
     {
         #region Versioning
-        protected override uint MinVersion => 2;
+        protected override uint MinVersion => 3;
 
         void IXConfigurationMigration.Run(XDocument configuration, uint version)
         {
             switch (version)
             {
                 case 2: V2.Run(configuration); break;
+                case 3: V3.Run(configuration); break;
             }
         }
         #endregion
@@ -80,16 +80,19 @@ namespace MadWizard.Desomnia.Network
 
         protected override void Load(ContainerBuilder builder, ModuleConfig<NetworkMonitorConfig> config)
         {
-            // Registered whether or not the configuration mentions networks: the observer
-            // is the sole desired-state arbiter for interface blocks, and a configuration
-            // that dropped every monitor still needs one round to release the intents a
-            // predecessor asserted (it never CREATES the manager for that — see its
-            // CreationTracker gate). Gated on the platform manager, which every platform
-            // host registers persistently.
-            builder.RegisterType<DynamicNetworkObserver>()
+            builder.RegisterType<NetworkInterfaceMonitor>()
                 .OnlyIf(reg => reg.IsRegistered(new TypedService(typeof(INetworkInterfaceManager))))
+                .WithParameter(new TypedParameter(typeof(IEnumerable<NetworkInterfaceWatchInfo>), config.NetworkInterface))
+                .SingleInstance()
+                .AsSelf();
+
+            builder.RegisterType<NetworkConfigSelector>()
                 .WithParameter(new TypedParameter(typeof(IEnumerable<NetworkMonitorConfig>), config.NetworkMonitor))
-                .WithParameter(new TypedParameter(typeof(IEnumerable<NetworkInterfaceBlockInfo>), config.NetworkInterfaceBlock))
+                .SingleInstance()
+                .AsSelf();
+
+            builder.RegisterType<DynamicNetworkObserver>()
+                .OnlyIf(reg => reg.IsRegistered(new TypedService(typeof(NetworkInterfaceMonitor))))
                 .AsImplementedInterfaces()
                 .SingleInstance()
                 .AsSelf();
@@ -134,6 +137,10 @@ namespace MadWizard.Desomnia.Network
             builder.RegisterComposite<CompositePacketFilter, IPacketFilter>();
 
             // Network Services //
+
+            builder.RegisterType<InterfaceConfigurator>()
+                .As<INetworkService>().WithPriority(-1)
+                .InstancePerNetwork();
 
             // The application-wide keeper of OS-level UDP sockets: DatagramServices registered
             // with SocketMetadata are linked to it at construction (see DefaultDatagramSocket),
@@ -197,9 +204,7 @@ namespace MadWizard.Desomnia.Network
             // Make NetworkMonitors dynamically available. NOTE: the IInspectable
             // bridge is gone — inspection membership is handed over explicitly by
             // the NetworkInspectionBridge at MonitoringStarted/Stopped (§7.2); the
-            // power-transition and monitor-enumeration bridges stay (GuardedPowerManager,
-            // FRITZBoxOperator).
-            builder.RegisterServiceMiddleware<IEnumerable<IPowerTransitionGuard>>(new DynamicNetworkMonitors<IPowerTransitionGuard>());
+            // monitor-enumeration bridge remains for FRITZBoxOperator.
             builder.RegisterServiceMiddleware<IEnumerable<NetworkMonitor>>(new DynamicNetworkMonitors<NetworkMonitor>());
 
             builder.RegisterType<SystemMonitorBridge>()

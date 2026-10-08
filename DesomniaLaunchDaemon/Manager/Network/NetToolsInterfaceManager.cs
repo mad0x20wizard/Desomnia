@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Network.Interface.Manager;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
@@ -12,6 +13,22 @@ namespace MadWizard.Desomnia.Network.Manager
     /// </summary>
     internal sealed class NetToolsInterfaceManager : NetworkInterfaceManager
     {
+        protected override bool IsInterfaceDisabled(INetworkInterface @interface)
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "ifconfig", ArgumentList = { @interface.Name },
+                RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false
+            }) ?? throw new InvalidOperationException("ifconfig failed to start.");
+            string output = process.StandardOutput.ReadToEnd();
+            string error = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            if (process.ExitCode != 0) throw new InvalidOperationException(error.Trim());
+            var match = System.Text.RegularExpressions.Regex.Match(output, @"flags=\w+<([^>]+)>");
+            if (!match.Success) throw new InvalidOperationException("Cannot read interface administrative flags.");
+            return !match.Groups[1].Value.Split(',').Contains("UP");
+        }
+
         protected override void DisableInterface(INetworkInterface @interface)
         {
             SetState(@interface.Name, up: false);

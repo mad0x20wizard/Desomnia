@@ -1,4 +1,4 @@
-using MadWizard.Desomnia.Network.Bridges;
+using MadWizard.Desomnia.Network.Interface;
 using System.Text.RegularExpressions;
 
 namespace MadWizard.Desomnia.Network.Manager

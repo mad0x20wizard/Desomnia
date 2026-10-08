@@ -13,7 +13,7 @@ namespace MadWizard.Desomnia.Network.Manager
             get
             {
                 var modes = FindInstance("MSPower_DeviceWakeEnable") is not null
-                    ? Pattern | WakeOnLANMode.MagicPacket
+                    ? WakeOnLANMode.Pattern | WakeOnLANMode.MagicPacket
                     : WakeOnLANMode.None;
 
                 return modes;
@@ -30,7 +30,7 @@ namespace MadWizard.Desomnia.Network.Manager
                 if (ReadProperty<bool>("MSNdis_DeviceWakeOnMagicPacketOnly", "EnableWakeOnMagicPacketOnly"))
                     return WakeOnLANMode.MagicPacket;
 
-                return Pattern | WakeOnLANMode.MagicPacket;
+                return WakeOnLANMode.Pattern | WakeOnLANMode.MagicPacket;
             }
 
             set

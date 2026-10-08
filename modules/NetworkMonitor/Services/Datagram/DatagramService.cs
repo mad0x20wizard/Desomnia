@@ -23,7 +23,7 @@ namespace MadWizard.Desomnia.Network.Datagram
 
         public virtual async Task Startup() { }
 
-        public virtual void Resume() { } // here to be overridden by subclasses
+        public virtual Task Resume() => Task.CompletedTask; // here to be overridden by subclasses
 
         void INetworkService.ProcessPacket(EthernetPacket packet)
         {

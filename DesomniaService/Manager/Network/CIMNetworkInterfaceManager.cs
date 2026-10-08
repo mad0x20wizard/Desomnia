@@ -1,19 +1,15 @@
+using MadWizard.Desomnia.Network.Interface.Manager;
 using Microsoft.Management.Infrastructure;
+using Microsoft.Management.Infrastructure.Options;
 using System.Net.NetworkInformation;
 
 namespace MadWizard.Desomnia.Network.Manager
 {
     /// <summary>
-    /// Windows implementation of the interface manager. Disabling and enabling go through CIM
-    /// (MSFT_NetAdapter.Disable/Enable — the operation behind Disable-/Enable-NetAdapter),
-    /// with the adapter looked up by interface GUID. That lookup also finds currently
-    /// DISABLED adapters — which the BCL enumeration does not: on Windows our own disable
-    /// removes the adapter from <see cref="NetworkInterface.GetAllNetworkInterfaces"/>, so
-    /// <see cref="StillExists"/> has to ask CIM to tell a merely disabled adapter apart from
-    /// one that is truly gone.
-    ///
-    /// It is also the platform that lets a service ask which wireless network an adapter is
-    /// joined to (see <see cref="WiFiInterop"/>), so this is where the SSID answer exists.
+    /// Windows interface inventory and administrative operations through MSFT_NetAdapter.
+    /// IP Helper supplies state for interfaces that have no corresponding CIM adapter.
+    /// CIM supplements the .NET inventory with disabled adapters, including ones disabled
+    /// before Desomnia started. Administrative state is independent of link connectivity.
     /// </summary>
     internal sealed class CIMNetworkInterfaceManager : NetworkInterfaceManager
     {
@@ -29,53 +25,59 @@ namespace MadWizard.Desomnia.Network.Manager
             InvokeOnAdapter(@interface.Identity.Id, "Enable");
         }
 
-        /// <summary>
-        /// Asks CIM instead of the enumeration the base consults: a disabled adapter is absent
-        /// from the BCL enumeration but still present as an MSFT_NetAdapter instance, and it is
-        /// exactly the adapter we disabled ourselves that must not be mistaken for a vanished
-        /// one — its restore depends on this answer.
-        /// </summary>
-        protected override bool StillExists(INetworkInterface @interface)
+        protected override IEnumerable<NetworkInterface> QueryInterfaces()
         {
-            try
-            {
-                using var session = CimSession.Create(null);
+            var visible = base.QueryInterfaces().ToArray();
+            var identities = visible.Select(n => n.ToIdentity()).ToHashSet();
+            foreach (var nic in visible) yield return nic;
 
-                using var adapter = FindAdapter(session, @interface.Identity.Id);
-
-                return adapter is not null;
-            }
-            catch
+            // .NET omits some disabled Windows adapters. Include them in the physical
+            // inventory so disabled="false" also works on the first application run.
+            using var session = CimSession.Create(null);
+            foreach (var adapter in EnumerateAdapters(session))
             {
-                return true; // if CIM will not tell, attempt the restore and let it speak
+                using (adapter)
+                {
+                    if (adapter.CimInstanceProperties["InterfaceGuid"]?.Value is not string id
+                        || !Guid.TryParse(id, out var guid)) continue;
+                    var identity = new NetworkIdentity(guid.ToString("B").ToUpperInvariant());
+                    if (identities.Contains(identity)) continue;
+                    var status = (OperationalStatus)Convert.ToInt32(adapter.CimInstanceProperties["InterfaceOperationalStatus"]?.Value ?? 6);
+                    if (status == OperationalStatus.NotPresent) continue;
+                    yield return new AdapterSnapshot(identity.Id,
+                        adapter.CimInstanceProperties["Name"]?.Value as string ?? id,
+                        (NetworkInterfaceType)Convert.ToInt32(adapter.CimInstanceProperties["InterfaceType"]?.Value ?? 1), status);
+                }
             }
         }
 
-        /// <summary>
-        /// Reads the CIM admin status, which — unlike the BCL <see cref="OperationalStatus"/> —
-        /// tells an adapter we (or the user) disabled apart from one that is merely
-        /// disconnected: both enumerate as Down, but only the disabled one has its admin status
-        /// down. InterfaceAdminStatus follows IF-MIB ifAdminStatus (1 = up/enabled, 2 = down).
-        /// </summary>
         protected override bool IsInterfaceDisabled(INetworkInterface @interface)
         {
-            try
-            {
-                using var session = CimSession.Create(null);
+            // The IP interface inventory includes hidden virtual and filter interfaces that
+            // MSFT_NetAdapter does not necessarily expose. A missing CIM row is not removal.
+            if (Guid.TryParse(@interface.Identity.Id, out var id)
+                && NetworkInterfaceInterop.TryGetDisabled(id, out bool disabled)) return disabled;
 
-                using var adapter = FindAdapter(session, @interface.Identity.Id);
-
-                if (adapter?.CimInstanceProperties["InterfaceAdminStatus"]?.Value is { } adminStatus)
-                    return Convert.ToInt32(adminStatus) != 1; // anything but "up" is administratively down
-            }
-            catch
-            {
-                // fall through — if CIM will not tell, assume enabled so a release still restores
-            }
-
-            return false;
+            // Administratively disabled adapters may be absent from the IP interface table.
+            using var session = CimSession.Create(null);
+            using var adapter = FindAdapter(session, @interface.Identity.Id)
+                ?? throw new InvalidOperationException($"Interface '{@interface.Name}' is no longer present.");
+            var value = adapter.CimInstanceProperties["InterfaceAdminStatus"]?.Value
+                ?? throw new InvalidOperationException($"Cannot read administrative state of '{@interface.Name}'.");
+            return Convert.ToInt32(value) != 1;
         }
 
+        private sealed class AdapterSnapshot(string id, string name, NetworkInterfaceType type, OperationalStatus status) : NetworkInterface
+        {
+            public override string Id => id;
+            public override string Name => name;
+            public override string Description => name;
+            public override NetworkInterfaceType NetworkInterfaceType => type;
+            public override OperationalStatus OperationalStatus => status;
+            public override PhysicalAddress GetPhysicalAddress() => PhysicalAddress.None;
+            public override IPInterfaceProperties GetIPProperties() => throw new NetworkInformationException();
+            public override bool Supports(NetworkInterfaceComponent component) => false;
+        }
         protected override string? GetSSID(INetworkInterface @interface)
         {
             // only a wireless adapter can be joined to anything - checking the type first spares
@@ -96,14 +98,17 @@ namespace MadWizard.Desomnia.Network.Manager
             using var adapter = FindAdapter(session, interfaceId)
                 ?? throw new InvalidOperationException($"No network adapter with interface id '{interfaceId}' found.");
 
-            session.InvokeMethod(AdapterNamespace, adapter, methodName, null)?.Dispose();
+            using var result = session.InvokeMethod(AdapterNamespace, adapter, methodName, null);
+            uint code = Convert.ToUInt32(result?.ReturnValue?.Value ?? throw new InvalidOperationException("CIM returned no result."));
+            if (code != 0 && code != 4096)
+                throw new InvalidOperationException($"{methodName} failed for '{interfaceId}' (CIM {code}).");
         }
 
         private static CimInstance? FindAdapter(CimSession session, string interfaceId)
         {
             string guid = interfaceId.Trim('{', '}');
 
-            foreach (var instance in session.EnumerateInstances(AdapterNamespace, "MSFT_NetAdapter"))
+            foreach (var instance in EnumerateAdapters(session))
             {
                 if (instance.CimInstanceProperties["InterfaceGuid"]?.Value is string interfaceGuid
                     && string.Equals(interfaceGuid.Trim('{', '}'), guid, StringComparison.OrdinalIgnoreCase))
@@ -115,6 +120,14 @@ namespace MadWizard.Desomnia.Network.Manager
             }
 
             return null;
+        }
+
+        private static IEnumerable<CimInstance> EnumerateAdapters(CimSession session)
+        {
+            using var options = new CimOperationOptions();
+            options.SetCustomOption("IncludeHidden", true, false);
+            foreach (var adapter in session.EnumerateInstances(AdapterNamespace, "MSFT_NetAdapter", options))
+                yield return adapter;
         }
     }
 }

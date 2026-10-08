@@ -57,7 +57,7 @@ namespace MadWizard.Desomnia.Network.Manager
                 if (this["WakeOnMagicPacket"] != null)
                     result |= WakeOnLANMode.MagicPacket;
                 if (this["WakeOnPattern"] != null)
-                    result |= Pattern;
+                    result |= WakeOnLANMode.Pattern;
 
                 return result;
             }
@@ -71,7 +71,7 @@ namespace MadWizard.Desomnia.Network.Manager
                 if (this["WakeOnMagicPacket"] == true)
                     result |= WakeOnLANMode.MagicPacket;
                 if (this["WakeOnPattern"] == true)
-                    result |= Pattern;
+                    result |= WakeOnLANMode.Pattern;
 
                 return result;
             }
@@ -79,7 +79,7 @@ namespace MadWizard.Desomnia.Network.Manager
             set
             {
                 this["WakeOnMagicPacket"] = value.HasFlag(WakeOnLANMode.MagicPacket);
-                this["WakeOnPattern"] = (value & Pattern) != WakeOnLANMode.None;
+                this["WakeOnPattern"] = (value & WakeOnLANMode.Pattern) != WakeOnLANMode.None;
             }
         }
 

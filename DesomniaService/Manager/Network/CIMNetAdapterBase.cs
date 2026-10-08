@@ -7,13 +7,6 @@ namespace MadWizard.Desomnia.Network.Manager
     {
         protected const string AdapterNamespace = @"root\StandardCimv2";
 
-        protected const WakeOnLANMode Pattern = WakeOnLANMode.None
-            | WakeOnLANMode.Unicast
-            | WakeOnLANMode.Broadcast
-            | WakeOnLANMode.Multicast
-            | WakeOnLANMode.ARP
-            | WakeOnLANMode.Filter;
-
         public required NetworkDevice Device { private get; init; }
 
         protected CimSession Session

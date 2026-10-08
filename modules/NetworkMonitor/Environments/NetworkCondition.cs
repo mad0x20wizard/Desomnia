@@ -1,5 +1,5 @@
 using MadWizard.Desomnia.Configuration.Binding;
-using MadWizard.Desomnia.Network.Bridges;
+using MadWizard.Desomnia.Network.Interface;
 using System.Net;
 using System.Net.NetworkInformation;
 

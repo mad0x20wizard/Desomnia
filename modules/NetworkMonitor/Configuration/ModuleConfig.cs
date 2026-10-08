@@ -1,4 +1,4 @@
-﻿using MadWizard.Desomnia.Network.Configuration.Interfaces;
+using MadWizard.Desomnia.Network.Configuration.Interfaces;
 using System.Collections.ObjectModel;
 
 namespace MadWizard.Desomnia.Network.Configuration
@@ -13,12 +13,7 @@ namespace MadWizard.Desomnia.Network.Configuration
         /// </summary>
         public IList<T> NetworkMonitor { get; private set; } = new OrdinalList<T>();
 
-        /// <summary>
-        /// Root-level (environment-scoped) interface blocks. An IList of a complex type, so
-        /// the collection-element derivation marks it — the environment merge then APPENDS
-        /// nameless blocks instead of fusing them.
-        /// </summary>
-        public IList<NetworkInterfaceBlockInfo> NetworkInterfaceBlock { get; private set; } = [];
+        public IList<NetworkInterfaceWatchInfo> NetworkInterface { get; private set; } = [];
 
         private sealed class OrdinalList<TItem> : Collection<TItem> where TItem : NetworkMonitorConfig
         {

@@ -2,12 +2,16 @@ using System.Net.NetworkInformation;
 
 namespace MadWizard.Desomnia.Network.Manager
 {
+    public readonly record struct NetworkIdentity(string Id)
+    {
+        public override string ToString() => Id;
+    }
+
     /// <summary>
     /// A network interface of this machine, the platform-independent handle handed out by the
     /// <see cref="INetworkInterfaceManager"/>. On disappearance the manager raises
     /// <see cref="INetworkInterfaceManager.InterfaceDetached"/>; the instance stays valid, and
-    /// as long as anyone still holds a reference to it — or a standing
-    /// <see cref="ShouldBeDisabled"/> intent keeps it — a returning interface with the same
+    /// as long as anyone still holds a reference to it, a returning interface with the same
     /// <see cref="NetworkIdentity"/> resurfaces as THE SAME instance (see
     /// <see cref="INetworkInterfaceManager"/>). Consumers therefore never need any identity
     /// check beyond reference equality.
@@ -26,8 +30,7 @@ namespace MadWizard.Desomnia.Network.Manager
         /// The operational status the OS reports, retaining its last value after the interface
         /// leaves the enumeration. Note it does NOT tell an administratively disabled interface
         /// apart from a merely disconnected one — both read as <see cref="OperationalStatus.Down"/>
-        /// (a WiFi adapter especially). The manager keeps that distinction internally, so it
-        /// restores only an interface it actually took out of service.
+        /// (a WiFi adapter especially). Use <see cref="IsDisabled"/> for administrative state.
         /// </summary>
         OperationalStatus Status { get; }
 
@@ -56,21 +59,14 @@ namespace MadWizard.Desomnia.Network.Manager
         /// information (only a platform host's manager can answer this).</exception>
         string? SSID { get; }
 
-        /// <summary>
-        /// OUR declared intent to keep this interface out of service — intent, not observed
-        /// state. Setting it routes to the manager, which owns locking and reconciliation:
-        /// the disable is applied while the interface is present and re-applied when it
-        /// returns, and only a state we actually took away is restored on release. The
-        /// intent keeps the handle alive across a disconnection, so it survives even
-        /// where disabling removes the interface from the OS enumeration (Windows).
-        /// </summary>
-        bool ShouldBeDisabled { get; set; }
+        /// <summary>Actual administrative state, independent of cable/link connectivity.</summary>
+        bool IsDisabled { get; }
 
         /// <summary>
-        /// While <see cref="ShouldBeDisabled"/>: whether a foreign re-enable is answered by
-        /// disabling the interface again. The default (false) is tolerant — a user flipping
-        /// the interface back on wins until the next intent change.
+        /// The state pushed by Desomnia. True disables, false enables, null releases the
+        /// override and restores the latest observed external state. External changes clear
+        /// this property without undoing them. Reassigning a value may enforce it again.
         /// </summary>
-        bool EnforceDisabled { get; set; }
+        bool? ShouldBeDisabled { get; set; }
     }
 }

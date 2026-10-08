@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Network.Interface.Manager;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
@@ -11,6 +12,13 @@ namespace MadWizard.Desomnia.Network.Manager
     /// </summary>
     internal sealed class IPNetworkInterfaceManager : NetworkInterfaceManager
     {
+        protected override bool IsInterfaceDisabled(INetworkInterface @interface)
+        {
+            // IFF_UP is administrative state; operstate also reflects carrier/link loss.
+            string flags = File.ReadAllText($"/sys/class/net/{@interface.Name}/flags").Trim();
+            return (Convert.ToUInt32(flags, 16) & 1) == 0;
+        }
+
         protected override void DisableInterface(INetworkInterface @interface)
         {
             SetState(@interface.Name, up: false);

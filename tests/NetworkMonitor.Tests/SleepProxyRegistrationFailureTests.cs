@@ -61,8 +61,8 @@ namespace MadWizard.Desomnia.Network.Tests
             var active = (ConcurrentDictionary<PhysicalAddress, Owned<SleepProxyLease>>)
                 typeof(SleepProxyRegistrar).GetField("_activeLeases", BindingFlags.Instance | BindingFlags.NonPublic)!
                     .GetValue(registrar)!;
-            active[lease.Registration.PrimaryAddress] = owned;
-            active[otherLease.Registration.PrimaryAddress] = otherOwned;
+            active[lease.Registration.PhysicalAddress] = owned;
+            active[otherLease.Registration.PhysicalAddress] = otherOwned;
 
             var error = new InvalidOperationException("Watch setup failed");
             var setup = canceled
@@ -85,7 +85,7 @@ namespace MadWizard.Desomnia.Network.Tests
             await completion.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.True(disposed);
-            Assert.False(active.ContainsKey(lease.Registration.PrimaryAddress));
+            Assert.False(active.ContainsKey(lease.Registration.PhysicalAddress));
             Assert.Same(otherOwned, Assert.Single(active).Value);
             Assert.False(host.HasAddress(ip: leasedIP));
             Assert.True(host.HasAddress(ip: configuredIP));

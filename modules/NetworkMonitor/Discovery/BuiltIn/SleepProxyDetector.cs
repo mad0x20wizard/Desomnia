@@ -56,12 +56,13 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
             await DiscoverSleepProxiesWithTimeout(timeout);
         }
 
-        void INetworkService.Resume()
+        Task INetworkService.Resume()
         {
             foreach (var instance in _tracked.Keys.ToArray())
             {
                 Remove(instance, false);
             }
+            return Task.CompletedTask;
         }
 
         private async Task DiscoverSleepProxiesWithTimeout(TimeSpan timeout)

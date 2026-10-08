@@ -51,7 +51,8 @@ namespace MadWizard.Desomnia.Network.Address
         }
 
         #region Manage static address mappings
-        private IEnumerable<NetworkHost> EligibleHosts => Monitor.Where(watch => watch is not LocalHostWatch).Select(watch => watch.Host);
+        // TODO find out, if virtual host is connected to this interface
+        private IEnumerable<NetworkHost> EligibleHosts => Monitor.Where(watch => watch is not LocalHostWatch || watch is LocalVirtualHostWatch).Select(watch => watch.Host);
 
         async Task INetworkService.Startup()
         {

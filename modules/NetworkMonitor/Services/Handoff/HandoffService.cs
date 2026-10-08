@@ -14,7 +14,7 @@ namespace MadWizard.Desomnia.Network.Handoff
             await HandoffLocalWatches(); // throw an exception if a handoff failed, but was required -> suspend cancelled
         }
 
-        async void INetworkService.Suspend()
+        async Task INetworkService.Suspend()
         {
             try
             {
@@ -91,7 +91,7 @@ namespace MadWizard.Desomnia.Network.Handoff
             }
         }
 
-        async void INetworkService.Resume()
+        async Task INetworkService.Resume()
         {
             foreach (var watch in monitor.OfType<LocalHostWatch>())
             {

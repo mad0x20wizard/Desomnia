@@ -4,7 +4,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
 
-namespace MadWizard.Desomnia.Network.Bridges
+namespace MadWizard.Desomnia.Network.Interface
 {
     /// <summary>
     /// Matches network interfaces against a set of criteria, using the exact same notation as the

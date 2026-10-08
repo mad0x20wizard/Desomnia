@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
@@ -16,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\modules\NetworkMonitor\NetworkMonitor.csproj" />
+    <Compile Include="..\..\DesomniaService\Manager\Network\NetworkInterfaceInterop.cs" Link="Windows\NetworkInterfaceInterop.cs" />
   </ItemGroup>
 
 </Project>

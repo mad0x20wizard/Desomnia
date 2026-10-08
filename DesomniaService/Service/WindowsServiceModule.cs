@@ -1,7 +1,7 @@
 using Autofac;
 using Autofac.Core;
 using MadWizard.Desomnia.Daemon.Configuration;
-using MadWizard.Desomnia.Network.Middleware;
+using MadWizard.Desomnia.Network.Handoff.Registration;
 using MadWizard.Desomnia.Session.Configuration;
 using MadWizard.Desomnia.Session.Manager;
 using MadWizard.Desomnia.Session.Middleware;
@@ -52,7 +52,7 @@ namespace MadWizard.Desomnia.Service
                 // Add RDP port to HandoffServiceRegistration
                 builder.ComponentRegistryBuilder.Registered += (sender, args) =>
                 {
-                    if (args.ComponentRegistration.IsLimitedTo<HandoffServiceRegistration>())
+                    if (args.ComponentRegistration.IsLimitedTo<HandoffRegistration>())
                         args.ComponentRegistration.PipelineBuilding += (_, pipeline) =>
                             pipeline.Use(new RDPHandoffRegistration());
                 };

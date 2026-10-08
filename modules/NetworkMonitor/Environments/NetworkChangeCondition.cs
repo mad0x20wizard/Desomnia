@@ -1,5 +1,5 @@
 using MadWizard.Desomnia.Environments;
-using MadWizard.Desomnia.Network.Bridges;
+using MadWizard.Desomnia.Network.Interface;
 using MadWizard.Desomnia.Network.Manager;
 
 namespace MadWizard.Desomnia.Network.Environments

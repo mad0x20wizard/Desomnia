@@ -144,10 +144,10 @@ public sealed class EventWatcherTests
         ((IEventSystem)instance)[nameof(DuoInstance.Started)].AddAction(new JSEventAction("test-failure"));
         await StartContext(context);
 
-        await watcher.SignalAsync(instance, true);
+        await watcher.PublishAsync(instance, true);
         instance.Release.TrySetResult();
         await instance.ErrorHandled.Task.WaitAsync(TestTimeout);
-        await watcher.SignalAsync(instance, false);
+        await watcher.PublishAsync(instance, false);
 
         Assert.False(instance.IsRunning);
         Assert.Single(instance.Errors);

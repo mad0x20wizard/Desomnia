@@ -4,7 +4,6 @@ using MadWizard.Desomnia.Network.Manager;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
 using SharpPcap;
-using SharpPcap.LibPcap;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -20,8 +19,9 @@ namespace MadWizard.Desomnia.Network
         public ILogger<NetworkDevice> Logger { private get; init; }
 
         public  string              Name => Device.Description ?? Device.Name;
+
+        private ILiveDevice         Device      { get; }
         public  INetworkInterface   Interface   { get; }
-        private ILiveDevice         Device      { get; init; }
 
         public bool IsCapturing => Device.Started;
 
@@ -30,9 +30,8 @@ namespace MadWizard.Desomnia.Network
 
         public string? Filter
         {
-            get => Device.Filter;
-
-            set => Device.Filter = value;
+            // Keep the requested filter across a failed close/open attempt.
+            get; set => field = Device.Filter = value;
         }
 
         public IEnumerable<IDevicePacketFilter> Filters { private get; init; } = [];
@@ -43,23 +42,12 @@ namespace MadWizard.Desomnia.Network
         {
             get
             {
-                IEnumerable<IPAddress> pcapAddresses = [];
-
-                if (Device is LibPcapLiveDevice pcap)
-                {
-                    pcapAddresses = pcap.Addresses
-                        .Where(address => address.Addr?.ipAddress is not null)
-                        .Select(address => address.Addr?.ipAddress!);
-                }
-
-                var niAddresses = Interface.Addresses.Select(unicast => unicast.Address);
-
-                return pcapAddresses.Concat(niAddresses).Select(IPAddressExt.RemoveScopeId).Distinct();
+                return Interface.Addresses.Select(unicast => unicast.Address).Select(IPAddressExt.RemoveScopeId).Distinct();
             }
         }
 
-        public IPAddress? IPv4Address => IPAddresses.Where(ip => ip.AddressFamily == AddressFamily.InterNetwork).FirstOrDefault();
-        public IPAddress? IPv6LinkLocalAddress => IPAddresses.Where(ip => ip.AddressFamily == AddressFamily.InterNetworkV6 && ip.IsIPv6LinkLocal).FirstOrDefault();
+        public IPAddress? IPv4Address => IPAddresses.FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork);
+        public IPAddress? IPv6LinkLocalAddress => IPAddresses.FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetworkV6 && ip.IsIPv6LinkLocal);
         public IEnumerable<IPAddress> IPv6Addresses => IPAddresses.Where(ip => ip.AddressFamily == AddressFamily.InterNetworkV6);
 
         public IPAddress? IPv6LinkLocalMulticastAddress
@@ -347,7 +335,8 @@ namespace MadWizard.Desomnia.Network
                 Device.Close();
             }
 
-            TryOpen(Device, ref IsMaxResponsiveness, ref IsNoCaptureLocal);
+            if (!TryOpen(Device, ref IsMaxResponsiveness, ref IsNoCaptureLocal))
+                throw new InvalidOperationException($"Failed to reopen network device '{Name}'.");
 
             Filter = filter;
 

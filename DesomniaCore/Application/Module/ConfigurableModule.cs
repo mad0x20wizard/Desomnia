@@ -18,10 +18,10 @@ namespace MadWizard.Desomnia
         /// header — so the format is versioned as a whole, not per module). A file may stay at
         /// an OLDER version for as long as no loaded module demands a newer one (see
         /// <see cref="MinVersion"/> and <see cref="ModuleRegistry"/>).
-        /// The history lives in docs/concepts/version.rst — version 2: the
-        /// DuoStreamIntegration plugin's element.
+        /// The history lives in docs/concepts/version.rst — version 3 introduces
+        /// declarative NetworkInterface settings.
         /// </summary>
-        public const uint LATEST_VERSION = 2;
+        public const uint LATEST_VERSION = 3;
 
         /// <summary>
         /// The format version in which this module last introduced an incompatible change, i.e.

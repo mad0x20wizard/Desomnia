@@ -2,6 +2,7 @@ using Autofac;
 using MadWizard.Desomnia.Processes;
 using MadWizard.Desomnia.Service.Duo.Manager.Watcher;
 using MadWizard.Desomnia.Service.Duo.Session;
+using MadWizard.Desomnia.Service.Duo.Session.Strategy;
 using MadWizard.Desomnia.Session;
 using MadWizard.Desomnia.Session.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -31,7 +32,10 @@ public sealed class SessionStartupTests
             Scope = scope, Logger = NullLogger<SessionMonitor>.Instance
         };
         using var duo = Monitor(new FakeDuoService(), _ => throw new InvalidOperationException("Not starting the service."));
-        using var adapter = new SessionWatchAdapter(config) { SessionMonitor = monitor, DuoSessionMonitor = duo };
+        using var adapter = new SessionWatchAdapter(config)
+        {
+            SessionMonitor = monitor, DuoSessionMonitor = duo, Strategy = new RemoteClientStrategy()
+        };
         adapter.Attach();
         duo.StartTracking(instance);
         using var registry = new TestDuoRegistry();

@@ -169,8 +169,11 @@ public sealed class DuoServiceContextTests
 
         manager.OnQuery = (_, _) => Task.FromResult(true);
         await watcher.SignalAsync(instance);
-        Assert.True(instance.IsRunning);
+        Assert.False(instance.IsRunning); // A backend start alone does not complete the transition.
         Assert.Null(instance.Session);
+        ControlledWatcher.SetSession(instance, SessionFor(instance));
+        await watcher.SignalAsync(instance);
+        Assert.True(instance.IsRunning);
         Assert.Single(logger.Errors);
     }
 
@@ -236,9 +239,9 @@ public sealed class DuoServiceContextTests
         instance.Started += _ => { starts++; return Task.CompletedTask; };
         instance.Stopped += _ => { stops++; return Task.CompletedTask; };
 
+        await watcher.PublishAsync(instance, true);
         await watcher.SignalAsync(instance, true);
-        await watcher.SignalAsync(instance, true);
-        await watcher.SignalAsync(instance, false);
+        await watcher.PublishAsync(instance, false);
         await watcher.SignalAsync(instance, false);
 
         Assert.Equal(1, starts);

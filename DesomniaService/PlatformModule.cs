@@ -3,9 +3,9 @@ using Autofac.Core;
 using MadWizard.Desomnia.Display.Manager;
 using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network;
-using MadWizard.Desomnia.Network.Bridges;
+using MadWizard.Desomnia.Network.Handoff.Registration;
+using MadWizard.Desomnia.Network.Interface;
 using MadWizard.Desomnia.Network.Manager;
-using MadWizard.Desomnia.Network.Middleware;
 using MadWizard.Desomnia.NetworkSession;
 using MadWizard.Desomnia.NetworkSession.Manager;
 using MadWizard.Desomnia.Power.Manager;
@@ -152,7 +152,7 @@ namespace MadWizard.Desomnia.Service
             // Add SMB port to HandoffServiceRegistration
             builder.ComponentRegistryBuilder.Registered += (sender, args) =>
             {
-                if (args.ComponentRegistration.IsLimitedTo<HandoffServiceRegistration>())
+                if (args.ComponentRegistration.IsLimitedTo<HandoffRegistration>())
                     args.ComponentRegistration.PipelineBuilding += (_, pipeline) =>
                         pipeline.Use(new SMBHandoffRegistration());
             };

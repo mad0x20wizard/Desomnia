@@ -9,6 +9,7 @@ using MadWizard.Desomnia.Network.Context.Watch;
 using MadWizard.Desomnia.Network.Datagram;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
+using MadWizard.Desomnia.Network.Interface.Configuration;
 using MadWizard.Desomnia.Network.Knocking;
 using MadWizard.Desomnia.Network.Logging;
 using MadWizard.Desomnia.Network.Manager;
@@ -20,6 +21,7 @@ using MadWizard.Desomnia.Network.SleepProxy;
 using MadWizard.Desomnia.Network.SleepProxy.Registration;
 using MadWizard.Desomnia.Network.Trace;
 using Microsoft.Extensions.Logging;
+using Nito.Disposables;
 
 namespace MadWizard.Desomnia.Network.Context
 {
@@ -39,27 +41,35 @@ namespace MadWizard.Desomnia.Network.Context
 
         public INetworkInterface Interface => Device.Interface;
 
-        internal bool IsSuspended { get; private set; }
+        private int _protectionCount;
+        private IDisposable? _suspension;
 
-        internal void Suspend()
+        internal bool IsProtected => _protectionCount > 0;
+        internal bool IsSuspended => _suspension is not null;
+
+        /// <summary>
+        /// Preserves this context against observed interface changes. Acquire and release
+        /// under the observer's lifecycle mutex; protection does not alter capture or services.
+        /// </summary>
+        internal IDisposable Protect()
         {
-            if (!IsSuspended)
-            {
-                IsSuspended = true;
+            _protectionCount++;
+            return Disposable.Create(() => _protectionCount--);
+        }
 
-                Monitor.SuspendMonitoring();
-            }
+        internal async Task Suspend()
+        {
+            if (IsSuspended) return;
+            _suspension = Protect();
+            await Monitor.SuspendMonitoring();
         }
 
         /// <summary>Resumes a suspended context on its still-present interface.</summary>
-        internal void Resume()
+        internal async Task Resume()
         {
-            if (IsSuspended)
-            {
-                IsSuspended = false;
-
-                Monitor.ResumeMonitoring();
-            }
+            if (!IsSuspended) return;
+            try { await Monitor.ResumeMonitoring(); }
+            finally { EndSuspension(); }
         }
 
         /// <summary>
@@ -67,7 +77,11 @@ namespace MadWizard.Desomnia.Network.Context
         /// did not survive the sleep: the following configuration pass shuts it down, and
         /// resuming capture on the dead device first would only trip the restart-on-error loop.
         /// </summary>
-        internal void EndSuspension() => IsSuspended = false;
+        internal void EndSuspension()
+        {
+            _suspension?.Dispose();
+            _suspension = null;
+        }
 
         private readonly IList<NetworkHostContext> _hostContexts = [];
         private readonly IList<NetworkKnockContext> _knockContexts = [];
@@ -151,17 +165,6 @@ namespace MadWizard.Desomnia.Network.Context
                         .AsImplementedInterfaces()
                         .InstancePerNetwork()
                         .AsSelf();
-                }
-
-                if (config.WatchTimeout is TimeSpan timeout)
-                {
-                    var reg = builder.RegisterType<CaptureWatchDog>().AutoActivate()
-                        .WithParameter(TypedParameter.From(timeout))
-                        .AsImplementedInterfaces()
-                        .InstancePerNetwork()
-                        .AsSelf();
-
-                    reg.OnActivated(x => x.Instance.GatewayTimeout = config.PingTimeout);
                 }
 
                 if (config.Where(h => h.Trace) is var tracedHosts && tracedHosts.Any())
@@ -270,7 +273,7 @@ namespace MadWizard.Desomnia.Network.Context
                 {
                     var build = builder.RegisterType<OffloadConfigurator>()
                         .WithParameter(TypedParameter.From(offload))
-                        .AsImplementedInterfaces().WithPriority(-1)
+                        .As<Configurator>()
                         .InstancePerNetwork();
                 }
 
@@ -278,7 +281,7 @@ namespace MadWizard.Desomnia.Network.Context
                 {
                     var build = builder.RegisterType<WakeOnLANConfigurator>()
                         .WithParameter(TypedParameter.From(wol))
-                        .AsImplementedInterfaces().WithPriority(-1)
+                        .As<Configurator>()
                         .InstancePerNetwork();
                 }
 

@@ -1,4 +1,6 @@
-namespace MadWizard.Desomnia.Network.Manager
+using MadWizard.Desomnia.Network.Manager;
+
+namespace MadWizard.Desomnia.Network.Interface.Manager
 {
     /// <summary>
     /// The identity guarantee behind <see cref="INetworkInterfaceManager"/>: a detached
