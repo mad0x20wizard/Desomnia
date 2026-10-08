@@ -3,6 +3,7 @@ using Autofac.Builder;
 using Autofac.Core;
 using Autofac.Core.Registration;
 using Autofac.Features.Decorators;
+using Autofac.Features.Metadata;
 using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 
@@ -55,10 +56,10 @@ namespace MadWizard.Desomnia
     /// <see cref="RegistrationsFor"/>) is what lets registrations made in a child scope — which is where
     /// the network/host/service scopes put their discoveries and services — take part in the ordering.
     ///
-    /// Two things deliberately stay with the built-in source: collections of value types (no shared
-    /// native code under AOT), and Autofac's relationship wrappers — a <c>Meta&lt;T&gt;</c> adapter
-    /// registration carries no priority of its own, so <c>IEnumerable&lt;Meta&lt;T&gt;&gt;</c> stays in
-    /// registration order.
+    /// Value-type collections stay with the built-in source (no shared native code under AOT).
+    /// Metadata wrappers (Meta&lt;T&gt; and Meta&lt;T,TMetadata&gt;) also stay with their own collection
+    /// sources: their adapters carry no priority, and strongly-typed metadata must be handled by
+    /// AOTMetadataCompatibility under NativeAOT, regardless of source registration order.
     /// </summary>
     [UnconditionalSuppressMessage("AOT", "IL3050",
         Justification = "The item type is always a reference type (value-type collections are left to the " +
@@ -101,6 +102,14 @@ namespace MadWizard.Desomnia
                 yield break;
 
             if (itemType.IsValueType) yield break;
+
+            // Do not bypass the AOT metadata collection source by resolving individual Meta<T, M>
+            // adapters through Autofac's dynamic metadata view provider.
+            if (itemType.IsGenericType)
+            {
+                var definition = itemType.GetGenericTypeDefinition();
+                if (definition == typeof(Meta<>) || definition == typeof(Meta<,>)) yield break;
+            }
 
             var itemService = typed.ChangeType(itemType); // keeps a service key intact
             var limitType = asList ? typeof(List<>).MakeGenericType(itemType) : itemType.MakeArrayType();

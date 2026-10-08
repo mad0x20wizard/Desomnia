@@ -211,11 +211,6 @@ namespace MadWizard.Desomnia.Application
 
             container.RegisterModule<LoggingModule>();
 
-            if (!RuntimeFeature.IsDynamicCodeSupported)
-            {
-                container.RegisterModule<AOTModule>();
-            }
-
             container.RegisterModule(new FrameworkBridgeModule(scope));
 
             // takes over the collection relationship (IEnumerable<T>, T[], ...) so .WithPriority() on a
@@ -227,6 +222,12 @@ namespace MadWizard.Desomnia.Application
             foreach (var module in _registry)
             {
                 container.RegisterModule(module);
+            }
+
+            // Register compatibility sources last so they take precedence over collection sources.
+            if (!RuntimeFeature.IsDynamicCodeSupported)
+            {
+                container.RegisterModule<AOTModule>();
             }
         }
         #endregion
