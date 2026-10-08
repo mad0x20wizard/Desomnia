@@ -94,6 +94,8 @@ namespace MadWizard.Desomnia.Configuration.Migration
                 throw new ConfigurationMigrationException($"<{unsupported.GetType().FullName}> requires configuration format version {unsupported.MinVersion}, " +
                     $"but cannot migrate this configuration automatically. Update the configuration file from version {version} to version {required} manually.");
 
+            Logger.LogWarning($"Configuration needs migration from version {version} -> {required}...");
+
             Run(document, needMigration, version, required, settings);
         }
 
@@ -106,7 +108,7 @@ namespace MadWizard.Desomnia.Configuration.Migration
             {
                 uint source = target - 1;
 
-                Logger.LogWarning($"Migrating the configuration from version {source} -> {target}...");
+                Logger.LogInformation($"Migrating the configuration to version {target}:");
 
                 foreach (var module in modules.Where(module => module.MinVersion >= target))
                 {

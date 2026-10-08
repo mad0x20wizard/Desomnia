@@ -1,5 +1,6 @@
 using MadWizard.Desomnia.Configuration.Binding;
 using MadWizard.Desomnia.Configuration.Xml;
+using Microsoft.Extensions.Logging;
 using System.Xml.Linq;
 
 namespace MadWizard.Desomnia.Network.Configuration.Migration
@@ -13,25 +14,27 @@ namespace MadWizard.Desomnia.Network.Configuration.Migration
                 if (RemoveIfMonitorBlock(block))
                     continue;
 
-                if (block.AttributeNamed("force") is XAttribute force)
+                block.MigrateRename("NetworkInterface");
+
+                if (block.AttributeNamed("force") is var force && false is bool enforce)
                 {
-                    if (!bool.TryParse(force.Value, out bool enforce))
-                        throw new ConfigurationValueException("NetworkInterfaceBlock force must be true or false.");
+                    if (force is not null && !bool.TryParse(force.Value, out enforce))
+                        throw new ConfigurationValueException("NetworkInterfaceBlock @force must be true or false.");
 
                     if (!enforce)
                     {
                         block.MigrateAdd(new XAttribute("allowToChange", "disabled"));
                     }
 
-                    force?.MigrateRemove();
+                    force?.MigrateRemove(level: LogLevel.Information);
                 }
 
                 if (block.AttributeNamed("interface") is not XAttribute selector)
                     throw new ConfigurationValueException("A legacy NetworkInterfaceBlock needs an interface selector.");
 
-                block.MigrateRename("NetworkInterface");
-                selector.MigrateRename("name");
                 block.MigrateAdd(new XAttribute("disabled", "true"));
+
+                selector.MigrateRename("name");
             }
         }
 
@@ -39,7 +42,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Migration
         {
             if (!string.Equals(block.Parent?.Name.LocalName, "SystemMonitor", StringComparison.OrdinalIgnoreCase))
             {
-                block.MigrateRemove(reason: "Monitor-level interface blocks are no longer supported.");
+                block.MigrateRemove(reason: "<NetworkMonitor> interface blocks are no longer supported.");
 
                 return true;
             }
