@@ -10,13 +10,23 @@ Application release notes are published on
 Version 3
 ---------
 
+:since: 3.4.0
 :current:
 
+Interface configuration
++++++++++++++++++++++++
+
 Root-level ``NetworkInterfaceBlock`` declarations become ``NetworkInterface``
-selectors with declarative administrative state and optional monitoring exclusion.
-See :doc:`interface configuration </modules/network/blocking>` for migration and
-the ``disabled``, ``allowToChange``, and ``monitor`` attributes. Retired blocks
-inside ``NetworkMonitor`` are removed.
+selectors with declarative administrative state and optional monitoring exclusion:
+
+- ``interface`` becomes ``name``.
+- ``disabled="true"`` is added.
+- An omitted or false ``force`` becomes ``allowToChange="disabled"``.
+- ``force="true"`` becomes strict enforcement.
+
+Retired blocks inside ``NetworkMonitor`` are removed rather than promoted to
+root level. See :doc:`interface configuration </modules/network/interface/configuration>`
+for the current ``disabled``, ``allowToChange``, and ``monitor`` attributes.
 
 .. _version-2:
 
@@ -66,5 +76,7 @@ for input, application activity, and streaming traffic.
 
 Version 1
 ---------
+
+:initial:
 
 This is the initial configuration format. Files with ``version="1"``, and files with no version declaration, are read as this format.

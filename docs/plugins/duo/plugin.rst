@@ -20,7 +20,9 @@ the monitored sessions are in use.
    actions
 
 See :doc:`demand` for installation requirements, packet-capture and TCP-listener
-configuration examples, and their limitations.
+configuration examples, and their limitations. The :ref:`duo-watch-mode` flags
+let you combine registry, event-log, and polling sources for instance state
+with either packet capture or TCP listeners for network demand.
 
 Running an instance is not by itself a reason to stay awake: input, streaming,
 and any configured application activity determine whether it is in use. The

@@ -16,20 +16,15 @@ For other installation methods, see their logging locations in the
 Configuration errors
 --------------------
 
-Read the first configuration or migration error, not just the service's restart
-message. Check XML syntax, option values, and the declared format version.
-When migrating an older file, keep its old version declaration until the
-contents have been converted.
+Read the first configuration error, not just the service's restart message.
+Check XML syntax, option values, and the declared format version.
 
 An unknown option can be ignored instead of producing an error. If a setting
 has no effect, compare its spelling and placement with the current reference.
-For example, ``maxLastInputTime`` is the current session option;
-``maxIdleTime`` belongs to format 1.
 
 Automatic reload can stop the application when a new configuration cannot be
 loaded. Restore a working file or fix the reported error, then restart the
-service if necessary. See :doc:`/concepts/version/migration` for backups and
-migration policies.
+service if necessary.
 
 Environment activation
 ----------------------
@@ -105,6 +100,10 @@ Duo instance lifecycle
 
 Configure both ``SessionMonitor`` and ``DuoSessionMonitor``, and set
 ``onInstanceDemand="start"`` / ``onInstanceIdle="stop"`` as needed.
+
+Check the :ref:`duo-watch-mode` flags for the intended instance-state sources.
+``Polling`` also needs an explicit ``pollInterval``; event-log watching needs
+a supported Duo version. ``Listener`` and ``Capture`` cannot be combined.
 
 For packet capture, verify Npcap and the selected interface. For listener mode,
 check firewall access and use non-sandboxed instances. Streaming traffic

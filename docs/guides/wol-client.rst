@@ -39,7 +39,7 @@ The following configuration tells Desomnia to watch your network and send a Magi
 
 Replace ``00:1A:2B:3C:4D:5E`` with the MAC address of your target host and ``192.168.1.10`` with its IP address.
 
-The ``<NetworkMonitor>`` element here specifies neither an ``interface`` nor a ``network`` attribute, which tells Desomnia to automatically bind to all interfaces that have a default gateway configured — normally just the interface connected to your local network. If you have multiple active network connections and need to target a specific one, see :doc:`/modules/network/interface`.
+The ``<NetworkMonitor>`` element here specifies neither an ``interface`` nor a ``network`` attribute, which tells Desomnia to automatically bind to all interfaces that have a default gateway configured — normally just the interface connected to your local network. If you have multiple active network connections and need to target a specific one, see :doc:`/modules/network/interface/selection`.
 
 The ``IPv4`` attribute on ``<RemoteHost>`` is optional in many environments. If your router provides DNS for local hosts, Desomnia can resolve the address automatically — see :doc:`/modules/network/auto` to learn how to remove static address mappings from your configuration once you have a working baseline.
 
@@ -58,7 +58,7 @@ If the host does not wake up, check the following:
 - Wake-on-LAN is enabled in the BIOS / UEFI settings of the target host.
 - The network adapter on the target host is configured to remain powered while suspended.
 - The MAC address and IP address in the configuration match the target host exactly.
-- Desomnia is monitoring the correct network interface — confirm with :doc:`/modules/network/interface`.
+- Desomnia is monitoring the correct network interface — confirm with :doc:`/modules/network/interface/selection`.
 
 .. _filtering-unwanted-wakeups:
 

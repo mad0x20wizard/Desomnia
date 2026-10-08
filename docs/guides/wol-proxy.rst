@@ -53,7 +53,7 @@ Replace ``00:1A:2B:3C:4D:5E`` with the MAC address of your target host and ``192
 
 Setting ``watchMode="promiscuous"`` switches Desomnia from monitoring only outgoing traffic of the local machine to monitoring connection attempts between *any* two hosts on the network. When a client tries to reach a sleeping host, Desomnia detects the attempt and sends the Magic Packet on its behalf. Read more about how this works in :doc:`/modules/network/promiscuous`.
 
-As in client mode, the ``<NetworkMonitor>`` element without an ``interface`` or ``network`` attribute automatically binds to all interfaces with a default gateway configured. See :doc:`/modules/network/interface` if you need to target a specific interface, and :doc:`/modules/network/auto` to learn how to remove static address mappings from your configuration once you have a working baseline.
+As in client mode, the ``<NetworkMonitor>`` element without an ``interface`` or ``network`` attribute automatically binds to all interfaces with a default gateway configured. See :doc:`/modules/network/interface/selection` if you need to target a specific interface, and :doc:`/modules/network/auto` to learn how to remove static address mappings from your configuration once you have a working baseline.
 
 .. note::
    In promiscuous mode, Desomnia observes traffic from every device on the network. Without any filters, it will react to **any** connection attempt directed at ``"server"`` — including traffic from your router, smart home devices, or the proxy device itself. The sections below explain how to bring this under control.
@@ -74,7 +74,7 @@ If the host does not wake up, check the following:
 - The network adapter on the target host is configured to remain powered while suspended.
 - The MAC address and IP address in the configuration match the target host exactly.
 - The always-on device is on the same network segment as the target host.
-- Desomnia is monitoring the correct network interface — confirm with :doc:`/modules/network/interface`.
+- Desomnia is monitoring the correct network interface — confirm with :doc:`/modules/network/interface/selection`.
 
 Filtering unwanted wake-ups
 ----------------------------

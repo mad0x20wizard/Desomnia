@@ -36,8 +36,10 @@ Without a threshold, activity follows the service's normal connection
 detection.
 
 Streaming thresholds require packet capture on the interface carrying the
-client's traffic. Listener mode detects connections but rejects streaming
-thresholds. See :doc:`/plugins/duo/demand`.
+client's traffic. Select ``Capture`` through :ref:`duo-watch-mode`, or use
+automatic traffic selection with a configured ``NetworkMonitor``. Listener
+mode detects connections but rejects streaming thresholds. See
+:doc:`/plugins/duo/demand`.
 
 Formats
 +++++++

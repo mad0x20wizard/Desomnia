@@ -11,7 +11,7 @@ adapter independently of network monitoring:
         <NetworkInterface name="Wi-Fi" disabled="true" />
     </SystemMonitor>
 
-``name`` is an :doc:`interface selector <interface>`. It accepts the same
+``name`` is an :doc:`interface selector <selection>`. It accepts the same
 patterns as a network monitor's ``interface`` attribute. One selector can
 match several adapters; each present adapter has one interface watch.
 Declarations inside ``<NetworkMonitor>`` are ignored.
@@ -102,15 +102,6 @@ configured state. Releasing that override, or exiting Desomnia, restores the lat
 external baseline. Without an external change, the original administrative state is
 restored. A physically removed device has no state to restore; its next attachment
 starts with a fresh baseline.
-
-Migration from interface blocks
--------------------------------
-
-Configuration version 3 converts root-level ``<NetworkInterfaceBlock>`` elements:
-``interface`` becomes ``name`` and ``disabled="true"`` is added. An omitted or
-false ``force`` becomes ``allowToChange="disabled"``; ``force="true"`` becomes
-strict enforcement. Retired monitor-level blocks are removed rather than promoted
-to root level.
 
 Platform requirements
 ---------------------

@@ -21,7 +21,3 @@ which associates each streaming instance with its Windows session.
 
    config
    actions
-
-Format 1 used ``clockTime``, ``clockRemote``, ``clockDisconnected``, and
-``maxIdleTime`` for the input settings. See :doc:`/concepts/version/history`
-for the current attribute names and automatic migration.

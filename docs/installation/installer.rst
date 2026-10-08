@@ -28,7 +28,7 @@ To ease the onboarding process, the installer walks you through a short configur
 
 - Whether Desomnia should replace the built-in power management
 - Timeouts and delays
-- A specific :doc:`network interface </modules/network/interface>` for monitoring
+- A specific :doc:`network interface </modules/network/interface/selection>` for monitoring
 - :doc:`Promiscuous mode </modules/network/promiscuous>`
 - Local and remote hosts and services
 - :doc:`Single Packet Authorization </modules/network/knocking>` (SPA)

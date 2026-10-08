@@ -12,7 +12,7 @@ working examples.
 NetworkMonitor
 --------------
 
-Desomnia provides support for monitoring any number of installed network interfaces. You can specify which configuration should be used with which interface by using the ``interface`` and/or ``network`` attribute. If none of them is declared, the configuration will be valid for all interfaces with a gateway configured. See :doc:`interface` to learn more about this.
+Desomnia provides support for monitoring any number of installed network interfaces. You can specify which configuration should be used with which interface by using the ``interface`` and/or ``network`` attribute. If none of them is declared, the configuration will be valid for all interfaces with a gateway configured. See :doc:`interface/selection` to learn more about this.
 
 .. TODO: should sweep made be publicly configurable?
 

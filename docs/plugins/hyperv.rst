@@ -16,7 +16,7 @@ To use this plugin, the `Hyper-V platform`_ must be enabled on your system.
 Network interface selection
 ---------------------------
 
-Hyper-V in bridged mode creates a virtual network switch connected to a specific physical adapter. The NetworkMonitor should be bound to the virtual interface, since that is the one carrying the IP configuration — this happens automatically when you :doc:`select the interface by network or by gateway presence </modules/network/interface>`.
+Hyper-V in bridged mode creates a virtual network switch connected to a specific physical adapter. The NetworkMonitor should be bound to the virtual interface, since that is the one carrying the IP configuration — this happens automatically when you :doc:`select the interface by network or by gateway presence </modules/network/interface/selection>`.
 
 At startup, the plugin detects that a virtual adapter is selected and redirects packet capture to the underlying physical adapter. This is necessary to observe all traffic destined for virtual machines, not only packets addressed to the physical host itself.
 

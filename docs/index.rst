@@ -22,10 +22,10 @@
    :caption: Guides
 
    /guides/sleep
-   /guides/troubleshooting
    /guides/wol-client
    /guides/wol-proxy
    /guides/remote-access
+   /guides/troubleshooting
 
 .. toctree::
    :maxdepth: 2

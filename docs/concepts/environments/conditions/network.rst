@@ -44,7 +44,7 @@ The explicit element is required for system settings such as ``timeout``.
 interface
 ---------
 
-An :doc:`interface selector </modules/network/interface>`, optionally followed
+An :doc:`interface selector </modules/network/interface/selection>`, optionally followed
 by an operational status: ``interface="en0@up"``. Without a status, matches
 any selected adapter that is present, including disconnected adapters.
 
@@ -80,7 +80,7 @@ The interface names must match the local system. Windows accepts an exact
 adapter display name, for example ``Ethernet``; Linux and macOS use interface
 names such as ``eth0`` or ``en5``.
 
-The :doc:`interface configuration </modules/network/blocking>` is removed when
+The :doc:`interface configuration </modules/network/interface/configuration>` is removed when
 the wired interface is no longer operational, allowing WiFi to be restored.
 A blocked interface must not also be the condition that activates its own block;
 that dependency can cause repeated configuration changes.

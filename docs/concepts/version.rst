@@ -2,7 +2,7 @@ Versioning
 ==========
 
 :3:
-:since: 3.3.0
+:since: 3.4.0
 
 Desomnia's configuration format is versioned independently of the application.
 
@@ -18,7 +18,7 @@ If you use :doc:`environments <environments>`, declare the version on
 ``<EnvironmentMonitor>`` instead. 
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
    version/history
    version/migration

@@ -5,7 +5,7 @@ Network Monitor
 
 The Network Monitor is the heart of Desomnia's wake-on-demand capability. It captures traffic at the Ethernet level using libpcap and reacts to connection attempts directed at sleeping hosts — sending a Magic Packet to wake them before the connecting client times out. A full reference of all available attributes is collected on the :doc:`configuration <config>` page.
 
-At its most basic, the Network Monitor runs in **normal mode**: it watches the outgoing traffic of the machine it is installed on, and wakes hosts that this machine tries to reach. Switching to :doc:`promiscuous mode <promiscuous>` turns the same device into a **network-wide proxy** — any client on the segment can trigger a wake-up, with no software required on the connecting device. The interface binding, and which network segments are monitored, is controlled through :doc:`interface selection <interface>`.
+At its most basic, the Network Monitor runs in **normal mode**: it watches the outgoing traffic of the machine it is installed on, and wakes hosts that this machine tries to reach. Switching to :doc:`promiscuous mode <promiscuous>` turns the same device into a **network-wide proxy** — any client on the segment can trigger a wake-up, with no software required on the connecting device. The interface binding, and which network segments are monitored, is controlled through :doc:`interface selection <interface/selection>`.
 
 Address mapping — knowing which MAC belongs to which IP — can be supplied statically in the configuration, or resolved automatically from your router's DNS and from traffic Desomnia observes on the wire. The :doc:`auto-configuration <auto>` page explains how to enable this. IPv6 addresses are supported alongside IPv4 and behave in the same way; the :doc:`IPv6 <ipv6>` page covers the cases where explicit configuration is needed.
 
@@ -22,7 +22,6 @@ For environments with virtual machines, the :doc:`virtual machines <virtual>` pa
    
    auto
    interface
-   blocking
    ipv6
    knocking
    promiscuous
