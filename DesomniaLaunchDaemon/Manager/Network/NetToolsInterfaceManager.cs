@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.LaunchDaemon.Native;
 using MadWizard.Desomnia.Network.Interface.Manager;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
@@ -5,9 +6,10 @@ using System.Diagnostics;
 namespace MadWizard.Desomnia.Network.Manager
 {
     /// <summary>
+    /// Reads administrative state directly from getifaddrs (IFF_UP), including interfaces
+    /// without an address or any flags set.
     /// Disables and enables network interfaces via "ifconfig &lt;name&gt; up/down" (the daemon
-    /// runs as root). A process call is deliberate: variadic libc functions like ioctl cannot
-    /// be P/Invoked reliably on Apple Silicon. The base's existence check needs no override —
+    /// runs as root). The base's existence check needs no override —
     /// a downed interface stays in the macOS enumeration, so absence really means gone (dock
     /// USB NICs) — and the daemon has no wireless source, so an SSID stays unanswerable.
     /// </summary>
@@ -15,18 +17,7 @@ namespace MadWizard.Desomnia.Network.Manager
     {
         protected override bool IsInterfaceDisabled(INetworkInterface @interface)
         {
-            using var process = Process.Start(new ProcessStartInfo
-            {
-                FileName = "ifconfig", ArgumentList = { @interface.Name },
-                RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false
-            }) ?? throw new InvalidOperationException("ifconfig failed to start.");
-            string output = process.StandardOutput.ReadToEnd();
-            string error = process.StandardError.ReadToEnd();
-            process.WaitForExit();
-            if (process.ExitCode != 0) throw new InvalidOperationException(error.Trim());
-            var match = System.Text.RegularExpressions.Regex.Match(output, @"flags=\w+<([^>]+)>");
-            if (!match.Success) throw new InvalidOperationException("Cannot read interface administrative flags.");
-            return !match.Groups[1].Value.Split(',').Contains("UP");
+            return NetworkInterfaceState.IsDisabled(@interface.Name);
         }
 
         protected override void DisableInterface(INetworkInterface @interface)
