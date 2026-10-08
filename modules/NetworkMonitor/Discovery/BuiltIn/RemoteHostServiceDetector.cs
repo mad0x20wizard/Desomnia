@@ -24,7 +24,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
                  * we have to wake it once.
                  */
                 case RemoteHostWatch remote when remote.Host is not VirtualNetworkHost:
-                    Logger.LogDebug("Creating services for '{Host}' dynamically", remote.Host.Name);
+                    Logger.LogDebug("Awaiting services for '{Host}' dynamically", remote.Host.Name);
 
                     using (Logger.BeginHostScope(remote.Host))
                     {
@@ -32,7 +32,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
                             if (remote.Host.PhysicalAddress is not null)
                             {
                                 Logger.LogInformation("Remote host '{Host}' is not reachable. " +
-                                    "Waking up now, in order to detect services.", watch.Host.Name);
+                                    "Waking it up now, so it can advertise its services.", watch.Host.Name);
 
                                 try
                                 {
