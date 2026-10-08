@@ -1,5 +1,44 @@
 ﻿namespace System.Threading
 {
+    public delegate Task AsyncEventHandler(object? sender, EventArgs args);
+
+    public static class AsyncEventHandlerExt
+    {
+        /// <summary>
+        /// Awaits each subscriber in order, preserving the synchronization context.
+        /// All subscribers run even if some fail; failures are collected in an AggregateException.
+        /// </summary>
+        public static async Task InvokeAsync(this AsyncEventHandler? handlers, object? sender, EventArgs args)
+        {
+            if (handlers is object)
+            {
+                Delegate[]? individualHandlers = handlers.GetInvocationList();
+                List<Exception>? exceptions = null;
+                foreach (AsyncEventHandler handler in individualHandlers)
+                {
+                    try
+                    {
+                        await handler(sender, args).ConfigureAwait(true);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (exceptions is null)
+                        {
+                            exceptions = new List<Exception>(2);
+                        }
+
+                        exceptions.Add(ex);
+                    }
+                }
+
+                if (exceptions is object)
+                {
+                    throw new AggregateException(exceptions);
+                }
+            }
+        }
+    }
+
     public static class SemaphoreExt
     {
         public static int ReleaseFinally(this SemaphoreSlim semaphore)

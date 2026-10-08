@@ -2,7 +2,7 @@ using MadWizard.Desomnia.Configuration.Binding;
 using MadWizard.Desomnia.Network.Configuration.Interfaces;
 using MadWizard.Desomnia.Network.Manager;
 using Microsoft.Extensions.Logging;
-using Microsoft.VisualStudio.Threading;
+using Nito.AsyncEx;
 using System.Collections.Concurrent;
 
 namespace MadWizard.Desomnia.Network.Interface
