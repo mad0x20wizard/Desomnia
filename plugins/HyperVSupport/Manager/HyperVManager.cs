@@ -14,6 +14,7 @@ namespace MadWizard.Desomnia.Network.HyperV.Manager
         public required ILogger<HyperVManager> Logger { internal get; init; }
 
         public required Func<string, HyperVM>  CreateVirtualMachine { private get; init; }
+        public required Func<Guid, string, HyperVSwitch> CreateSwitch { private get; init; }
         public required Func<CimInstance, Owned<HyperVJob>> CreateJob { private get; init; }
 
         internal CimSession Session
@@ -57,6 +58,35 @@ namespace MadWizard.Desomnia.Network.HyperV.Manager
         }
 
         public IVirtualMachine? this[string name] => Machines.TryGetValue(name, out var machine) ? machine : null;
+
+        internal IEnumerable<HyperVSwitch> Switches
+        {
+            get
+            {
+                const string QUERY = "SELECT Name, ElementName FROM Msvm_VirtualEthernetSwitch";
+
+                // Query again on each device selection so switch reconfiguration is observed.
+                foreach (var instance in Session.QueryInstances(NS, DIALECT, QUERY))
+                {
+                    using (instance)
+                    {
+                        yield return CreateSwitch(
+                            Guid.Parse((string)instance.CimInstanceProperties["Name"].Value),
+                            (string)instance.CimInstanceProperties["ElementName"].Value);
+                    }
+                }
+            }
+        }
+
+        internal HyperVSwitch? FindSwitch(NetworkIdentity identity)
+        {
+            if (!Guid.TryParse(identity.Id, out var guid))
+                return null;
+
+            var normalized = new NetworkIdentity(guid.ToString("B").ToUpperInvariant());
+
+            return Switches.FirstOrDefault(@switch => @switch.Interfaces.Contains(normalized));
+        }
 
         private void LoadMachines()
         {

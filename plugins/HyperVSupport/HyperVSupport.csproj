@@ -13,4 +13,8 @@
     <ProjectReference Include="..\..\DesomniaService\DesomniaService.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="HyperVSupport.Tests" />
+  </ItemGroup>
+
 </Project>

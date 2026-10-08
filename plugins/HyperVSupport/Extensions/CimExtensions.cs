@@ -10,10 +10,10 @@ namespace Microsoft.Management.Infrastructure
 {
     internal static class CimExtensions
     {
-        internal static IEnumerable<CimInstance> EnumerateAssociatedInstances(this CimSession session, string namespaceName, CimInstance sourceInstance, string resultClassName)
+        internal static IEnumerable<CimInstance> EnumerateAssociatedInstances(this CimSession session, string namespaceName, CimInstance sourceInstance, string resultClassName, string associationClassName = "")
         {
             return session.EnumerateAssociatedInstances(namespaceName, sourceInstance,
-                associationClassName: "",
+                associationClassName: associationClassName,
                 resultClassName: resultClassName,
                 sourceRole: "",
                 resultRole: "");
