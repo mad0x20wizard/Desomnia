@@ -10,7 +10,7 @@ using SharpPcap;
 
 namespace MadWizard.Desomnia.Network.HyperV
 {
-    public sealed class HyperVDeviceSwitcher : IResolveMiddleware
+    public sealed class HyperVDeviceDetector : IResolveMiddleware
     {
         public PipelinePhase Phase => PipelinePhase.ParameterSelection;
 
@@ -23,21 +23,19 @@ namespace MadWizard.Desomnia.Network.HyperV
 
             if (@interface is not null && device is not null)
             {
-                var logger = context.Resolve<ILogger<HyperVDeviceSwitcher>>();
+                var logger = context.Resolve<ILogger<HyperVDeviceDetector>>();
 
                 try
                 {
                     var @switch = context.Resolve<HyperVManager>().FindSwitch(@interface.Identity);
 
-                    if (@switch?.Type == HyperVSwitchType.External)
+                    if (@switch?.Type == HyperVSwitchType.External) // bridged
                     {
                         logger.LogDebug("The network device '{device}' is a virtual switch in bridged mode.", device.Description);
 
                         if (@switch.QueryPhysicalInterface() is { } physical)
                         {
-                            var deviceName = $@"\Device\NPF_{physical.Identity.Id}";
-
-                            if (CaptureDeviceList.Instance.FirstOrDefault(device => string.Equals(device.Name, deviceName, StringComparison.OrdinalIgnoreCase)) is { } physicalDevice)
+                            if (CaptureDeviceList.Instance.TryFindByIdentity(physical.Identity, out var physicalDevice))
                             {
                                 if (!ReferenceEquals(device, physicalDevice))
                                 {
@@ -49,8 +47,8 @@ namespace MadWizard.Desomnia.Network.HyperV
 
                                     context.ChangeParameterByType(composite);
 
-                                    logger.LogDebug("Hyper-V capture mode {mode}; virtual device '{virtual}', physical device '{physical}'.",
-                                        WatchVirtualTraffic, device.Description, physicalDevice.Description);
+                                    logger.LogDebug("Hyper-V capture mode: '{mode}'; '{virtual}' -> '{physical}'",
+                                        ToModeString(WatchVirtualTraffic), device.Description, physicalDevice.Description);
                                 }
                             }
                             else
@@ -69,6 +67,19 @@ namespace MadWizard.Desomnia.Network.HyperV
             }
 
             next(context);
+        }
+
+        static string ToModeString(VirtualTraffic mode)
+        {
+            List<string> modes = [];
+            if (mode.HasFlag(VirtualTraffic.Private))
+                modes.Add("private");
+            if (mode.HasFlag(VirtualTraffic.Internal))
+                modes.Add("internal");
+            if (mode.HasFlag(VirtualTraffic.External))
+                modes.Add("external");
+
+            return modes.Count > 0 ? string.Join('|', modes) : "none";
         }
     }
 }

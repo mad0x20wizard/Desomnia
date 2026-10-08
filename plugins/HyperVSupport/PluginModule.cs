@@ -44,7 +44,7 @@ namespace MadWizard.Desomnia.Network.HyperV
             {
                 if (args.ComponentRegistration.IsLimitedTo<NetworkDevice>())
                     args.ComponentRegistration.PipelineBuilding += (_, pipeline) =>
-                        pipeline.Use(new HyperVDeviceSwitcher{ WatchVirtualTraffic = _watchTraffic });
+                        pipeline.Use(new HyperVDeviceDetector{ WatchVirtualTraffic = _watchTraffic });
             };
         }
     }

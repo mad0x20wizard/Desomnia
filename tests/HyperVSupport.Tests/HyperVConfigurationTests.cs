@@ -56,9 +56,9 @@ namespace MadWizard.Desomnia.Network.HyperV.Tests
             Assert.Contains("HyperV:WatchVirtualTraffic", error.Message);
         }
 
-        private static HyperVDeviceSwitcher GetMiddleware(PluginModule module)
+        private static HyperVDeviceDetector GetMiddleware(PluginModule module)
         {
-            HyperVDeviceSwitcher? middleware = null;
+            HyperVDeviceDetector? middleware = null;
             var builder = new ContainerBuilder();
             builder.RegisterModule(module);
             // Observe the pipeline after the plugin has installed its middleware.
@@ -66,11 +66,11 @@ namespace MadWizard.Desomnia.Network.HyperV.Tests
             {
                 if (args.ComponentRegistration.IsLimitedTo<NetworkDevice>())
                     args.ComponentRegistration.PipelineBuilding += (_, pipeline) =>
-                        middleware = Assert.Single(pipeline.Middleware.OfType<HyperVDeviceSwitcher>());
+                        middleware = Assert.Single(pipeline.Middleware.OfType<HyperVDeviceDetector>());
             });
             builder.RegisterType<NetworkDevice>();
             using var container = builder.Build(ContainerBuildOptions.IgnoreStartableComponents);
-            return Assert.IsType<HyperVDeviceSwitcher>(middleware);
+            return Assert.IsType<HyperVDeviceDetector>(middleware);
         }
 
         private sealed class TestPluginModule : PluginModule

@@ -193,10 +193,10 @@ namespace MadWizard.Desomnia.Network.HyperV.Tests
             {
                 var builder = new ContainerBuilder();
                 builder.RegisterGeneric(typeof(NullLogger<>)).As(typeof(ILogger<>));
-                builder.RegisterInstance(Logger).As<ILogger<HyperVDeviceSwitcher>>();
+                builder.RegisterInstance(Logger).As<ILogger<HyperVDeviceDetector>>();
                 builder.RegisterModule(new PluginModule());
                 builder.RegisterType<ResolvedDevice>().ConfigurePipeline(pipeline =>
-                    pipeline.Use(new HyperVDeviceSwitcher { WatchVirtualTraffic = mode }));
+                    pipeline.Use(new HyperVDeviceDetector { WatchVirtualTraffic = mode }));
                 _container = builder.Build(ContainerBuildOptions.IgnoreStartableComponents);
                 Discovery = new HyperVDiscovery(_container.Resolve<HyperVManager>(),
                     includePhysical ? [Original, Physical] : [Original])
@@ -285,7 +285,7 @@ namespace MadWizard.Desomnia.Network.HyperV.Tests
             public bool? ShouldBeDisabled { get; set; }
         }
 
-        private sealed class RecordingLogger : ILogger<HyperVDeviceSwitcher>
+        private sealed class RecordingLogger : ILogger<HyperVDeviceDetector>
         {
             internal readonly List<(LogLevel Level, string Message, Exception? Exception)> Messages = [];
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
