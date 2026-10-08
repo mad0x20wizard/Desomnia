@@ -7,13 +7,13 @@ namespace MadWizard.Desomnia.Network.Filter.Rules
     {
         public IPPort Port => port;
 
-        override public bool Matches(EthernetPacket packet)
+        override public bool Matches(EthernetPacket packet, PacketDirection direction = PacketDirection.Inbound)
         {
             if (packet.PayloadPacket is IPPacket ip && ip.PayloadPacket is TransportPacket transport)
             {
-                if (Port.Accepts(transport))
+                if (Port.Accepts(transport, direction))
                 {
-                    return base.Matches(packet);
+                    return base.Matches(packet, direction);
                 }
             }
 

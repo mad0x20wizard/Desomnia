@@ -7,13 +7,13 @@ namespace MadWizard.Desomnia.Network.Monitor.Filter.Rules
     {
         public IEnumerable<HostFilterRule> HostRules { get; set; } = [];
 
-        override public bool Matches(EthernetPacket packet)
+        override public bool Matches(EthernetPacket packet, PacketDirection direction = PacketDirection.Inbound)
         {
             bool needMatch = HostRules.Any(rule => rule.Type == FilterRuleType.Must);
 
             foreach (HostFilterRule rule in HostRules)
             {
-                if (rule.Matches(packet))
+                if (rule.Matches(packet, direction))
                 {
                     if (rule.Type == FilterRuleType.MustNot)
                         return false;

@@ -1,5 +1,6 @@
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Filter;
+using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Neighborhood.Services;
 using MadWizard.Desomnia.Network.Watch;
@@ -22,7 +23,9 @@ namespace MadWizard.Desomnia.Network.Tests
 
         private sealed class TestDemandWatch : HostDemandWatch
         {
-            public override bool IsOnline => true;
+            public bool Online { get; init; } = true;
+
+            public override bool IsOnline => Online;
         }
 
         private static NetworkSegment CreateNetwork() => new()
@@ -152,8 +155,12 @@ namespace MadWizard.Desomnia.Network.Tests
             Assert.Null(hostWatch[serviceWatch.Service]);
         }
 
-        [Fact]
-        public void EstablishedTCP_BypassesDemandFilterAndIsStillAccounted()
+        [Theory]
+        [InlineData(true, true)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(false, false)]
+        public void EstablishedTCP_UsesDemandFilterWithoutStartingRequest(bool online, bool allowed)
         {
             var network = CreateNetwork();
             var host = new NetworkHost("target") { Network = network };
@@ -162,6 +169,7 @@ namespace MadWizard.Desomnia.Network.Tests
             var watch = new TestDemandWatch
             {
                 Host = host,
+                Online = online,
                 Logger = NullLogger<NetworkHostWatch>.Instance,
                 Scope = null!,
                 Device = null!,
@@ -172,7 +180,11 @@ namespace MadWizard.Desomnia.Network.Tests
                 Filter = new Lazy<IPacketFilter>(() =>
                 {
                     filterWasResolved = true;
-                    throw new Xunit.Sdk.XunitException("established TCP must not resolve the demand filter");
+                    return new PacketRuleFilter(allowed ? [] : [new StaticHostFilterRule
+                    {
+                        Type = FilterRuleType.MustNot,
+                        Addresses = [SourceIP]
+                    }]);
                 }),
                 DefaultFilterOptions = default
             };
@@ -180,10 +192,18 @@ namespace MadWizard.Desomnia.Network.Tests
             var summary = new CaptureSummary(CreateTCPPacket(synchronize: false, [1, 2, 3, 4]));
 
             Assert.Null(watch.Evaluate(summary));
-            Assert.False(filterWasResolved);
+            Assert.True(filterWasResolved);
 
-            var usage = Assert.IsType<NetworkHostUsage>(Assert.Single(watch.Inspect(TimeSpan.FromSeconds(1))));
-            Assert.Equal(4, usage.Bytes);
+            var tokens = watch.Inspect(TimeSpan.FromSeconds(1));
+            if (allowed)
+            {
+                var usage = Assert.IsType<NetworkHostUsage>(Assert.Single(tokens));
+                Assert.Equal(4, usage.Bytes);
+            }
+            else
+            {
+                Assert.Empty(tokens);
+            }
         }
 
         [Fact]

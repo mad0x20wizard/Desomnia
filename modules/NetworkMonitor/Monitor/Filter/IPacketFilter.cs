@@ -32,18 +32,19 @@ namespace MadWizard.Desomnia.Network.Filter
     {
         IEnumerable<PacketFilterRule> Rules => [];
 
-        bool ShouldFilter(EthernetPacket packet, PacketFilterOptions options = default);
+        // Direction is relative to the watched host; demand verification is inbound.
+        bool ShouldFilter(EthernetPacket packet, PacketFilterOptions options = default, PacketDirection direction = PacketDirection.Inbound);
     }
 
     internal class CompositePacketFilter(IEnumerable<IPacketFilter> filters) : IPacketFilter
     {
         IEnumerable<PacketFilterRule> IPacketFilter.Rules => filters.SelectMany(x => x.Rules);
 
-        bool IPacketFilter.ShouldFilter(EthernetPacket packet, PacketFilterOptions options)
+        bool IPacketFilter.ShouldFilter(EthernetPacket packet, PacketFilterOptions options, PacketDirection direction)
         {
             foreach (IPacketFilter filter in filters)
             {
-                if (filter.ShouldFilter(packet, options))
+                if (filter.ShouldFilter(packet, options, direction))
                 {
                     return true;
                 }

@@ -99,7 +99,7 @@ namespace MadWizard.Desomnia.Network.Watch
                 }
 
                 // An established TCP stream can no longer start a demand request. Account for it
-                // directly, without running host/service filters or walking their rule sets.
+                // through the same filters, without starting a request.
                 else if (packet.Extract<TcpPacket>() is { Synchronize: false })
                 {
                     ReportNetworkTraffic(packet.Ethernet, PacketDirection.Inbound);
@@ -188,19 +188,34 @@ namespace MadWizard.Desomnia.Network.Watch
             return null;
         }
 
-        public bool Verify(EthernetPacket packet)
+        public bool Verify(EthernetPacket packet, PacketDirection direction = PacketDirection.Inbound)
         {
             /*
              * Packets accepted by a service watch are judged by that service's own filter, starting
              * from the configured baseline. Everything else runs against the effective options,
              * which already account for present service watches and Must-rules (see FilterOptions).
              */
-            foreach (var serviceWatch in this.OfType<ServiceFilterWatch>().Where(w => w.Service.Accepts(packet)))
-                {
-                return !serviceWatch.Filter.Value.ShouldFilter(packet, DefaultFilterOptions);
+            foreach (var serviceWatch in this.OfType<ServiceFilterWatch>().Where(w => w.Service.Accepts(packet, direction)))
+            {
+                return !serviceWatch.Filter.Value.ShouldFilter(packet, DefaultFilterOptions, direction);
             }
 
-            return !Filter.Value.ShouldFilter(packet, FilterOptions);
+            return !Filter.Value.ShouldFilter(packet, FilterOptions, direction);
+        }
+
+        protected internal override void ReportNetworkTraffic(EthernetPacket packet, PacketDirection direction)
+        {
+            try
+            {
+                if (Verify(packet, direction))
+                {
+                    base.ReportNetworkTraffic(packet, direction);
+                }
+            }
+            catch (AdditionalDataNeededException)
+            {
+                // Accounting never starts a request to gather missing information.
+            }
         }
 
         internal protected virtual async Task<PhysicalAddress?> RequestIPUnicastTrafficTo(IPAddress ip)

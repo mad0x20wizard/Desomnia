@@ -14,13 +14,16 @@ namespace MadWizard.Desomnia.Network.Filter
 
         public required ReachabilityService Reachability { private get; init; }
 
-        bool IPacketFilter.ShouldFilter(EthernetPacket packet, PacketFilterOptions options)
+        bool IPacketFilter.ShouldFilter(EthernetPacket packet, PacketFilterOptions options, PacketDirection direction)
         {
-            if (SentByRouter(packet) is NetworkRouter router)
+            if (FindPeerRouter(packet, direction) is NetworkRouter router)
             {
-                if (ShouldAllow(router, packet) && !packet.IsIPUnicast() && packet.FindTargetIPAddress() is IPAddress ip)
+                if (direction == PacketDirection.Inbound)
                 {
-                    throw new IPUnicastNeededException(ip); // respond to ARP/NDP request
+                    if (!packet.IsIPUnicast() && ShouldAllow(router, packet) && packet.FindTargetIPAddress() is IPAddress ip)
+                    {
+                        throw new IPUnicastNeededException(ip); // respond to ARP/NDP request
+                    }
                 }
 
                 if (!router.Options.AllowWake)
@@ -67,9 +70,11 @@ namespace MadWizard.Desomnia.Network.Filter
             return false;
         }
 
-        private NetworkRouter? SentByRouter(EthernetPacket packet)
+        private NetworkRouter? FindPeerRouter(EthernetPacket packet, PacketDirection direction)
         {
-            return Network.OfType<NetworkRouter>().FirstOrDefault(router => router.HasAddress(ip: packet.FindSourceIPAddress()));
+            var peer = direction == PacketDirection.Inbound ? packet.FindSourceIPAddress() : packet.FindTargetIPAddress();
+
+            return Network.OfType<NetworkRouter>().FirstOrDefault(router => router.HasAddress(ip: peer));
         }
 
         public async Task<bool> HasAnyVPNClientConnected(NetworkRouter router)
