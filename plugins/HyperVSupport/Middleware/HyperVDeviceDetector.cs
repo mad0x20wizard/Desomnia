@@ -47,7 +47,7 @@ namespace MadWizard.Desomnia.Network.HyperV
 
                                     context.ChangeParameterByType(composite);
 
-                                    logger.LogDebug("Hyper-V capture mode: '{mode}'; '{virtual}' -> '{physical}'",
+                                    logger.LogDebug("Hyper-V capture mode: {mode}; '{virtual}' -> '{physical}'",
                                         ToModeString(WatchVirtualTraffic), device.Description, physicalDevice.Description);
                                 }
                             }
