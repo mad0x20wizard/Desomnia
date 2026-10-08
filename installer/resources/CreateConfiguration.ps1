@@ -206,7 +206,7 @@ $xml = New-Object System.Xml.XmlDocument
 # the <?config?> header is only written when the user asks for a non-default migration
 # policy ("transient" is the default and needs no declaration)
 $config      = $ini["config"]
-$version     = if ($config -and $config["version"])     { $config["version"] }     else { "2" }
+$version     = if ($config -and $config["version"])     { $config["version"] }     else { "3" }
 $autoMigrate = if ($config -and $config["autoMigrate"]) { $config["autoMigrate"] } else { $null }
 
 if ($autoMigrate)

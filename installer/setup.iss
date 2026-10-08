@@ -137,7 +137,7 @@ Source: "build\components\plugins\HyperVSupport\*"; DestDir: "{app}\plugins\Hype
 [INI]
 Filename: {tmp}\prefs.ini; Section: "config:monitor.xml"; Key: "SHA256"; String: "?";
 
-Filename: {tmp}\prefs.ini; Section: config; Key: version; String: 2; Check: ShouldConfigureDesomnia
+Filename: {tmp}\prefs.ini; Section: config; Key: version; String: 3; Check: ShouldConfigureDesomnia
 Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: timeout; String: {code:SystemMonitorPrefs|Timeout}; Check: ShouldConfigureDesomnia
 Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: idle; String: {code:SystemMonitorPrefs|IdleAction}; Check: ShouldConfigureDesomnia
 Filename: {tmp}\prefs.ini; Section: SystemMonitor; Key: usage; String: {code:SystemMonitorPrefs|UsageAction}; Check: ShouldConfigureDesomnia
