@@ -27,9 +27,9 @@ else
 
 try
 {
-    builder.RegisterModule<MadWizard.Desomnia.CoreModule>();
-
     builder.RegisterModule<MadWizard.Desomnia.Service.PlatformModule>();
+
+    builder.RegisterModule<MadWizard.Desomnia.CoreModule>();
 
     builder.RegisterModule<MadWizard.Desomnia.Display.Module>();
     builder.RegisterModule<MadWizard.Desomnia.Network.Module>();

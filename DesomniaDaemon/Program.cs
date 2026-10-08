@@ -20,9 +20,9 @@ DesomniaDaemonBuilder builder;
         builder = new DesomniaDaemonBuilder(args);
     }
 
-    builder.RegisterModule<MadWizard.Desomnia.CoreModule>();
-
     builder.RegisterModule<MadWizard.Desomnia.Daemon.PlatformModule>();
+
+    builder.RegisterModule<MadWizard.Desomnia.CoreModule>();
 
     builder.RegisterModule<MadWizard.Desomnia.Network.Module>();
     builder.RegisterModule<MadWizard.Desomnia.PowerRequest.Module>();

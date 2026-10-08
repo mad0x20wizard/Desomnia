@@ -8,9 +8,9 @@ using var mutex = new SystemMutex("MadWizard.Desomnia", true);
 
 var builder = new DesomniaLaunchDaemonBuilder(args);
 {
-    builder.RegisterModule<MadWizard.Desomnia.CoreModule>();
-
     builder.RegisterModule<MadWizard.Desomnia.LaunchDaemon.PlatformModule>();
+
+    builder.RegisterModule<MadWizard.Desomnia.CoreModule>();
 
     builder.RegisterModule<MadWizard.Desomnia.Display.Module>();
     builder.RegisterModule<MadWizard.Desomnia.Network.Module>();
