@@ -10,7 +10,7 @@ elements and, optionally, one ``DefaultEnvironment``:
 .. code:: xml
    :force:
 
-   <EnvironmentMonitor version="2" debounce="3s" conflictStrategy="last"
+   <EnvironmentMonitor version="3" debounce="3s" conflictStrategy="last"
                        writeEffectiveXML="effective.xml"
                        writeEffectiveConfiguration="effective.txt">
      <DefaultEnvironment ... />

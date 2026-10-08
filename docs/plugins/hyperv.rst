@@ -20,6 +20,38 @@ Hyper-V in bridged mode creates a virtual network switch connected to a specific
 
 At startup, the plugin detects that a virtual adapter is selected and redirects packet capture to the underlying physical adapter. This is necessary to observe all traffic destined for virtual machines, not only packets addressed to the physical host itself.
 
+By default, it also captures traffic between the host and its VMs on the virtual adapter.
+MAC address filtering selects one capture source for each packet to prevent duplicates.
+Choose which virtual-machine traffic to watch with this global setting before the root
+element of the configuration file:
+
+.. code:: xml
+
+   <?system HyperV:watchVirtualTraffic="internal|external" ?>
+
+``internal``
+   Capture only on vEthernet, without MAC filtering. This includes host-to-VM traffic
+   and ordinary non-VM traffic visible on that adapter.
+
+``external``
+   Capture only on Ethernet, without MAC filtering. This includes network-to-VM traffic
+   and ordinary non-VM traffic visible on that adapter.
+
+``internal|external`` (default)
+   Capture on both adapters. Accept host-to-VM traffic in either direction from
+   vEthernet and all other traffic from Ethernet, preventing duplicate captures.
+
+``none``
+   Capture only on vEthernet, dropping packets whose source or destination MAC belongs
+   to a known VM. Non-VM traffic remains visible, including network-originated broadcasts
+   and multicast without a known VM source MAC.
+
+When ``internal`` is included, unicast packets sent to known local VMs use vEthernet.
+All other sends use Ethernet, including broadcasts and multicast. With ``external``
+or ``none``, all sends use Ethernet.
+
+This setting is read at startup; changing it requires restarting Desomnia.
+
 Example configuration
 ---------------------
 
@@ -27,7 +59,7 @@ The following configuration keeps a self-hosted GitLab VM running only when it i
 
 .. code:: xml
 
-  <SystemMonitor version="2" timeout="2min" onIdle="sleep+1h" onUsage="sleepless">
+  <SystemMonitor version="3" timeout="2min" onIdle="sleep+1h" onUsage="sleepless">
 
     <NetworkMonitor network="192.168.178.0/24" autoDetect="MAC|IPv4|IPv6" handoff="UnMagicPacket">
 

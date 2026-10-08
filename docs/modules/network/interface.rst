@@ -34,7 +34,7 @@ By interface name
         <!-- hosts, etc. -->
     </NetworkMonitor>
 
-When you specify an interface name, the ``<NetworkMonitor>`` is activated only for interfaces with a matching name. The value is matched both by exact name and by whether the interface ID contains the specified string. How interfaces are identified differs between operating systems:
+When you specify an interface name, the ``<NetworkMonitor>`` is activated only for interfaces with a matching name. On Linux and macOS, the value is a case-sensitive regular expression matched against the interface name. On Windows, it is a regular expression matched against the adapter GUID, or an exact match for the human-readable adapter name. A regular expression such as ``Ethernet.*`` does not match Windows display names. How interfaces are identified differs between operating systems:
 
 Windows
 +++++++
@@ -87,6 +87,20 @@ By interface name and network
     </NetworkMonitor>
 
 You can combine both attributes to activate a configuration only when a specific interface has joined a specific network. If multiple configurations match the same interface, the first matching one in the configuration file is used. Each interface is monitored at most once.
+
+Exact matches and regular expressions
+--------------------------------------
+
+Regular expressions are not automatically anchored. On Linux/macOS,
+``interface="^en0$"`` selects exactly ``en0``, while
+``interface="en0|en5"`` can match either name. Escape regex metacharacters
+when they are meant literally. On Windows, use the exact displayed adapter
+name or a pattern matching its GUID.
+
+The same selectors are used for :doc:`interface configuration <blocking>` and
+:doc:`environment conditions </concepts/environments/conditions/network>`. Environment
+conditions additionally allow an operational-status suffix; do not add that
+suffix to a network monitor's interface selector.
 
 Hot plugging
 ------------

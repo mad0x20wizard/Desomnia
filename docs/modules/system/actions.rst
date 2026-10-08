@@ -8,7 +8,7 @@ sleep
 
 :🔥 action:
 
-This tries to suspend the system immediately. If the system fails to suspend, the SystemMonitor will execute the  ``onSuspendTimeout`` action, after the next **timeout**.
+Requests system suspension immediately. If configured, ``onSuspendTimeout`` runs after its own explicit delay when suspension has not occurred; see :doc:`config`.
 
 sleepless
 ---------

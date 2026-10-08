@@ -6,8 +6,20 @@ project = 'Desomnia'
 copyright = '2026, mad0x20wizard'
 author = 'mad0x20wizard'
 
-release = '3.0'
-version = '3.0.0-alpha'
+# Keep the displayed version aligned with the checked-out release.
+# Source archives without git retain the latest documented feature release.
+import subprocess
+from pathlib import Path
+
+try:
+    release = subprocess.check_output(
+        ['git', 'describe', '--tags', '--abbrev=0'],
+        cwd=Path(__file__).resolve().parent.parent,
+        stderr=subprocess.DEVNULL, text=True,
+    ).strip().removeprefix('v')
+except (OSError, subprocess.CalledProcessError):
+    release = '3.3.0'
+version = '.'.join(release.split('.')[:2])
 
 # -- General configuration
 

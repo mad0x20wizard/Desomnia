@@ -43,7 +43,7 @@ A corresponding configuration, that makes use of all these types, could look lik
 .. code:: xml
 
     <?xml version="1.0" encoding="utf-8"?>
-    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onUsage="sleepless">
+    <SystemMonitor version="3" timeout="2min" onIdle="sleep" onUsage="sleepless">
 
         <SessionMonitor>
             <User name="John">
@@ -87,7 +87,7 @@ Fires when a resource has been idle for a complete timeout cycle.
 
 .. code:: xml
 
-    <SystemMonitor version="2" timeout="2min" onIdle="sleep">
+    <SystemMonitor version="3" timeout="2min" onIdle="sleep">
 
 onUsage
 +++++++
@@ -98,7 +98,7 @@ Fires on every inspection cycle in which a resource reports activity. An ``onUsa
 
 .. code:: xml
 
-    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onUsage="sleepless">
+    <SystemMonitor version="3" timeout="2min" onIdle="sleep" onUsage="sleepless">
 
 With both events configured, Desomnia holds a *sleepless* power request while any monitor is active, and releases it — then puts the system to sleep — once everything goes quiet.
 
@@ -149,7 +149,7 @@ For example, a user session may go idle while an open SMB connection is still ke
 
 .. code:: xml
 
-    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onUsage="sleepless">
+    <SystemMonitor version="3" timeout="2min" onIdle="sleep" onUsage="sleepless">
 
         <SessionMonitor>
             <User name="John" onIdle="logout" />
@@ -170,7 +170,7 @@ A practical use of this is the ``exec`` action, which runs an arbitrary command.
 
 .. code:: xml
 
-    <SystemMonitor version="2" timeout="2min" onIdle="sleep">
+    <SystemMonitor version="3" timeout="2min" onIdle="sleep">
 
         <SessionMonitor>
             <User name="John" onIdle="exec('C:\scripts\notify.ps1')" />

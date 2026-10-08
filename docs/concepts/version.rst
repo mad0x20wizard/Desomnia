@@ -1,7 +1,7 @@
 Versioning
 ==========
 
-:2:
+:3:
 :since: 3.3.0
 
 Desomnia's configuration format is versioned independently of the application.
@@ -10,7 +10,7 @@ The ``version`` attribute belongs on the outermost element:
 
 .. code:: xml
 
-   <SystemMonitor version="2" timeout="5min" onUsage="sleepless" onIdle="sleep">
+   <SystemMonitor version="3" timeout="5min" onUsage="sleepless" onIdle="sleep">
      <PowerRequestMonitor />
    </SystemMonitor>
 

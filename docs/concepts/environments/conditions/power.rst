@@ -25,7 +25,7 @@ This configuration selects a shorter inspection interval on battery power:
 
 .. code:: xml
 
-   <EnvironmentMonitor version="2">
+   <EnvironmentMonitor version="3">
      <DefaultEnvironment>
        <SystemMonitor timeout="5min" onUsage="sleepless" onIdle="sleep">
          <PowerRequestMonitor />

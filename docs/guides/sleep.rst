@@ -22,7 +22,7 @@ Timing is everything
 .. code:: xml
 
     <?xml version="1.0" encoding="utf-8"?>
-    <SystemMonitor version="2" timeout="2min">
+    <SystemMonitor version="3" timeout="2min">
 
         <!-- ... monitor configuration goes here ... -->
 
@@ -56,7 +56,7 @@ To put the system to sleep when idle, configure the ``sleep`` action on the ``<S
 .. code:: xml
 
     <?xml version="1.0" encoding="utf-8"?>
-    <SystemMonitor version="2" timeout="2min" onIdle="sleep+10min">
+    <SystemMonitor version="3" timeout="2min" onIdle="sleep+10min">
 
         <!-- ... -->
 
@@ -78,7 +78,7 @@ The most common use on the ``<SystemMonitor>`` is the ``sleepless`` action, whic
 .. code:: xml
 
     <?xml version="1.0" encoding="utf-8"?>
-    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onUsage="sleepless">
+    <SystemMonitor version="3" timeout="2min" onIdle="sleep" onUsage="sleepless">
 
         <!-- ... -->
 
@@ -102,7 +102,7 @@ requests, which resembles the behaviour of the built-in power management:
 .. code:: xml
 
     <?xml version="1.0" encoding="utf-8"?>
-    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onUsage="sleepless">
+    <SystemMonitor version="3" timeout="2min" onIdle="sleep" onUsage="sleepless">
 
         <SessionMonitor />
         <NetworkSessionMonitor />
@@ -120,7 +120,7 @@ and SMB monitors are unavailable on these platforms:
 
 .. code:: xml
 
-    <SystemMonitor version="2" timeout="2min" onIdle="sleep" onUsage="sleepless">
+    <SystemMonitor version="3" timeout="2min" onIdle="sleep" onUsage="sleepless">
       <PowerRequestMonitor />
       <NetworkMonitor>
         <Service name="SSH" port="22" />
@@ -135,7 +135,7 @@ A sleep request from Desomnia can bypass application sleep inhibitors on Linux
 and macOS. Include the power-request monitor and filter it deliberately if those
 requests should influence Desomnia's decision.
 
-Add process rules using :doc:`activity`, display rules using
+Add process rules using :doc:`/concepts/metrics`, display rules using
 :doc:`/modules/display/monitor`, or settings that adapt to battery and network
 changes using :doc:`/concepts/environments`.
 

@@ -5,14 +5,25 @@ This page records configuration format versions and their changes.
 Application release notes are published on
 `GitHub releases <https://github.com/mad0x20wizard/Desomnia/releases>`_.
 
+.. _version-3:
+
+Version 3
+---------
+
+:current:
+
+Root-level ``NetworkInterfaceBlock`` declarations become ``NetworkInterface``
+selectors with declarative administrative state and optional monitoring exclusion.
+See :doc:`interface configuration </modules/network/blocking>` for migration and
+the ``disabled``, ``allowToChange``, and ``monitor`` attributes. Retired blocks
+inside ``NetworkMonitor`` are removed.
+
 .. _version-2:
 
 Version 2
 ---------
 
 :since: 3.3.0
-
-:current:
 
 Activity events
 +++++++++++++++

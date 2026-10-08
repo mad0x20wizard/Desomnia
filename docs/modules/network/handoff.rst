@@ -48,9 +48,13 @@ handoffRetry
 ++++++++++++
 
 :inherited:
-:default: ``0``
+:default: ``2``
 
-How many additional attempts are made before a handoff is considered failed. It applies to both ends of the exchange: on the departing host, how many times a registration with a Sleep Proxy is retried — the retries are exhausted against each candidate proxy before the next-best one is tried, and the handoff only fails once every discovered proxy has been exhausted; on the receiving proxy, how many times reachability is re-checked before accepting that the host has really gone. After each ``handoffTimeout`` interval the step is repeated up to this many times. Increase it on networks where suspend takes longer to settle.
+How many additional attempts are made before a handoff is considered failed. It applies to both ends of the exchange: on the departing host, how many times a registration with a Sleep Proxy is retried — transient failures are retried against each candidate before the next-best one is tried, and the handoff only fails once every discovered proxy has been exhausted; on the receiving proxy, how many times reachability is re-checked before accepting that the host has really gone. After each ``handoffTimeout`` interval the step is repeated up to this many times. Increase it on networks where suspend takes longer to settle.
+
+In builds after 3.3.0 that include declined-registration handling, an explicit
+refusal or unsupported registration skips retries for that proxy and moves to
+the next candidate. In 3.3.0, those responses also consume the retry allowance.
 
 handoffDuration
 +++++++++++++++

@@ -3,12 +3,25 @@ Session Monitor
 
 :OS: 🪟 *Windows*
 
-The Session Monitor tracks Windows user sessions and uses their activity to determine whether the system is in use. It can target specific users by name, members of the administrators group, arbitrary security groups, or every logged-in account at once. Multiple selectors can overlap: if a session is matched by more than one, it collects the event handlers and merges the attributes from all of them.
+The Session Monitor tracks Windows user sessions, including Remote Desktop.
+It can keep the system awake for user input or work performed by the session's
+processes, and run actions such as locking, disconnecting, or logging out an
+idle session.
 
-Within each selector, individual session events are exposed as configurable event handlers: ``onLogin``, ``onLogout``, ``onDisconnect``, and others. If a session has been idle longer than ``maxIdleTime``, the ``onIdle`` event fires. The :doc:`available actions <actions>` — ``lock``, ``disconnect``, and ``logout`` — operate on the matched session directly. Nested ``<Process>`` elements allow per-session process tracking, so a session is only considered idle once both input activity and the session's own processes are quiet.
+Use selectors for everyone, named users, or administrators. Input timeouts,
+CPU/GPU activity, storage I/O, and network traffic can be combined to decide
+whether a session is active. Nested process watches can protect particular
+applications independently.
 
-The :doc:`configuration reference <config>` lists all selectors, their attributes, and the session-level options that control clock behaviour for remote and disconnected sessions.
+The monitor is also required by :doc:`Duo integration </plugins/duo/plugin>`,
+which associates each streaming instance with its Windows session.
 
 .. toctree::
-   actions
+   :maxdepth: 2
+
    config
+   actions
+
+Format 1 used ``clockTime``, ``clockRemote``, ``clockDisconnected``, and
+``maxIdleTime`` for the input settings. See :doc:`/concepts/version/history`
+for the current attribute names and automatic migration.

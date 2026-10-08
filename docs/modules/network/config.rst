@@ -3,6 +3,10 @@ Configuration
 
 This reference has been created to allow you to easily see all the available configuration options of Desomnia at a glance, as opposed to the rather prosaic explanations on the other pages.
 
+The configuration sketches below use ``...`` for omitted settings. They describe
+available attributes, not complete files to copy. Use the linked guides for
+working examples.
+
 .. include:: /concepts/time.rst
 
 NetworkMonitor
@@ -13,7 +17,9 @@ Desomnia provides support for monitoring any number of installed network interfa
 .. TODO: should sweep made be publicly configurable?
 
 .. code:: xml
-  <SystemMonitor version="2">
+  :force:
+
+  <SystemMonitor version="3">
 
     <NetworkMonitor interface="eth0" network="192.168.178.0/24"
 
@@ -62,7 +68,6 @@ Desomnia provides support for monitoring any number of installed network interfa
       sleepProxyPort="..."
 
       watchMode="normal"
-      watchTimeout="1min"
       watchUDPPort="9"
 
       allowWakeOnLAN="MagicPacket"
@@ -100,6 +105,8 @@ Desomnia provides support for monitoring any number of installed network interfa
     </NetworkMonitor>
 
   </SystemMonitor>
+
+.. _network-monitor-interface:
 
 interface
 +++++++++
@@ -142,9 +149,7 @@ If you define this attribute, Desomnia will scan repeatedly for a changed config
 watchTimeout
 +++++++++++++
 
-:⏱️ duration:
-
-The packet capture device can sometimes become unresponsive. If you set this option, the Network Monitor will restart if no packets have been captured for the specified duration. There is no default — the capture watchdog is disabled unless you configure a duration here.
+Retired. This attribute is still accepted for compatibility but is ignored. ``NetworkDevice`` handles capture failures directly; an absence of traffic no longer triggers a capture restart.
 
 .. include:: ./options/knock.rst
 
@@ -316,6 +321,7 @@ HostRange
 With this type you can declare an entire range of hosts. You can further include nested host ranges and individual hosts, identified by their name or IP address.
 
 .. code:: xml
+  :force:
 
   <HostRange name="anything"
     network="192.168.178.0/24"
@@ -340,6 +346,7 @@ DynamicHostRange
 A ``<DynamicHostRange>`` can be configured exactly like a normal ``<HostRange>``, but has the ability to temporarily include additonal hosts, after a successful Singe Packet Authorisation (SPA). If you don't specify the knock attributes, they will be inherited from the Network Monitor configuration.
 
 .. code:: xml
+  :force:
 
   <DynamicHostRange name="anything" ...
     
@@ -447,6 +454,7 @@ LocalHost
 Inside ``<LocalHost>`` you can declare the services and virtual machines, that should be watched for :doc:`local sleep management </guides/sleep>`:
 
 .. code:: xml
+  :force:
 
   <NetworkMonitor interface="eth0" ... >
 
@@ -469,6 +477,7 @@ Inside ``<LocalHost>`` you can declare the services and virtual machines, that s
 To simplify your configuration and reduce unnecessary verbosity, you are allowed to omit the ``<LocalHost>`` tags, and include your services and virtual hosts directly under the ``<NetworkMonitor>``. The following configuration is behaviourally equivalent to the previous one:
 
 .. code:: xml
+  :force:
 
   <NetworkMonitor interface="eth0" ...
     minTraffic="1MB/s"
@@ -501,6 +510,7 @@ To simplify your configuration and reduce unnecessary verbosity, you are allowed
 Watched hosts (``<RemoteHost>`` and ``<VirtualHost>``) extend the ``<Host>`` and both share these additional properties:
 
 .. code:: xml
+  :force:
 
   <RemoteHost name="morpheus" ...
     minTraffic="1MB/s"
@@ -613,6 +623,7 @@ RemoteHost
 For remote hosts you can configure these additional properties:
 
 .. code:: xml
+   :force:
 
    <RemoteHost name="morpheus" ...
       advertiseIfStopped="true"
@@ -652,6 +663,7 @@ VirtualHost
 Virtual hosts can only be configured in the context of a ``<RemoteHost>`` or the ``<LocalHost>``. Apart from that, everything is configured like any watched host:
 
 .. code-block:: xml
+  :force:
   :emphasize-lines: 7
 
    <RemoteHost name="morpheus" ... >
@@ -678,6 +690,7 @@ Router
 A router shares the same attributes as any other host on the network, but has the following additional attributes:
 
 .. code:: xml
+   :force:
 
    <Router name="fritz.box" IPv4="192.168.178.1" ...
      allowWake="false"
@@ -760,6 +773,8 @@ metrics
 
 The metric used to prefer this proxy over others, when several are known. Accepts the shorthands ``best``, ``average`` or ``worst``, or the explicit four-field form ``intent-portability-marginalPower-totalPower``. See :doc:`sleepproxy` for the meaning of the individual fields.
 
+.. _network-host-filter-rule:
+
 HostFilterRule
 --------------
 
@@ -783,6 +798,8 @@ This is the logical name of the host, to be referenced by this filter. In order 
 .. include:: ./attributes/ipv4.rst
 
 .. include:: ./attributes/ipv6.rst
+
+.. _network-host-range-filter-rule:
 
 HostRangeFilterRule
 -------------------
@@ -813,6 +830,7 @@ EveryHostFilterRule
 The ``<EveryHostFilterRule>`` applies to **every** host on the contextual network interface. It has no attributes besides the mandatory ``type``, but — unlike the plain filter rules — it may contain network entities (``<Host>``, ``<HostRange>`` and ``<DynamicHostRange>``) directly, in addition to ``<HostFilterRule>`` and ``<HostRangeFilterRule>``:
 
 .. code-block:: xml
+  :force:
   :emphasize-lines: 6-8
 
   <EveryHostFilterRule type="MustNot">
@@ -838,6 +856,7 @@ ForeignHostFilterRule
 The ``<ForeignHostFilterRule>`` behaves exactly like an ``<EveryHostFilterRule>``, except that it derives its configuration from the contextual network interface and matches only those hosts that are **not** part of the local subnet:
 
 .. code-block:: xml
+  :force:
   :emphasize-lines: 6-8
 
   <ForeignHostFilterRule type="MustNot">
@@ -859,6 +878,7 @@ ServiceFilterRule
 This rule configures the embedded packet filter to either include or exclude requests that target the specified network service. You can include any number of ``<HostFilterRule>`` and ``<HostRangeFilterRule>`` in order to make the filter more specific:
 
 .. code:: xml
+   :force:
 
    <ServiceFilterRule name="SSH" type="MustNot"
      protocol="TCP" 
@@ -907,6 +927,7 @@ Additionally you can configure any number of ``RequestFilterRule`` to inspect th
   This rule is a work in progress and will be released in a future version of Desomnia.
 
 .. code:: xml
+   :force:
 
    <HTTPFilterRule name="HTTP" type="MustNot"
      protocol="TCP" 
@@ -971,6 +992,7 @@ Service
 When you configure a ``<Service>`` you can configure all the attributes of a ``<ServiceFilterRule>``, except of ``type``. An equivalent ``<ServiceFilterRule>`` will automatically be created then, but which will always have ``type="Must"``.
 
 .. code:: xml
+  :force:
 
   <Service name="SSH" ...
     serviceName="ssh"
@@ -1044,6 +1066,7 @@ HTTPService
 When you configure a ``<HTTPService>`` you can configure all the attributes of a ``<HTTPFilterRule>``, except of ``type``. An equivalent ``<HTTPFilterRule>`` will automatically be created then, but which will always have ``type="Must"``. It also shares all additional attributes from ``<Service>``, but has the ability to declare any number of ``RequestFilterRule`` as child filters:
 
 .. code:: xml
+  :force:
 
   <HTTPService name="HTTP" ...
     serviceName="http"

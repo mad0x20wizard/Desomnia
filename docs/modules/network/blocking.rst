@@ -1,55 +1,121 @@
-Interface blocking
-==================
+Interface configuration
+=======================
 
-Desomnia can take network interfaces out of service for you. This is useful whenever one connection should be preferred over another — the classic example being a docked laptop, where the internal WiFi should stay silent as long as the wired connection is available. Instead of scripting the enable/disable dance yourself, you declare which interfaces should be blocked, and Desomnia keeps reality in line with that declaration.
-
-A block is expressed with the ``<NetworkInterfaceBlock>`` element:
-
-.. code:: xml
-
-    <NetworkInterfaceBlock interface="wlan0" />
-
-The ``interface`` attribute selects the interfaces to block and uses the same notation as :doc:`interface selection <interface>` — an interface name on Linux and macOS, a name or GUID on Windows, and a regular expression anywhere. A single block may therefore cover several interfaces at once, for example ``interface="en0|en12"``.
-
-Placement
----------
-
-Where you place the element decides how long the block holds:
-
-Inside a ``<NetworkMonitor>``
-+++++++++++++++++++++++++++++
-
-.. code:: xml
-
-    <NetworkMonitor name="Ethernet" interface="eth0">
-        <NetworkInterfaceBlock interface="wlan0" />
-        <!-- hosts, etc. -->
-    </NetworkMonitor>
-
-The block is tied to the life of that particular monitor: the matched interfaces stay blocked while the monitored interface is being watched, and are released as soon as the monitor shuts down — for example, when the ethernet cable is pulled. The blocked interface then comes back on its own, and its own configuration (if any) takes over. A monitor can never block the interface it is monitoring itself; such a match is ignored with a warning.
-
-At the configuration root
-+++++++++++++++++++++++++
+Use ``<NetworkInterface>`` at the root of ``<SystemMonitor>`` to configure an
+adapter independently of network monitoring:
 
 .. code:: xml
 
     <SystemMonitor>
-        <NetworkInterfaceBlock interface="wlan0" />
-        <!-- monitors, etc. -->
+        <NetworkInterface name="Ethernet" disabled="false" />
+        <NetworkInterface name="Wi-Fi" disabled="true" />
     </SystemMonitor>
 
-A block at the root of ``<SystemMonitor>`` is not tied to any monitor — it holds as long as the configuration that declares it is in effect. Root-level blocks take precedence over everything else: an interface blocked this way is never monitored, even if a ``<NetworkMonitor>`` would otherwise match it. A running monitor on such an interface is shut down in an orderly fashion before the block is applied.
+``name`` is an :doc:`interface selector <interface>`. It accepts the same
+patterns as a network monitor's ``interface`` attribute. One selector can
+match several adapters; each present adapter has one interface watch.
+Declarations inside ``<NetworkMonitor>`` are ignored.
 
-Enforcement
------------
+Administrative state
+--------------------
+
+``disabled="true"`` disables matching interfaces; ``disabled="false"`` enables
+them. This is administrative state: an enabled adapter with an unplugged cable
+is not administratively disabled.
+
+Omitting ``disabled`` leaves that property unspecified. If no matching declaration
+supplies it, Desomnia releases any override left by the previous environment and
+restores the latest externally observed state. Otherwise, omission inherits an
+earlier matching declaration's value.
+
+Desomnia applies interface settings before selecting interfaces for network
+monitoring. It checks them again on network changes. Interfaces that are actually
+enabled and operational can be monitored, including ones manually enabled when
+external changes are allowed.
+
+Excluding interfaces from monitoring
+-----------------------------------
 
 .. code:: xml
 
-    <NetworkInterfaceBlock interface="wlan0" force="true" />
+    <NetworkInterface name="Wi-Fi" monitor="false" />
 
-By default, Desomnia is tolerant about outside interference: if you (or the system) manually re-enable a blocked interface, Desomnia respects that decision and leaves the interface alone until the blocking declaration itself changes. With ``force="true"``, the block is enforced instead — whenever the interface comes back into service, Desomnia takes it right back out.
+``monitor="false"`` excludes matching adapters from network monitoring without
+changing their OS state. Their interface watches remain active, so configured
+``disabled`` settings and restoration still apply. Manually enabling an adapter
+does not override this monitoring exclusion.
+
+An omitted ``monitor`` inherits an earlier matching declaration's value; the
+effective default is ``true``. A later explicit ``monitor="true"`` enables
+monitoring eligibility again. A matching ``NetworkMonitor`` configuration is
+still required to create a network context.
+
+Allowing external changes
+-------------------------
+
+.. code:: xml
+
+    <NetworkInterface name="Wi-Fi" disabled="true" allowToChange="disabled" />
+
+By default, configured properties are enforced. ``allowToChange`` is a flags
+value naming the properties external software or the user may change. Currently
+``disabled`` is the only change flag; ``none`` selects strict enforcement.
+
+With ``allowToChange="disabled"``, Desomnia still applies the initial configured
+state, but accepts subsequent external changes. Every environment rebuild applies
+the effective configuration again. A genuine removal and reconnection also creates
+a fresh watch; disabling an adapter does not count as physical removal.
+
+Ordering and environments
+-------------------------
+
+Environment merging combines declarations with the same ``name`` according to
+:doc:`environment priority </concepts/environments/merging>` and conflict rules.
+Differently named selectors that match the same adapter are applied in effective
+configuration order: later explicitly supplied properties override earlier ones.
+An omitted property does not clear an inherited value.
+
+For example, use an environment condition to disable WiFi while Ethernet is up:
+
+.. code:: xml
+
+    <Environment interface="eth0@up">
+        <SystemMonitor>
+            <NetworkInterface name="wlan0" disabled="true" />
+        </SystemMonitor>
+    </Environment>
+
+See the :doc:`network environment conditions </concepts/environments/conditions/network>`.
+Do not make an adapter's availability the condition for disabling that same adapter,
+since this can repeatedly activate and deactivate the environment.
 
 Restoration
 -----------
 
-Blocks never outlive their declaration. When a block is lifted — because its monitor ended, the configuration changed, or Desomnia shuts down — the interfaces are brought back into service. Only a state Desomnia actually took away is restored: an interface that was already down when the block began stays down when it is released, and an interface that has vanished in the meantime (a dock's USB adapter, for example) is left to start fresh when it reappears.
+The persistent interface manager retains restoration information across environment
+rebuilds. Ending an individual monitor or replacing the ephemeral application does
+not release interface settings; the replacement reconciles them with its configuration.
+
+Observed external administrative-state changes become the new restoration baseline
+and clear Desomnia's pushed state. Strict enforcement may subsequently reapply the
+configured state. Releasing that override, or exiting Desomnia, restores the latest
+external baseline. Without an external change, the original administrative state is
+restored. A physically removed device has no state to restore; its next attachment
+starts with a fresh baseline.
+
+Migration from interface blocks
+-------------------------------
+
+Configuration version 3 converts root-level ``<NetworkInterfaceBlock>`` elements:
+``interface`` becomes ``name`` and ``disabled="true"`` is added. An omitted or
+false ``force`` becomes ``allowToChange="disabled"``; ``force="true"`` becomes
+strict enforcement. Retired monitor-level blocks are removed rather than promoted
+to root level.
+
+Platform requirements
+---------------------
+
+Interface configuration requires the privileges of Desomnia's system service.
+Windows uses CIM and includes disabled adapters in discovery. Linux uses ``ip``
+from iproute2 to change state and reads administrative flags from sysfs. macOS uses
+``ifconfig``. Enabling an adapter does not guarantee an immediate connection or IP address.

@@ -19,7 +19,7 @@ processes in the selected session:
 
 .. code:: xml
 
-   <SystemMonitor version="2" timeout="2min" onUsage="sleepless" onIdle="sleep">
+   <SystemMonitor version="3" timeout="2min" onUsage="sleepless" onIdle="sleep">
      <SessionMonitor>
        <User name="^Smith$" watchInput="true" watchInputRemote="true"
              maxLastInputTime="10min" minIO="100kb/s" watch="Input or IO" />

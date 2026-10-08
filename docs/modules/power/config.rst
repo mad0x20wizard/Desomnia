@@ -6,7 +6,11 @@ PowerRequestMonitor
 
 You can configure any number of ``<RequestFilterRule>`` to describe which power requests should be considered as usage.
 
+The following sketch shows where filter rules go; ``...`` marks omitted settings.
+The ``watchOperation`` and ``watchMode`` attributes only apply on Linux.
+
 .. code:: xml
+  :force:
 
   <SystemMonitor>
 

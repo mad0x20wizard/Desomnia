@@ -22,6 +22,7 @@
    :caption: Guides
 
    /guides/sleep
+   /guides/troubleshooting
    /guides/wol-client
    /guides/wol-proxy
    /guides/remote-access
@@ -31,6 +32,8 @@
    :caption: Basic Concepts
 
    /concepts/resources
+   /concepts/metrics
+   /concepts/environments
    /concepts/version
    /concepts/logging
 
@@ -39,6 +42,7 @@
    :caption: Core Modules
 
    /modules/system/monitor
+   /modules/display/monitor
    /modules/network/monitor
    /modules/network_session/monitor
    /modules/session/monitor
@@ -51,7 +55,7 @@
 
    /plugins/fko
    /plugins/duo/plugin
-..   /plugins/bridge
+   /plugins/bridge
 
 .. toctree::
    :maxdepth: 2

@@ -54,7 +54,7 @@ This configuration combines shared monitoring with a battery-specific timeout:
 
 .. code:: xml
 
-   <EnvironmentMonitor version="2" conflictStrategy="error"
+   <EnvironmentMonitor version="3" conflictStrategy="error"
                        writeEffectiveXML="effective.xml">
 
      <DefaultEnvironment>
@@ -74,7 +74,7 @@ monitor remain in place. The effective XML is equivalent to:
 
 .. code:: xml
 
-   <SystemMonitor version="2" timeout="2min" onUsage="sleepless" onIdle="sleep">
+   <SystemMonitor version="3" timeout="2min" onUsage="sleepless" onIdle="sleep">
      <PowerRequestMonitor />
    </SystemMonitor>
 

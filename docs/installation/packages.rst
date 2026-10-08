@@ -133,15 +133,25 @@ configuration is chosen to match the machine's role:
 The choice is made **only on the first installation** — upgrades never touch ``monitor.xml``.
 Both templates ship under ``/usr/share/desomnia/`` (``monitor-proxy.xml`` and
 ``monitor-host.xml``); to switch roles later, copy the one you want over
-``/etc/desomnia/monitor.xml`` and restart the service.
+``/etc/desomnia/monitor.xml``; the packaged service reloads it automatically.
 
 To tailor it to your network — declaring specific hosts, a router, or a Wake-on-LAN client role —
-edit the file and restart the service:
+edit the file:
 
 .. code:: bash
 
    sudo nano /etc/desomnia/monitor.xml
-   sudo systemctl restart desomnia
+
+
+The packaged service enables ``--auto-reload`` (``-a``), so changes to
+``monitor.xml`` take effect without a manual restart. Settings declared with
+``<?system ...?>``, such as process polling,
+are startup settings and require a service restart. To disable automatic reload,
+override the service's ``ExecStart`` without ``-a``.
+
+A configuration that cannot be loaded can stop the application; check
+``journalctl -u desomnia``, fix the file, and restart if necessary.
+See :doc:`/guides/troubleshooting`.
 
 Your changes are preserved across package upgrades. See :doc:`/concepts/resources` for the full
 set of configuration elements.

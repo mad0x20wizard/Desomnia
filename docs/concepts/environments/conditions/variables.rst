@@ -12,7 +12,7 @@ declared with ``xmlns:env`` on the element or an enclosing element:
 
 .. code:: xml
 
-   <EnvironmentMonitor version="2" xmlns:env="environment:process">
+   <EnvironmentMonitor version="3" xmlns:env="environment:process">
      <Environment name="Lab" env:DESOMNIA_LOCATION="lab">
        <SystemMonitor timeout="5min">
          <PowerRequestMonitor />

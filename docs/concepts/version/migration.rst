@@ -76,7 +76,7 @@ version
 +++++++
 
 An alternative to the ``version`` attribute on the outermost element, for
-example ``<?config version="2"?>``. If both locations declare a version, the
+example ``<?config version="3"?>``. If both locations declare a version, the
 numbers must agree. See :doc:`/concepts/version`.
 
 Migration messages

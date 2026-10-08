@@ -88,7 +88,7 @@ Use this on an always-on device. Any client on the local network that tries to r
 .. code:: xml
 
    <?xml version="1.0" encoding="utf-8"?>
-   <SystemMonitor version="2">
+   <SystemMonitor version="3">
 
      <NetworkMonitor watchMode="promiscuous" autoDetect="IPv4">
        <RemoteHost name="server" MAC="00:1A:2B:3C:4D:5E">
@@ -109,7 +109,7 @@ This configuration could be used to automatically suspend a physical system unle
 .. code:: xml
 
    <?xml version="1.0" encoding="utf-8"?>
-   <SystemMonitor version="2" timeout="2min" onIdle="sleep+20min" onUsage="sleepless">
+   <SystemMonitor version="3" timeout="2min" onIdle="sleep+20min" onUsage="sleepless">
 
      <NetworkMonitor>
        <Service name="SSH" port="22" />

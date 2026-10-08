@@ -1,7 +1,7 @@
 Platform considerations
 =======================
 
-Both Windows and Linux provide a mechanism for applications and drivers to signal that the system should not go to sleep — but they were designed by different teams with different philosophies and expose different capabilities. Desomnia understands both natively.
+Windows, Linux, and macOS provide different mechanisms for applications to request that the system remain awake. Desomnia can include these requests in its activity checks.
 
 Power Requests
 --------------
@@ -132,3 +132,26 @@ Reason
 This common representation is what allows the ``<PowerRequestMonitor>`` and its ``<RequestFilterRule>`` elements to work identically on both platforms. The same regex-based rules match against ``Name`` and ``Reason`` regardless of whether the underlying source is a Windows power request or a Linux inhibition lock.
 
 .. _`Inhibitor Locks`: https://systemd.io/INHIBITOR_LOCKS/
+
+Power assertions
+----------------
+
+:OS: 🍎 *macOS*
+
+Applications use power assertions to keep the system or display awake while
+performing work. Desomnia reads the supported assertion types and exposes the
+application name and reason to the same ``RequestFilterRule`` mechanism.
+
+To inspect assertions reported by macOS:
+
+.. code:: bash
+
+   pmset -g assertions
+
+Use the output and Desomnia's activity log to identify the request before
+adding a filter. Desomnia's own ``sleep`` action requests system sleep even
+when applications hold assertions, so include ``PowerRequestMonitor`` if
+those applications should influence the decision to sleep.
+
+Full sleep and resume notifications are distinct from background network wakes
+on macOS. A background wake may not trigger ``onResume``.

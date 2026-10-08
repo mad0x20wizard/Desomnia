@@ -16,7 +16,7 @@ on an ``Everyone``, ``User``, or ``Administrator`` selector under ``SessionMonit
 
 .. code:: xml
 
-   <SystemMonitor version="2">
+   <SystemMonitor version="3">
      <SessionMonitor>
        <User name="^Alice$"
              allowControlSleep="true"

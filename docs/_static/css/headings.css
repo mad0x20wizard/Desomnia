@@ -1,16 +1,16 @@
-h1 + dl
+h1 + dl.field-list
 {
   font-size: 1.25em;
 }
 
 *:where(h1, h2, h3, h4) /* show the section fields inline with the heading*/
 {
-  &:has(+ dl)
+  &:has(+ dl.field-list)
   {
     display: inline;
   }
 
-  & + dl
+  & + dl.field-list
   {
     display: inline-flex !important;
     align-items: baseline;

@@ -127,7 +127,7 @@ credentials, port identifier, and process pattern with those for your setup:
 
 .. code:: xml
 
-   <SystemMonitor version="2">
+   <SystemMonitor version="3">
      <NetworkMonitor>
        <FRITZBoxRouter name="fritz.box" username="desomnia" password="replace-me" />
      </NetworkMonitor>

@@ -38,7 +38,7 @@ public class NetworkInterfaceConfigurationTests
     }
 
     [Theory]
-    [InlineData(null, null)]
+    [InlineData(null, "disabled")]
     [InlineData("false", "disabled")]
     [InlineData("true", null)]
     public void Version3MigratesRootBlocks(string? force, string? allowed)

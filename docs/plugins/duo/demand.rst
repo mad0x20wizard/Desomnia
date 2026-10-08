@@ -21,7 +21,7 @@ network monitor must cover the interface carrying the client's traffic.
 
 .. code:: xml
 
-   <SystemMonitor version="2" timeout="5min" onUsage="sleepless" onIdle="sleep">
+   <SystemMonitor version="3" timeout="5min" onUsage="sleepless" onIdle="sleep">
      <SessionMonitor />
      <NetworkMonitor />
      <DuoSessionMonitor onInstanceDemand="start" onInstanceIdle="stop" />
@@ -45,7 +45,7 @@ listening when it stops. Active connections are observed through Windows.
 
 .. code:: xml
 
-   <SystemMonitor version="2" timeout="5min" onUsage="sleepless" onIdle="sleep">
+   <SystemMonitor version="3" timeout="5min" onUsage="sleepless" onIdle="sleep">
      <SessionMonitor />
      <DuoSessionMonitor useListener="true"
                         onInstanceDemand="start" onInstanceIdle="stop" />

@@ -3,7 +3,7 @@ Environments
 
 Environments apply configuration settings according to various conditions that can change their state over time. Several environments can apply simultaneously; their settings are merged into one system configuration.
 
-In order to use environments, replace the outermost ``<SystemMonitor>`` element with ``<EnvironmentMonitor version="2">``.
+In order to use environments, replace the outermost ``<SystemMonitor>`` element with ``<EnvironmentMonitor version="3">``.
 ``<DefaultEnvironment>`` contains shared settings, while ``<Environment>``
 elements contain conditional settings.
 

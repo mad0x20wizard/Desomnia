@@ -20,7 +20,7 @@ awake:
 
 .. code:: xml
 
-   <EnvironmentMonitor version="2">
+   <EnvironmentMonitor version="3">
      <DefaultEnvironment>
        <SystemMonitor timeout="5min" onUsage="sleepless" onIdle="sleep">
          <PowerRequestMonitor />
@@ -72,7 +72,7 @@ without requiring a ``NetworkMonitor`` for the wired connection:
 
    <Environment interface="eth0@up">
      <SystemMonitor>
-       <NetworkInterfaceBlock interface="wlan0" />
+       <NetworkInterface name="wlan0" disabled="true" />
      </SystemMonitor>
    </Environment>
 
@@ -80,7 +80,7 @@ The interface names must match the local system. Windows accepts an exact
 adapter display name, for example ``Ethernet``; Linux and macOS use interface
 names such as ``eth0`` or ``en5``.
 
-The :doc:`network-interface block </modules/network/blocking>` is removed when
+The :doc:`interface configuration </modules/network/blocking>` is removed when
 the wired interface is no longer operational, allowing WiFi to be restored.
 A blocked interface must not also be the condition that activates its own block;
 that dependency can cause repeated configuration changes.

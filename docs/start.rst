@@ -54,7 +54,7 @@ If you want to reach sleeping hosts from **outside your local network**, read th
 Configuration topics
 --------------------
 
-Use :doc:`/guides/activity` to choose which workloads keep the machine awake,
+Use :doc:`/concepts/metrics` to choose which workloads keep the machine awake,
 :doc:`/modules/display/monitor` for display and lid rules, and
 :doc:`/concepts/environments` to change settings automatically on different
 networks or power sources. When upgrading an existing installation, start with

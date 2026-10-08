@@ -12,7 +12,8 @@ You can configure any number of ``<Process>`` to watch OS processes or groups of
 
     <ProcessMonitor onUsage="" onIdle="">
 
-      <Process name="Backup" minIO="100kb/s">backup</Process>
+      <Process ... />
+      <Process ... />
 
     </ProcessMonitor>
 

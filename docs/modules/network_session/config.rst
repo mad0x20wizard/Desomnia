@@ -6,7 +6,10 @@ NetworkSessionMonitor
 
 You can configure any number of ``<FilterRules>`` to describe which network sessions should be considered as usage.
 
+The following sketch shows where filter rules go; ``...`` marks omitted settings.
+
 .. code:: xml
+  :force:
 
   <SystemMonitor>
 
