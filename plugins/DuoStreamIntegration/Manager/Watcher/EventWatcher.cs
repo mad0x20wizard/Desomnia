@@ -74,7 +74,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
                     }
                 }
 
-            throw new KeyNotFoundException("Duo event does not identify a known instance.");
+            throw new InstanceNotFoundException();
         }
 
         async IAsyncEnumerable<WatchSignal> IDuoWatcher.WatchAsync(IEnumerable<DuoInstance> instances, [EnumeratorCancellation] CancellationToken token)
@@ -90,6 +90,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
                 else if (args.EventRecord is EventRecord record)
                 {
                     var eventId = (DuoEventID)record.Id;
+                    var eventMessage = record.Properties.FirstOrDefault()?.Value?.ToString();
 
                     try
                     {
@@ -111,13 +112,19 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
                     }
                     catch (AmbiguousInstanceNameException ex)
                     {
-                        Logger.LogWarning(ex, "Unable to determine event instance");
+                        Logger.LogWarning(ex, "Could not determine Duo event instance");
+
+                        channel.Writer.TryWrite(new());
+                    }
+                    catch (InstanceNotFoundException)
+                    {
+                        Logger.LogWarning("Could not find instance for Duo event ({EventId}): '{EventMessage}'", eventId, eventMessage);
 
                         channel.Writer.TryWrite(new());
                     }
                     catch (Exception ex)
                     {
-                        Logger.LogError(ex, "Could not handle Duo event ({EventId}). ", eventId);
+                        Logger.LogError(ex, "Could not handle Duo event ({EventId}): '{EventMessage}'", eventId, eventMessage);
                     }
                     finally
                     {
@@ -176,6 +183,8 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
             DebugChannel = 1130
         }
 
-        protected class AmbiguousInstanceNameException(params string[] names) : Exception($"Duo instance names [{string.Join(", ", names.Select(n => $"'{n}'"))}] are ambiguous.");
+        protected class InstanceNotFoundException(string? message = null) : Exception(message);
+
+        protected class AmbiguousInstanceNameException(params string[] names) : InstanceNotFoundException($"Duo instance names [{string.Join(", ", names.Select(n => $"'{n}'"))}] are ambiguous.");
     }
 }

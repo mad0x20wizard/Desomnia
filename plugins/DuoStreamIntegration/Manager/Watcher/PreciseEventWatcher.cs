@@ -29,7 +29,7 @@ namespace MadWizard.Desomnia.Service.Duo.Manager.Watcher
 
             try
             {
-                return matches.SingleOrDefault() ?? throw new KeyNotFoundException("Duo event does not identify a known instance.");
+                return matches.SingleOrDefault() ?? throw new InstanceNotFoundException();
             }
             catch (InvalidOperationException)
             {
