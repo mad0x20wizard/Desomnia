@@ -14,7 +14,7 @@ namespace MadWizard.Desomnia.Network.Services.Knocking
         public required IKnockDetector      Detector        { internal get; init; }
 
         // Filters
-        public required IPacketFilter       PacketFilter    { internal get; init; }
+        public required Lazy<IPacketFilter> PacketFilter    { internal get; init; }
         public required IKnockFilter        KnockFilter     { internal get; init; }
 
         // Method agnostic parameters

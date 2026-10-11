@@ -19,7 +19,7 @@
             }
         }
 
-        public readonly bool HasFlags(IPAddressFlags flags) => Flags.HasFlag(flags);
+        public readonly bool HasFlags(IPAddressRangeFlags flags) => Flags.HasFlag(flags);
 
         public readonly bool HasExpired => Expires < DateTime.Now;
     }

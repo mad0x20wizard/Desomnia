@@ -1,7 +1,6 @@
 ﻿using Autofac;
 using Autofac.Core;
 using MadWizard.Desomnia.Network.Configuration.Hosts;
-using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Network.Manager;
 using MadWizard.Desomnia.Network.Watch;
 using Microsoft.Extensions.Logging;
@@ -133,7 +132,7 @@ namespace MadWizard.Desomnia.Network.Context
                     created.Add(CreateDynamicHost(new TypedParameter(typeof(NetworkHostInfo), config)));
                 }
 
-                ctx.Scope?.Resolve<IEnumerable<PacketFilterRule>>(); // the rules should now be resolvable
+                ctx.ResolveFilterRules(); // the rules should now be resolvable
             }
 
             return created;

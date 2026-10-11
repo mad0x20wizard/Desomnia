@@ -1,6 +1,4 @@
-using System.Timers;
-
-namespace MadWizard.Desomnia.Network.SleepProxy.Registration
+namespace System.Timers
 {
     /// <summary>
     /// A one-shot timer that fires at an absolute <see cref="DueTime"/>, not bound to the
@@ -8,12 +6,12 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
     /// The target may be changed at any time, including while running.
     /// </summary>
     /// <remarks>
-    /// A single <see cref="Timer"/> (System.Threading) is re-armed in chunks of at most
+    /// A single <see cref="System.Threading.Timer"/> is re-armed in chunks of at most
     /// <see cref="int.MaxValue"/> ms until the target instant is reached, so no thread is
     /// consumed while idle. <see cref="Elapsed"/> is raised on a thread-pool thread; exceptions
     /// thrown by handlers are swallowed, mirroring <see cref="System.Timers.Timer"/>.
     /// </remarks>
-    internal sealed class ScheduledTimer : IDisposable
+    public sealed class ScheduledTimer : IDisposable
     {
         private static readonly TimeSpan MaxChunk = TimeSpan.FromMilliseconds(int.MaxValue);
 

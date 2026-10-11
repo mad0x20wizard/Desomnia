@@ -11,39 +11,46 @@ namespace MadWizard.Desomnia.Network.Knocking
     {
         public required ILogger<KnockService> Logger { private get; init; }
 
-        public required IEnumerable<KnockStanza> Stanzas { get; init; }
-
         public required IIndex<string, IKnockMethod> Methods { private get; init; }
 
-        async Task INetworkService.Startup()
+        #region Stanza management
+        private readonly HashSet<KnockStanza> _stanzas = [];
+
+        internal void AddStanza(KnockStanza stanza)
         {
-            using var scope = Logger.BeginRealmScope("knocking");
+            if (stanza.Detector is IKnockValidation validation)
+                validation.ValidateSecret(stanza.Secret);
 
-            foreach (var stanza in Stanzas)
+            lock (_stanzas)
             {
-                if (stanza.Detector is IKnockValidation validation)
-                {
-                    // Fail here rather than on every packet: ProcessPacket swallows and logs per-packet
-                    // exceptions, so an unusable secret would otherwise show up only as repeated noise.
-                    validation.ValidateSecret(stanza.Secret);
-                }
+                using var scope = Logger.BeginRealmScope("knocking");
 
-                Logger.LogDebug($"Listening on {stanza.Port} for SPA stanza '{stanza.Label}'" +
-                    $" using <{stanza.Detector.Name}>");
+                if (_stanzas.Add(stanza))
+                    Logger.LogDebug($"Listening on {stanza.Port} for SPA stanza '{stanza.Label}'" +
+                        $" using <{stanza.Detector.Name}>");
             }
         }
+
+        internal void RemoveStanza(KnockStanza stanza)
+        {
+            lock (_stanzas)
+            {
+                _stanzas.Remove(stanza);
+            }
+        }
+        #endregion
 
         void INetworkService.ProcessPacket(EthernetPacket packet)
         {
             if (packet.PayloadPacket is IPPacket ip && ip.PayloadPacket is TransportPacket transport) // TODO: filter for target TriggerIPPacket?
             {
-                foreach (var stanza in Stanzas.Where(stanza => stanza.Port.Accepts(transport)))
+                lock (_stanzas) foreach (var stanza in _stanzas.Where(stanza => stanza.Port.Accepts(transport)).ToArray())
                 {
                     using var scope = Logger.BeginRealmScope("knocking");
 
                     try
                     {
-                        if (stanza.PacketFilter.ShouldFilter(packet)) continue; // maybe filter packet
+                        if (stanza.PacketFilter.Value.ShouldFilter(packet)) continue; // maybe filter packet
 
                         foreach (var knock in stanza.Detector.Examine(ip, stanza.Secret))
                         {

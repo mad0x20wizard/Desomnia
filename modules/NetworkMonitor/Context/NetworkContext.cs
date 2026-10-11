@@ -295,8 +295,6 @@ namespace MadWizard.Desomnia.Network.Context
 
                 RegisterPlugins(builder);
             });
-
-            Scope.Resolve<KnockService>(TypedParameter.From(_knockContexts.SelectMany(ctx => ctx))); // TODO: change to add/remove
         }
 
         private void RegisterPlugins(ContainerBuilder builder)

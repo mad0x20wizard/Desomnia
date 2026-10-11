@@ -200,6 +200,7 @@ namespace MadWizard.Desomnia.Network.Context
             }
         }
 
+        #region Dynamic FilterRule Host resolution
         protected void RememberDynamicHostFilters(IPFilterRuleInfo rule)
         {
             foreach (var host in rule.HostFilterRule)
@@ -221,5 +222,11 @@ namespace MadWizard.Desomnia.Network.Context
                 }
             }
         }
+
+        protected internal virtual void ResolveFilterRules()
+        {
+            Scope?.Resolve<IEnumerable<PacketFilterRule>>();
+        }
+        #endregion
     }
 }

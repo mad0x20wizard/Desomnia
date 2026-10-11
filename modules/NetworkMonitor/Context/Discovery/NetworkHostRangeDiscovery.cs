@@ -1,7 +1,9 @@
 ﻿using Autofac;
 using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Knocking;
+using MadWizard.Desomnia.Network.Knocking;
 using MadWizard.Desomnia.Network.Neighborhood;
+using MadWizard.Desomnia.Network.Neighborhood.Options;
 using Microsoft.Extensions.Logging;
 using NetTools;
 
@@ -35,7 +37,7 @@ namespace MadWizard.Desomnia.Network.Context
 
                 foreach (IPAddressRange address in config)
                 {
-                    range.AddAddressRange(address); // add static ranges
+                    range.AddAddressRange(address, new IPAddressRangeOptions(IPAddressRangeFlags.Static)); // add static ranges
                 }
 
                 foreach (var host in this.FindHostsByName(config.Host.Select(c => c.Name)))
@@ -65,19 +67,40 @@ namespace MadWizard.Desomnia.Network.Context
         {
             var context = Scope.Resolve<NetworkKnockContext>(TypedParameter.From(range), TypedParameter.From(config));
 
-            Logger.LogDebug("Created dynamic host range '{Name}'", config.Name);
+            try
+            {
+                if (context.ToArray() is { } stanzas) // disposal must not resolve from the ending scope
+                {
+                    var knocking = Scope.Resolve<KnockService>();
 
-            _knockContexts.Add(context);
+                    context.Scope.CurrentScopeEnding += (sender, args) =>
+                    {
+                        foreach (var stanza in stanzas)
+                        {
+                            knocking.RemoveStanza(stanza);
+                        }
 
-            // TODO create an intermediate scope for the whole context
-            //context.Scope.CurrentScopeEnding += (sender, args) =>
-            //{
-            //    Logger.LogDebug("Removed dynamic host range '{Name}'", config.Name);
+                        _knockContexts.Remove(context);
 
-            //    _knockContexts.Remove(context);
-            //};
+                        Logger.LogDebug("Removed dynamic host range '{Name}'", config.Name);
+                    };
 
-            return context;
+                    foreach (var stanza in stanzas)
+                    {
+                        knocking.AddStanza(stanza);
+                    }
+
+                    _knockContexts.Add(context);
+
+                    Logger.LogDebug("Created dynamic host range '{Name}'", config.Name);
+                }
+
+                return context;
+            }
+            catch
+            {
+                context.Dispose(); throw;
+            }
         }
     }
 }

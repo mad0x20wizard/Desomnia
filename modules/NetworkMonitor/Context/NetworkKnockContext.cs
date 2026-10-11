@@ -8,6 +8,7 @@ using MadWizard.Desomnia.Network.Knocking.Filter;
 using MadWizard.Desomnia.Network.Knocking.Filter.Rules;
 using MadWizard.Desomnia.Network.Knocking.Secrets;
 using MadWizard.Desomnia.Network.Neighborhood;
+using MadWizard.Desomnia.Network.Neighborhood.Options;
 using MadWizard.Desomnia.Network.Services.Knocking;
 using NetTools;
 using System.Net;
@@ -27,29 +28,39 @@ namespace MadWizard.Desomnia.Network.Context
             var method  = DetermineMethod(parent, network, config);
             var port    = DeterminePort(network, config);
 
-            foreach (var secret in config.SharedSecret)
+            Scope = parent.BeginLifetimeScope();
+
+            try
             {
-                var scope = parent.BeginLifetimeScope(MatchingScopeLifetimeTags.KnockLifetimeScopeTag, builder =>
+                foreach (var secret in config.SharedSecret)
                 {
-                    var stanza = builder.RegisterType<KnockStanza>()
-                        .WithParameter(TypedNamedResolvedParameter<IKnockDetector>.FindBy(method))
-                        .WithParameter(TypedParameter.From(DetermineTimeout(network, config)))
-                        .WithParameter(TypedParameter.From(DetermineLabel(config, secret)))
-                        .WithParameter(TypedParameter.From(BuildSharedSecret(secret)))
-                        .WithParameter(TypedParameter.From(port))
-                        .SingleInstance()
-                        .AsSelf();
+                    var scope = Scope.BeginLifetimeScope(MatchingScopeLifetimeTags.KnockLifetimeScopeTag, builder =>
+                    {
+                        var stanza = builder.RegisterType<KnockStanza>()
+                            .WithParameter(TypedNamedResolvedParameter<IKnockDetector>.FindBy(method))
+                            .WithParameter(TypedParameter.From(DetermineTimeout(network, config)))
+                            .WithParameter(TypedParameter.From(DetermineLabel(config, secret)))
+                            .WithParameter(TypedParameter.From(BuildSharedSecret(secret)))
+                            .WithParameter(TypedParameter.From(port))
+                            .SingleInstance()
+                            .AsSelf();
 
-                    stanza.OnActivated(args => args.Instance.Knocked += KnockStanza_Knocked);
+                        stanza.OnActivated(args => args.Instance.Knocked += KnockStanza_Knocked);
+                        stanza.OnRelease(instance => instance.Knocked -= KnockStanza_Knocked);
 
-                    RegisterTrafficFilter(builder, port);
-                    RegisterPacketFilter(builder, config);
-                    RegisterKnockFilter(builder, config);
-                });
+                        RegisterTrafficFilter(builder, port);
+                        RegisterPacketFilter(builder, config);
+                        RegisterKnockFilter(builder, config);
+                    });
 
-                parent.Disposer.AddInstanceForDisposal(scope);
+                    Scope.Disposer.AddInstanceForDisposal(scope);
 
-                _scopes.Add(scope);
+                    _scopes.Add(scope);
+                }
+            }
+            catch
+            {
+                Scope.Dispose(); throw;
             }
         }
 
@@ -151,29 +162,33 @@ namespace MadWizard.Desomnia.Network.Context
 
             builder.RegisterComposite<CompositeKnockFilter, IKnockFilter>();
         }
+
+        protected internal override void ResolveFilterRules()
+        {
+            // Knock rules live in the individual stanza scopes. Resolve them here as well,
+            // once their hosts exist, so those hosts are protected by the filter references.
+
+            foreach (var stanza in this)
+            {
+                _ = stanza.PacketFilter.Value;
+            }
+        }
         #endregion
 
-        private async void KnockStanza_Knocked(object? sender, KnockEventArgs args)
+        private void KnockStanza_Knocked(object? sender, KnockEventArgs args)
         {
             var stanza = (KnockStanza)sender!;
 
             var ip = args.SourceEndPoint.Address;
 
-            var range = new IPAddressRange(ip);
+            TargetRange.AddAddressRange(new IPAddressRange(ip), new IPAddressRangeOptions(args.Timeout));
 
-            if (TargetRange.AddAddressRange(range))
-            {
-                TargetNetwork.RememberHostName(ip, stanza.Label, args.Timeout);
-
-                await Task.Delay(args.Timeout); // TODO really naive implementation
-
-                TargetRange.RemoveAddressRange(range);
-            }
+            TargetNetwork.RememberHostName(ip, stanza.Label, args.Timeout);
         }
 
         /// <summary>
-        /// Resolved lazily, because the stanza filters may depend on dynamic hosts which are only
-        /// created after construction — but materialized, so the scopes are resolved exactly once.
+        /// Each scope owns a single stanza; its packet filter resolves separately after
+        /// the caller has created any missing dynamic filter hosts.
         /// </summary>
         IEnumerator<KnockStanza> IEnumerable<KnockStanza>.GetEnumerator()
         {
