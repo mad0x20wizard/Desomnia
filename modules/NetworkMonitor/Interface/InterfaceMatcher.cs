@@ -2,7 +2,6 @@ using MadWizard.Desomnia.Network.Manager;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
-using System.Text.RegularExpressions;
 
 namespace MadWizard.Desomnia.Network.Interface
 {
@@ -116,7 +115,7 @@ namespace MadWizard.Desomnia.Network.Interface
         /// </summary>
         protected virtual bool MatchesInterface(INetworkInterface @interface, string pattern)
         {
-            return Regex.IsMatch(@interface.Identity.Id, pattern);
+            return @interface.Identity.Id == pattern;
         }
 
         protected virtual bool MatchesNetwork(INetworkInterface @interface, IPNetwork network)

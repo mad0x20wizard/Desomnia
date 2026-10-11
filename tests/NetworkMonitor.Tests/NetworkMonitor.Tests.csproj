@@ -18,6 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\modules\NetworkMonitor\NetworkMonitor.csproj" />
     <Compile Include="..\..\DesomniaService\Manager\Network\NetworkInterfaceInterop.cs" Link="Windows\NetworkInterfaceInterop.cs" />
+    <Compile Include="..\..\DesomniaService\Manager\Network\WindowsNetworkInterfaceInventory.cs" Link="Windows\WindowsNetworkInterfaceInventory.cs" />
   </ItemGroup>
 
 </Project>

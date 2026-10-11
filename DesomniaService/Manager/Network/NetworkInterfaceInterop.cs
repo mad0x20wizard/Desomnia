@@ -3,9 +3,54 @@ using System.Runtime.InteropServices;
 
 namespace MadWizard.Desomnia.Network.Manager
 {
-    /// <summary>Reads administrative state for IP interfaces, including hidden and filter interfaces.</summary>
+    /// <summary>Discovers IP-bound adapters and reads their administrative state.</summary>
     internal static partial class NetworkInterfaceInterop
     {
+        // Without GAA_FLAG_INCLUDE_ALL_INTERFACES, Windows excludes NDIS filter modules
+        // that .NET 9+ also returns from GetAllNetworkInterfaces. Keep CIM discovery
+        // separate: disabled adapters and adapters without IP bindings still belong there.
+        public static HashSet<Guid> GetIPInterfaceIds()
+        {
+            uint size = 15000; // recommended initial GetAdaptersAddresses buffer size
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                IntPtr buffer = Marshal.AllocHGlobal(checked((int)size));
+                try
+                {
+                    uint error = GetAdaptersAddresses(0, 0, IntPtr.Zero, buffer, ref size);
+                    if (error == 111) continue; // ERROR_BUFFER_OVERFLOW: retry with the new size
+                    if (error == 232) return []; // ERROR_NO_DATA
+                    if (error != 0) throw new Win32Exception((int)error);
+
+                    HashSet<Guid> ids = [];
+                    for (var current = buffer; current != IntPtr.Zero;)
+                    {
+                        var adapter = Marshal.PtrToStructure<AdapterAddressesHeader>(current);
+                        if (Guid.TryParse(Marshal.PtrToStringAnsi(adapter.AdapterName), out var id))
+                            ids.Add(id);
+                        current = adapter.Next;
+                    }
+                    return ids;
+                }
+                finally { Marshal.FreeHGlobal(buffer); }
+            }
+            // An unstable inventory must not look like every adapter was detached.
+            throw new Win32Exception(111);
+        }
+
+        [LibraryImport("iphlpapi.dll")]
+        private static partial uint GetAdaptersAddresses(uint family, uint flags, IntPtr reserved,
+            IntPtr addresses, ref uint size);
+
+        // Only the fixed prefix of IP_ADAPTER_ADDRESSES is needed to walk its linked list.
+        [StructLayout(LayoutKind.Sequential)]
+        private struct AdapterAddressesHeader
+        {
+            public ulong Alignment; // union of ULONG Length and DWORD IfIndex
+            public IntPtr Next;
+            public IntPtr AdapterName;
+        }
+
         public static bool TryGetDisabled(Guid interfaceId, out bool disabled)
         {
             disabled = false;

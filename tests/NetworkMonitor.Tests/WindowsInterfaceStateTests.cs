@@ -18,6 +18,7 @@ public class WindowsInterfaceStateTests
     public void LoopbackAdministrativeStateIsReadableWithoutACimAdapter()
     {
         var loopback = NetworkInterface.GetAllNetworkInterfaces().First(nic => nic.NetworkInterfaceType == NetworkInterfaceType.Loopback);
+        Assert.Contains(Guid.Parse(loopback.Id), NetworkInterfaceInterop.GetIPInterfaceIds());
         Assert.True(NetworkInterfaceInterop.TryGetDisabled(Guid.Parse(loopback.Id), out bool disabled));
         Assert.False(disabled);
     }
@@ -29,9 +30,10 @@ public class WindowsInterfaceStateTests
     }
 
     [WindowsFact]
-    public void PresentIpInterfacesIncludingHiddenOnesHaveAdministrativeState()
+    public void PresentIpBoundInterfacesHaveAdministrativeState()
     {
-        foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+        var ids = NetworkInterfaceInterop.GetIPInterfaceIds();
+        foreach (var nic in NetworkInterface.GetAllNetworkInterfaces().Where(nic => ids.Contains(Guid.Parse(nic.Id))))
         {
             // Recheck membership if a real adapter disappears during this read-only test.
             if (NetworkInterfaceInterop.TryGetDisabled(Guid.Parse(nic.Id), out _)) continue;

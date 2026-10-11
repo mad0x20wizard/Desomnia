@@ -69,12 +69,13 @@ namespace MadWizard.Desomnia.Network.Context
 
             _knockContexts.Add(context);
 
-            context.Scope.CurrentScopeEnding += (sender, args) =>
-            {
-                Logger.LogDebug("Removed dynamic host range '{Name}'", config.Name);
+            // TODO create an intermediate scope for the whole context
+            //context.Scope.CurrentScopeEnding += (sender, args) =>
+            //{
+            //    Logger.LogDebug("Removed dynamic host range '{Name}'", config.Name);
 
-                _knockContexts.Remove(context);
-            };
+            //    _knockContexts.Remove(context);
+            //};
 
             return context;
         }

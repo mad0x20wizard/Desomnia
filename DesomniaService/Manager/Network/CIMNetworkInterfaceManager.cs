@@ -27,12 +27,14 @@ namespace MadWizard.Desomnia.Network.Manager
 
         protected override IEnumerable<NetworkInterface> QueryInterfaces()
         {
-            var visible = base.QueryInterfaces().ToArray();
-            var identities = visible.Select(n => n.ToIdentity()).ToHashSet();
-            foreach (var nic in visible) yield return nic;
+            return WindowsNetworkInterfaceInventory.Merge(base.QueryInterfaces(),
+                NetworkInterfaceInterop.GetIPInterfaceIds(), QueryAdapterSnapshots());
+        }
 
-            // .NET omits some disabled Windows adapters. Include them in the physical
-            // inventory so disabled="false" also works on the first application run.
+        private static IEnumerable<NetworkInterface> QueryAdapterSnapshots()
+        {
+            // CIM supplements IP-bound interfaces with disabled adapters and adapters
+            // without IP bindings. Do not exclude virtual or hidden adapters here.
             using var session = CimSession.Create(null);
             foreach (var adapter in EnumerateAdapters(session))
             {
@@ -40,11 +42,9 @@ namespace MadWizard.Desomnia.Network.Manager
                 {
                     if (adapter.CimInstanceProperties["InterfaceGuid"]?.Value is not string id
                         || !Guid.TryParse(id, out var guid)) continue;
-                    var identity = new NetworkIdentity(guid.ToString("B").ToUpperInvariant());
-                    if (identities.Contains(identity)) continue;
                     var status = (OperationalStatus)Convert.ToInt32(adapter.CimInstanceProperties["InterfaceOperationalStatus"]?.Value ?? 6);
                     if (status == OperationalStatus.NotPresent) continue;
-                    yield return new AdapterSnapshot(identity.Id,
+                    yield return new AdapterSnapshot(guid.ToString("B").ToUpperInvariant(),
                         adapter.CimInstanceProperties["Name"]?.Value as string ?? id,
                         (NetworkInterfaceType)Convert.ToInt32(adapter.CimInstanceProperties["InterfaceType"]?.Value ?? 1), status);
                 }
