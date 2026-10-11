@@ -6,7 +6,7 @@ namespace MadWizard.Desomnia.Network.FRITZ.Configuration
     /// networks that opted into <c>Router</c> without configuring a box). Name and everything else
     /// are bound (and validated) by the NetworkMonitor module; here it is just the container.
     /// </summary>
-    public class NetworkMonitorConfig : Network.Configuration.NetworkMonitorConfig
+    public record class NetworkMonitorConfig : Network.Configuration.NetworkMonitorConfig
     {
         public IList<FRITZBoxRouterInfo> FRITZBoxRouter { get; private set; } = [];
     }

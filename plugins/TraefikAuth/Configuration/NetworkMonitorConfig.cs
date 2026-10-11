@@ -7,7 +7,7 @@ namespace MadWizard.Desomnia.Network.Traefik.Configuration
     /// options plus the &lt;RemoteHost&gt; items' &lt;HTTPService&gt; children (the hidden
     /// <see cref="RemoteHost"/> binds the same sections with the plugin's item type).
     /// </summary>
-    public class NetworkMonitorConfig : Network.Configuration.NetworkMonitorConfig
+    public record class NetworkMonitorConfig : Network.Configuration.NetworkMonitorConfig
     {
         internal ushort     TraefikAuthPort     { get; set; } = 5000;
         internal TimeSpan   TraefikAuthTimeout  { get; set; } = TimeSpan.FromSeconds(5);

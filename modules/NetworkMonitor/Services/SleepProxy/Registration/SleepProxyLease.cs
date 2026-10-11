@@ -91,6 +91,17 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
         }
     }
 
+    class SleepProxyDynamicHostRangeLease(ILogger logger, NetworkHost host, IPAddress ip) : IDisposable
+    {
+        void IDisposable.Dispose()
+        {
+            if (host.RemoveAddress(ip))
+            {
+                logger.LogHostAddressRemoved(host, ip);
+            }
+        }
+    }
+
     class SleepProxyLeaseEndEventArgs(SleepProxyLeaseEndReason reason) : EventArgs
     {
         public SleepProxyLeaseEndReason Reason => reason;

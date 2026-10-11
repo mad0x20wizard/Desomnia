@@ -61,8 +61,7 @@ namespace MadWizard.Desomnia.Network.Context
                     .SingleInstance()
                     .AsSelf();
 
-                RegisterHostFilters(builder, config.HostFilterRule);
-                RegisterHostRangeFilters(builder, config.HostRangeFilterRule);
+                RegisterFilters(builder, config);
 
                 RegisterTrafficFilterWatch(builder);
 

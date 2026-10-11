@@ -6,7 +6,7 @@ using System.Text;
 
 namespace MadWizard.Desomnia.Network.Configuration.Hosts
 {
-    public class WatchedHostInfo : NetworkHostInfo
+    public class WatchedHostInfo : NetworkHostInfo, IFilterInfo
     {
         public TransmissionThreshold? MinTraffic { get; set; }
 
@@ -101,7 +101,9 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
         // Filter-Rules
         public IList<HostFilterRuleInfo> HostFilterRule { get; set; } = [];
         public IList<HostRangeFilterRuleInfo> HostRangeFilterRule { get; set; } = [];
-        public IEnumerable<ServiceFilterRuleInfo> ServiceFilterRules => ServiceFilterRule.Concat(HTTPFilterRule);
+        public ForeignHostFilterRuleInfo? ForeignHostFilterRule { get; set; }
+        public EveryHostFilterRuleInfo? EveryHostFilterRule { get; set; }
+
         public IList<ServiceFilterRuleInfo> ServiceFilterRule { get; set; } = [];
         public IList<HTTPFilterRuleInfo> HTTPFilterRule { get; set; } = [];
         public PingFilterRuleInfo? PingFilterRule { get; set; }

@@ -36,10 +36,12 @@ namespace MadWizard.Desomnia.Network.Context
                 .WithParameter(new PacketRuleFiltersParameter(_tagName));
         }
 
-        protected void RegisterFilters(ContainerBuilder builder, WatchedHostInfo info)
+        protected void RegisterFilters(ContainerBuilder builder, IFilterInfo info)
         {
             RegisterHostFilters(builder, info.HostFilterRule);
             RegisterHostRangeFilters(builder, info.HostRangeFilterRule);
+            RegisterEveryHostFilter(builder, info.EveryHostFilterRule);
+            RegisterForeignHostFilter(builder, info.ForeignHostFilterRule);
             RegisterServiceFilters(builder, info.ServiceFilterRules);
             RegisterPingFilter(builder, info.PingFilterRule);
         }

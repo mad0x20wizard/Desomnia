@@ -15,7 +15,7 @@ using System.Text;
 
 namespace MadWizard.Desomnia.Network.Configuration
 {
-    public class NetworkMonitorConfig : LocalHostInfo, IIEnumerable<NetworkHostInfo>
+    public record class NetworkMonitorConfig : LocalHostInfo, IIEnumerable<NetworkHostInfo>
     {
         const long DEFAULT_TIMEOUT_MS = 500;
 
@@ -184,23 +184,15 @@ namespace MadWizard.Desomnia.Network.Configuration
         #endregion
 
         // Hosts
-        public LocalHostInfo?                   LocalHost   { get; private set; }
-        public IList<RemotePhysicalHostInfo>    RemoteHost  { get; private set; } = [];
-        public IList<NetworkSleepProxyInfo>     SleepProxy  { get; private set; } = [];
-        public IList<NetworkRouterInfo>         Router      { get; private set; } = [];
-        public IList<NetworkHostInfo>           Host        { get; private set; } = [];
+        public LocalHostInfo?                   LocalHost           { get; private set; }
+        public IList<RemotePhysicalHostInfo>    RemoteHost          { get; private set; } = [];
+        public IList<NetworkSleepProxyInfo>     SleepProxy          { get; private set; } = [];
+        public IList<NetworkRouterInfo>         Router              { get; private set; } = [];
+        public IList<NetworkHostInfo>           Host                { get; private set; } = [];
 
         // Host-Ranges
         public IList<NetworkHostRangeInfo>      HostRange           { get; private set; } = [];
         public IList<DynamicHostRangeInfo>      DynamicHostRange    { get; private set; } = [];
-
-        // Filter-Rules (networkwide)
-        public EveryHostFilterRuleInfo? EveryHostFilterRule { get; set; }
-        public ForeignHostFilterRuleInfo? ForeignHostFilterRule { get; set; }
-        public IEnumerable<ServiceFilterRuleInfo> ServiceFilterRules => ServiceFilterRule.Concat(HTTPFilterRule);
-        public IList<ServiceFilterRuleInfo> ServiceFilterRule { get; set; } = [];
-        public IList<HTTPFilterRuleInfo> HTTPFilterRule { get; set; } = [];
-        public PingFilterRuleInfo? PingFilterRule { get; set; }
 
         internal OffloadProtocol? DefaultProtocolOffload()
         {
@@ -237,27 +229,52 @@ namespace MadWizard.Desomnia.Network.Configuration
             return null;
         }
 
-        #region Host(-Range) enumeration
-        public bool HasCatchAllHostFilterRule => ForeignHostFilterRule != null || EveryHostFilterRule != null;
+        #region Host-/Service-Filter enumeration
+        public IEnumerable<EveryHostFilterRuleInfo> EveryHostFilterRules => Enumerate(EveryHostFilterRule)
+            .Concat(WatchedHosts.SelectMany(w => Enumerate(w.EveryHostFilterRule)))
+            .Concat(Enumerate(LocalHost?.EveryHostFilterRule));
+        public IEnumerable<ForeignHostFilterRuleInfo> ForeignHostFilterRules => Enumerate(ForeignHostFilterRule)
+            .Concat(WatchedHosts.SelectMany(w => Enumerate(w.ForeignHostFilterRule)))
+            .Concat(Enumerate(LocalHost?.ForeignHostFilterRule));
 
-        public IEnumerable<NetworkHostRangeInfo> Ranges => HostRange.Concat(DynamicHostRange)
-            .Concat(EveryHostFilterRule?.HostRange ?? []).Concat(EveryHostFilterRule?.DynamicHostRange ?? [])
-            .Concat(ForeignHostFilterRule?.HostRange ?? []).Concat(ForeignHostFilterRule?.DynamicHostRange ?? []);
+        public IEnumerable<ServiceFilterRuleInfo> ServiceFilterRules => ServiceFilterRule.Concat(HTTPFilterRule);
+
+        private static IEnumerable<T> Enumerate<T>(T? value) => new[] { value }.OfType<T>();
+        #endregion
+
+        #region Host(-Range) enumeration
+        /// <returns>All configured static host ranges.</returns>
+        public IEnumerable<NetworkHostRangeInfo> Ranges => HostRange
+            .Concat(EveryHostFilterRules.SelectMany(rule => rule.HostRange))
+            .Concat(ForeignHostFilterRules.SelectMany(rule => rule.HostRange))
+            .Concat(DynamicRanges);
+
+        /// <returns>All configured dynamic host ranges.</returns>
+        public IEnumerable<DynamicHostRangeInfo> DynamicRanges => DynamicHostRange
+            .Concat(EveryHostFilterRules.SelectMany(rule => rule.DynamicHostRange))
+            .Concat(ForeignHostFilterRules.SelectMany(rule => rule.DynamicHostRange));
 
         /// <returns>All configured simple hosts.</returns>
         public IEnumerable<NetworkHostInfo> Hosts => Host
-            .Concat(SleepProxy)
             .Concat(Ranges.SelectMany(range => range.Host)) // all hosts in all host ranges
-            .Concat(EveryHostFilterRule?.Host ?? [])
-            .Concat(ForeignHostFilterRule?.Host ?? []);
+            .Concat(EveryHostFilterRules.SelectMany(rule => rule.Host))
+            .Concat(ForeignHostFilterRules.SelectMany(rule => rule.Host))
+            .Concat(SleepProxy);
+
+        /// <returns>All configured watched hosts.</returns>
+        public IEnumerable<WatchedHostInfo> WatchedHosts => Enumerable.Empty<WatchedHostInfo>()
+            .Concat(RemoteHost).Concat(RemoteHost.SelectMany(r => r.VirtualHost))
+            .Concat(LocalHost?.VirtualHost ?? VirtualHost);
+
+        public IEnumerable<IFilterInfo> WatchedHostFilters => Enumerable.Empty<IFilterInfo>()
+            .Concat(Enumerate(LocalHost))
+            .Concat(WatchedHosts);
 
         /// <returns>All configured hosts, regardless of type.</returns>
         IEnumerator<NetworkHostInfo> IEnumerable<NetworkHostInfo>.GetEnumerator() => Hosts
+            .Concat(WatchedHosts)
             .Concat(Router)
-            .Concat(RemoteHost)
-            .Concat(RemoteHost.SelectMany(r => r.VirtualHost))
-            .Concat(LocalHost?.VirtualHost ?? [])
-            .Concat(VirtualHost).GetEnumerator();
+            .GetEnumerator();
         #endregion
 
         internal bool ShouldAdvertiseSleepProxy

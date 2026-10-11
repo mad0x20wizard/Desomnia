@@ -13,7 +13,7 @@ namespace MadWizard.Desomnia.Network.Tests
     /// </summary>
     public class NetworkOrdinalTests
     {
-        private sealed class PluginNetworkConfig : NetworkMonitorConfig
+        private sealed record class PluginNetworkConfig : NetworkMonitorConfig
         {
             public string? Extra { get; set; }
         }

@@ -1,6 +1,7 @@
 ﻿using Autofac;
 using MadWizard.Desomnia.Network.Filter;
 using Microsoft.Extensions.Logging;
+using System.Net;
 
 namespace MadWizard.Desomnia.Network.Context
 {
@@ -19,6 +20,17 @@ namespace MadWizard.Desomnia.Network.Context
                 Logger = (ILogger) value.Resolve(typeof(ILogger<>).MakeGenericType(GetType()));
             }
         } = null!;
+
+        protected void RegisterTrafficFilter(ContainerBuilder builder, IPPort port)
+        {
+            RegisterTrafficFilter(builder, port.Protocol switch
+            {
+                IPProtocol.TCP => new TCPTrafficType(port),
+                IPProtocol.UDP => new UDPTrafficType(port),
+
+                _ => throw new NotImplementedException("Unknown IP protocol: " + port.Protocol),
+            });
+        }
 
         protected void RegisterTrafficFilter(ContainerBuilder builder, params ITrafficType[] traffic)
         {

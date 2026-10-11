@@ -8,21 +8,25 @@ namespace MadWizard.Desomnia.Network.Configuration.Knocking
 {
     public class DynamicHostRangeInfo : NetworkHostRangeInfo
     {
-        public string?              KnockMethod         { get; set; }
+        public string?                  KnockMethod     { get; set; }
 
-        public ushort?              KnockPort           { get; set; }
-        public IPProtocol?          KnockProtocol       { get; set; }
-        public TimeSpan?            KnockTimeout        { get; set; }
+        public ushort?                  KnockPort       { get; set; }
+        public IPProtocol?              KnockProtocol   { get; set; }
+        public TimeSpan?                KnockTimeout    { get; set; }
 
-        public bool                 ProofIP             { get; set; } = false;
-        public TimeSpan?            ProofTime           { get; set; } = null;
+        // Cryptographic validation
 
-        public IList<SharedSecretData> SharedSecret     { get; set; } = [];
+        public bool                     ProofIP         { get; set; } = false;
+        public TimeSpan?                ProofTime       { get; set; } = null;
+
+        public IList<SharedSecretData>  SharedSecret    { get; set; } = [];
 
         // Packet Filter Rules
+
+        // Source Host Filter Rules
         public IList<HostFilterRuleInfo> HostFilterRule { get; set; } = [];
         public IList<HostRangeFilterRuleInfo> HostRangeFilterRule { get; set; } = [];
-        // KnockEvent Filter Rules // TODO
+        // Destination Service Filter Rules
         public IList<ServiceFilterRuleInfo> ServiceFilterRule { get; set; } = [];
     }
 

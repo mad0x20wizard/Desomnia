@@ -13,7 +13,32 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
 
         public PhysicalAddress? MAC { get; set; }
 
-        public bool Trace { get; set; } = false;
+        public bool Trace { get; set; } = false; // remove in favor of Wireshark remoting?
+
+        public bool IsNameOnly
+        {
+            get
+            {
+                if (AutoDetect != null)
+                    return false;
+
+                if (HostName != null)
+                    return false;
+                if (MAC != null)
+                    return false;
+
+                if (IPAddresses.Any())
+                    return false;
+
+                if (Services.Any())
+                    return false;
+
+                if (Trace != false)
+                    return false;
+
+                return true;
+            }
+        }
 
         #region Services
         private IList<ServiceInfo> Service { get; set; } = [];

@@ -160,7 +160,7 @@ namespace Microsoft.Extensions.Logging
                     tokens.Add("remote");
 
                 if (host.ShouldAddressExpire(ip, out var expires))
-                    tokens.Add($"expires=>{expires}");
+                    tokens.Add($"expires -> {expires}");
                 else if (host[ip].HasFlags(IPAddressFlags.Static))
                     tokens.Add("static");
 

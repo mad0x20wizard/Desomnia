@@ -17,6 +17,7 @@ namespace MadWizard.Desomnia.Network.Context
 
             foreach (var range in config.Ranges)
             {
+                // register static ranges
                 builder.RegisterType<NetworkHostRange>()
                     .Named<NetworkHostRange>(range.Name)
                     .SingleInstance()
@@ -28,56 +29,54 @@ namespace MadWizard.Desomnia.Network.Context
         {
             Logger.LogDebug("Discovering network host ranges...");
 
-            foreach (var configRange in Config.Ranges)
+            foreach (var config in Config.Ranges)
             {
-                var range = Scope.ResolveNamed<NetworkHostRange>(configRange.Name);
+                var range = Scope.ResolveNamed<NetworkHostRange>(config.Name);
 
-                if (configRange.AddressRange is IPAddressRange addressRange)
-                    range.AddAddressRange(addressRange);
-
-                foreach (var configChildRange in configRange.HostRange)
-                    if (configChildRange.AddressRange is IPAddressRange childAddressRange)
-                        range.AddAddressRange(childAddressRange);
-
-                foreach (var configChildHost in configRange.Host)
+                foreach (IPAddressRange address in config)
                 {
-                    var ips = configChildHost.IPAddresses;
-
-                    if (configChildHost.Name is not null)
-                    {
-                        var ctx = _hostContexts.First(ctx => ctx.Host.Name == configChildHost.Name);
-
-                        ctx.Host.AddressAdded += (sender, @event) => range.AddAddress(@event.IPAddress);
-                        ctx.Host.AddressRemoved += (sender, @event) => range.RemoveAddress(@event.IPAddress);
-
-                        ips = ctx.Host.IPAddresses;
-                    }
-
-                    foreach (var ip in ips)
-                    {
-                        range.AddAddressRange(new IPAddressRange(ip));
-                    }
+                    range.AddAddressRange(address); // add static ranges
                 }
 
-                if (configRange is DynamicHostRangeInfo dynamic)
+                foreach (var host in this.FindHostsByName(config.Host.Select(c => c.Name)))
+                {
+                    range.AddHostAddressRange(host); // add dynamic host ranges
+                }
+
+                if (config is DynamicHostRangeInfo configDynamic)
                 {
                     try
                     {
-                        CreateKnockContext(dynamic);
+                        CreateKnockContext(configDynamic, range);
                     }
                     catch (Exception ex)
                     {
-                        Logger.LogError(ex, $"DynamicHostRange '{dynamic.Name}' could not be initialized.");
+                        Logger.LogError(ex, $"DynamicHostRange '{configDynamic.Name}' could not be initialized.");
                     }
+                }
+                else
+                {
+                    Logger.LogDebug("Created host range '{Name}'", config.Name);
                 }
             }
         }
 
-        private void CreateKnockContext(DynamicHostRangeInfo range)
+        internal NetworkKnockContext CreateKnockContext(DynamicHostRangeInfo config, NetworkHostRange range)
         {
-            var context = Scope.Resolve<NetworkKnockContext>(TypedParameter.From(range));
+            var context = Scope.Resolve<NetworkKnockContext>(TypedParameter.From(range), TypedParameter.From(config));
+
+            Logger.LogDebug("Created dynamic host range '{Name}'", config.Name);
 
             _knockContexts.Add(context);
+
+            context.Scope.CurrentScopeEnding += (sender, args) =>
+            {
+                Logger.LogDebug("Removed dynamic host range '{Name}'", config.Name);
+
+                _knockContexts.Remove(context);
+            };
+
+            return context;
         }
     }
 }

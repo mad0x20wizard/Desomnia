@@ -1,37 +1,36 @@
 ﻿using MadWizard.Desomnia.Configuration;
-using MadWizard.Desomnia.Network.Configuration.Filter;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Configuration.Services;
 using System.Text;
 
 namespace MadWizard.Desomnia.Network.Configuration.Hosts
 {
-    public class LocalHostInfo
+    public record class LocalHostInfo : SharedFilterRules
     {
         public TransmissionThreshold? MinTraffic { get; set; }
 
         // Options
         #region         DemandOptions
-        DemandSource?   DemandSource        { get; set; }
-        TimeSpan?       DemandTimeout       { get; set; }
-        int?            DemandParallel      { get; set; }
+        DemandSource?   DemandSource                { get; set; }
+        TimeSpan?       DemandTimeout               { get; set; }
+        int?            DemandParallel              { get; set; }
 
         public DemandOptions MakeDemandOptions(NetworkMonitorConfig network) => new()
         {
-            Source      = DemandSource      ?? network.DemandSource,
-            Timeout     = DemandTimeout     ?? network.DemandTimeout,
-            Parallel    = DemandParallel    ?? network.DemandParallel,
+            Source      = DemandSource          ?? network.DemandSource,
+            Timeout     = DemandTimeout         ?? network.DemandTimeout,
+            Parallel    = DemandParallel        ?? network.DemandParallel,
             Forward     = false
         };
         #endregion
 
         #region AdvertiseOptions
-        private bool?       AdvertiseServices       { get; set; }
+        bool?       AdvertiseServices               { get; set; }
 
-        private TimeSpan?   AdvertiseTimeout        { get; set; }
+        TimeSpan?   AdvertiseTimeout                { get; set; }
 
-        private TimeSpan?   AdvertiseHostTTL        { get; set; }
-        private TimeSpan?   AdvertiseServiceTTL     { get; set; }
+        TimeSpan?   AdvertiseHostTTL                { get; set; }
+        TimeSpan?   AdvertiseServiceTTL             { get; set; }
 
         public AdvertiseOptions MakeAdvertiseOptions(NetworkMonitorConfig network) => new()
         {
@@ -77,16 +76,29 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
         }
         #endregion
 
-        // Ports
+        // Services
         public IList<WatchedServiceInfo> Service { get; set; } = [];
         public IList<WatchedHTTPServiceInfo> HTTPService { get; set; } = [];
         public IEnumerable<WatchedServiceInfo> Services => Service.Concat(HTTPService);
 
-        // Virtual-Hosts
+        // Virtual hosts
         public IList<LocalVirtualHostInfo> VirtualHost { get; set; } = [];
 
-        // Filter-Rules
-        public IList<HostFilterRuleInfo> HostFilterRule { get; set; } = [];
-        public IList<HostRangeFilterRuleInfo> HostRangeFilterRule { get; set; } = [];
+        internal LocalHostInfo WithoutNetworkFilters()
+        {
+            return this with
+            {
+                HostFilterRule = [],
+                HostRangeFilterRule = [],
+
+                ForeignHostFilterRule = null,
+                EveryHostFilterRule = null,
+
+                ServiceFilterRule = [],
+                HTTPFilterRule = [],
+
+                PingFilterRule = null
+            };
+        }
     }
 }

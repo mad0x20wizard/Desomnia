@@ -3,7 +3,7 @@ using System.Net;
 
 namespace MadWizard.Desomnia.Network.Configuration.Hosts
 {
-    public class IPAddressRangeInfo
+    public class IPAddressRangeInfo : IIEnumerable<IPAddressRange>
     {
         // either:
         private IPNetwork? Network  { get; set; }
@@ -29,6 +29,14 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
                     return new IPAddressRange(firstIP, lastIP);
                 else
                     return null;
+            }
+        }
+
+        public virtual IEnumerator<IPAddressRange> GetEnumerator()
+        {
+            if (AddressRange is not null)
+            {
+                yield return AddressRange;
             }
         }
     }

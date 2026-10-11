@@ -16,15 +16,70 @@ namespace MadWizard.Desomnia.Network.Context
 
             CreateLocalHost();
 
-            foreach (var configHost in Config.Hosts)
-            {
-                CreateHost(new TypedParameter(typeof(NetworkHostInfo), configHost));
-            }
-
             foreach (var configHost in Config.RemoteHost)
             {
                 CreateRemoteHost(configHost);
             }
+
+            foreach (var configHost in Config.Hosts)
+            {
+                CreateHost(configHost);
+            }
+        }
+
+        private void CreateLocalHost()
+        {
+            LocalHostInfo configHost;
+            if (Config.LocalHost is not null)
+            {
+                if (Config.Services.Any() || Config.VirtualHost.Any())
+                    throw new Exception("You have to specify the configuration of local services and virtual hosts on the LocalHost node.");
+
+                configHost = Config.LocalHost;
+            }
+            else
+            {
+                configHost = Config.WithoutNetworkFilters(); // don't register those filters twice
+            }
+
+            CreateHost(new TypedParameter(typeof(LocalHostInfo), configHost));
+
+            foreach (var configHostVirtual in configHost.VirtualHost)
+            {
+                if (VMManager[configHostVirtual.Name!] is IVirtualMachine vm)
+                {
+                    CreateHost(
+                        new TypedParameter(typeof(LocalVirtualHostInfo), configHostVirtual),
+                        new TypedParameter(typeof(IVirtualMachine), vm)
+                    );
+                }
+            }
+        }
+
+        private void CreateRemoteHost(RemotePhysicalHostInfo configHost)
+        {
+            CreateHost(new TypedParameter(typeof(RemotePhysicalHostInfo), configHost));
+
+            foreach (var configHostVirtual in configHost.VirtualHost)
+            {
+                CreateHost(new TypedParameter(typeof(RemoteVirtualHostInfo), configHostVirtual), TypedParameter.From(configHost));
+            }
+        }
+
+        private void CreateHost(NetworkHostInfo configHost)
+        {
+            if (configHost.IsNameOnly) // special handling for potential <Host> references
+            {
+                /**
+                 * We allow to use the <Host> config nodes to reference 
+                 * watched hosts (local / remote) for grouping
+                 * into host ranges.
+                 */
+                if (configHost.IsNameOnly && _hostContexts.Any(ctx => ctx.Host.Name == configHost.Name))
+                    return;
+            }
+
+            CreateHost(new TypedParameter(typeof(NetworkHostInfo), configHost));
         }
 
         public async Task DiscoverDynamicHosts(params FilterContext[] contexts)
@@ -84,47 +139,7 @@ namespace MadWizard.Desomnia.Network.Context
             return created;
         }
 
-        private void CreateLocalHost()
-        {
-            LocalHostInfo configHost;
-            if (Config.LocalHost is not null)
-            {
-                if (Config.Service.Any() || Config.HTTPService.Any() || Config.VirtualHost.Any())
-                    throw new Exception("You have to specify the configuration of local services and virtual hosts on the LocalHost node.");
-
-                configHost = Config.LocalHost;
-            }
-            else
-            {
-                Config.HostFilterRule.Clear(); // don't register these filters twice
-
-                configHost = Config;
-            }
-
-            CreateHost(new TypedParameter(typeof(LocalHostInfo), configHost));
-
-            foreach (var configHostVirtual in configHost.VirtualHost)
-            {
-                if (VMManager[configHostVirtual.Name!] is IVirtualMachine vm)
-                {
-                    CreateHost(
-                        new TypedParameter(typeof(LocalVirtualHostInfo), configHostVirtual),
-                        new TypedParameter(typeof(IVirtualMachine), vm)
-                    );
-                }
-            }
-        }
-
-        private void CreateRemoteHost(RemotePhysicalHostInfo configHost)
-        {
-            CreateHost(new TypedParameter(typeof(RemotePhysicalHostInfo), configHost));
-
-            foreach (var configHostVirtual in configHost.VirtualHost)
-            {
-                CreateHost(new TypedParameter(typeof(RemoteVirtualHostInfo), configHostVirtual), TypedParameter.From(configHost));
-            }
-        }
-
+        #region Host context creation
         internal NetworkHostContext CreateHost(params Parameter[] parameters)
         {
             return CreateHost<NetworkHostContext>(parameters);
@@ -172,5 +187,6 @@ namespace MadWizard.Desomnia.Network.Context
 
             return context;
         }
+        #endregion
     }
 }
