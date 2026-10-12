@@ -19,17 +19,32 @@ namespace MadWizard.Desomnia.Network.Context
 
             foreach (var range in config.Ranges)
             {
-                // register static ranges
-                builder.RegisterType<NetworkHostRange>()
-                    .Named<NetworkHostRange>(range.Name)
-                    .SingleInstance()
-                    .AsSelf();
+                if (range is DynamicHostRangeInfo)
+                {
+                    // register dynamic ranges
+                    var reg = builder.RegisterType<NetworkServiceHostRange>()
+                        .Named<NetworkHostRange>(range.Name)
+                        .SingleInstance()
+                        .AsSelf();
+
+                    // TODO add service filters here
+                }
+                else
+                {
+                    // register static ranges
+                    builder.RegisterType<NetworkHostRange>()
+                        .Named<NetworkHostRange>(range.Name)
+                        .SingleInstance()
+                        .AsSelf();
+                }
             }
         }
 
         internal async Task DiscoverHostRanges()
         {
             Logger.LogDebug("Discovering network host ranges...");
+
+            var janitor = Scope.Resolve<NetworkJanitor>();
 
             foreach (var config in Config.Ranges)
             {
@@ -60,6 +75,8 @@ namespace MadWizard.Desomnia.Network.Context
                 {
                     Logger.LogDebug("Created host range '{Name}'", config.Name);
                 }
+
+                janitor.WatchRange(range);
             }
         }
 
@@ -69,6 +86,8 @@ namespace MadWizard.Desomnia.Network.Context
 
             try
             {
+                Scope.Resolve<NetworkJanitor>().WatchRange(range);
+
                 if (context.ToArray() is { } stanzas) // disposal must not resolve from the ending scope
                 {
                     var knocking = Scope.Resolve<KnockService>();

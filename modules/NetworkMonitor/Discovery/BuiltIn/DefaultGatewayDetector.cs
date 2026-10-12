@@ -14,7 +14,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
 
         public required NetworkContext NetworkContext { private get; init; }
 
-        async Task IRouterDiscovery.DiscoverRouters(NetworkContext ctx)
+        async IAsyncEnumerable<NetworkRouterContext> IRouterDiscovery.DiscoverRouters(NetworkContext ctx)
         {
             var info = new DefaultGatewayInfo(Device.Interface, auto)
             {
@@ -39,7 +39,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
 
                 Logger.LogDebug($"Using default gateway");
 
-                await NetworkContext.CreateRouter<NetworkRouterContext>(info);
+                yield return NetworkContext.CreateRouter<NetworkRouterContext>(info);
             }
         }
     }

@@ -37,7 +37,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
         {
             _hosts.GetOrAdd(host, []).Add(family);
 
-            foreach (var ip in await FindIPAddresses(host, family, CancellationToken.None))
+            foreach (var ip in await FindIPAddresses(host, family, CancellationToken.None)) using (await Network.Mutex.LockAsync())
             {
                 if (host.AddAddress(ip, new(options.Refresh)))
                 {

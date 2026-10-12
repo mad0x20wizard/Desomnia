@@ -5,6 +5,7 @@ using MadWizard.Desomnia.Network.Configuration.Hosts;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Discovery;
 using MadWizard.Desomnia.Network.Discovery.BuiltIn;
+using MadWizard.Desomnia.Network.Neighborhood;
 using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia.Network.Context
@@ -20,6 +21,7 @@ namespace MadWizard.Desomnia.Network.Context
                 .AsImplementedInterfaces()
                 .SingleInstance()
                 .AsSelf();
+
             builder.RegisterType<RouterAdvertismentDetector>().WithPriority(2)
                 .WithParameter(TypedParameter.From(config.AutoDetect))
                 .WithParameter(TypedParameter.From(config.MakeAutoDiscoveryOptions()))
@@ -28,7 +30,17 @@ namespace MadWizard.Desomnia.Network.Context
                 .AsSelf();
         }
 
-        public async Task<T> CreateRouter<T>(NetworkRouterInfo info, params Parameter[] parameters) where T : NetworkRouterContext
+        public T CreateRouter<T>(NetworkRouterInfo info, params Parameter[] parameters) where T : NetworkRouterContext
+        {
+            return CreateRouter<T>(info, null, parameters);
+        }
+
+        public T CreateDynamicRouter<T>(NetworkRouterInfo info, DateTime validUntil) where T : NetworkRouterContext
+        {
+            return CreateRouter<T>(info, validUntil);
+        }
+
+        private T CreateRouter<T>(NetworkRouterInfo info, DateTime? validUntil, params Parameter[] parameters) where T : NetworkRouterContext
         {
             foreach (var configVPNClient in info.VPNClient)
             {
@@ -48,16 +60,12 @@ namespace MadWizard.Desomnia.Network.Context
                 new TypedParameter(info.GetType(), info),
             ]);
 
-            await ctx.DiscoverAddresses();
+            if (validUntil is not null)
+            {
+                ((NetworkRouter)ctx.Host).ValidUntil = validUntil;
 
-            return ctx;
-        }
-
-        public async Task<T> CreateDynamicRouter<T>(NetworkRouterInfo info) where T : NetworkRouterContext
-        {
-            var ctx = await CreateRouter<T>(info);
-
-            Scope.Resolve<NetworkJanitor>().MakeHostEligibleForSweeping(ctx);
+                Scope.Resolve<NetworkJanitor>().MakeHostEligibleForSweeping(ctx);
+            }
 
             return ctx;
         }
@@ -68,14 +76,19 @@ namespace MadWizard.Desomnia.Network.Context
 
             foreach (var configRouter in Config.Router)
             {
-                await CreateRouter<NetworkRouterContext>(configRouter);
+                var ctx = CreateRouter<NetworkRouterContext>(configRouter);
+
+                await ctx.DiscoverAddresses();
             }
 
             var discoveries = Scope.Resolve<IEnumerable<IRouterDiscovery>>();
 
             foreach (var discovery in discoveries)
             {
-                await discovery.ConfigureRouters(this);
+                await foreach (var router in discovery.ConfigureRouters(this))
+                {
+                    await router.DiscoverAddresses();
+                }
             }
 
             // active router lookup (default gateway, NDP advertisements, DNS-SD) — only on opt-in
@@ -83,7 +96,10 @@ namespace MadWizard.Desomnia.Network.Context
             {
                 foreach (var discovery in discoveries)
                 {
-                    await discovery.DiscoverRouters(this);
+                    await foreach (var router in discovery.DiscoverRouters(this))
+                    {
+                        await router.DiscoverAddresses();
+                    }
                 }
             }
         }

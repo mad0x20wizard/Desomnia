@@ -56,31 +56,32 @@ namespace MadWizard.Desomnia.Network.FRITZ.Discovery
         public required MulticastServiceBrowser Browser { private get; init; }
 
         // Statically-configured boxes — always created (autoDetect="Router" not required).
-        async Task IRouterDiscovery.ConfigureRouters(NetworkContext ctx)
+        async IAsyncEnumerable<NetworkRouterContext> IRouterDiscovery.ConfigureRouters(NetworkContext ctx)
         {
             foreach (var config in staticBoxes)
             {
-                await CreateFRITZBoxRouter(ctx, config);
+                if (await CreateFRITZBoxRouter(ctx, config) is { } router)
+                    yield return router;
             }
         }
 
         // Active lookup — runs only under autoDetect="Router" (the IRouterDiscovery pipeline gate).
-        async Task IRouterDiscovery.DiscoverRouters(NetworkContext ctx)
+        IAsyncEnumerable<NetworkRouterContext> IRouterDiscovery.DiscoverRouters(NetworkContext ctx)
         {
-            await DiscoverViaMDNS(ctx);
+            return DiscoverViaMDNS(ctx);
         }
 
         /// <summary>Creates a router for one box, unless it is already present. Enumerating the box'
         /// hosts is the reachability probe: if it throws, the box is unreachable and no router is
         /// created. The proven client is handed to the router scope, which owns it from then on.</summary>
-        private async Task CreateFRITZBoxRouter(NetworkContext ctx, FRITZBoxRouterInfo config)
+        private async Task<FRITZBoxRouterContext?> CreateFRITZBoxRouter(NetworkContext ctx, FRITZBoxRouterInfo config)
         {
             if (ctx.Network[config.Name] is not null)
-                return; // already present
+                return null; // already present
             if (config.IPv4 is IPAddress v4 && ctx.Network[v4] is not null)
-                return;
+                return null;
             if (config.IPv6 is IPAddress v6 && ctx.Network[v6] is not null)
-                return;
+                return null;
 
             var client = CreateClient(config);
 
@@ -92,15 +93,15 @@ namespace MadWizard.Desomnia.Network.FRITZ.Discovery
             {
                 Logger.LogError(ex, "FRITZ!Box '{Box}' could not be reached — not creating a router for it.", config.Name);
                 client.Dispose();
-                return;
+                return null;
             }
 
-            var router = await ctx.CreateRouter<FRITZBoxRouterContext>(config, TypedParameter.From(client));
+            return ctx.CreateRouter<FRITZBoxRouterContext>(config, TypedParameter.From(client));
         }
 
         /// <summary>Browses <c>_tr064._tcp</c> and creates a router for every FRITZ!Box on the segment
         /// (fritz.box domain) that isn't configured or already known.</summary>
-        private async Task DiscoverViaMDNS(NetworkContext ctx)
+        private async IAsyncEnumerable<NetworkRouterContext> DiscoverViaMDNS(NetworkContext ctx)
         {
             // Collect matching instances during the browse window; keeping the references alive lets
             // the browser enrich them with their addresses. Read them (and create) after the window.
@@ -123,7 +124,7 @@ namespace MadWizard.Desomnia.Network.FRITZ.Discovery
             catch (Exception ex)
             {
                 Logger.LogWarning(ex, "mDNS browse for FRITZ!Box routers failed.");
-                return;
+                yield break;
             }
 
             foreach (var instance in found.Values)
@@ -132,7 +133,8 @@ namespace MadWizard.Desomnia.Network.FRITZ.Discovery
 
                 Logger.LogDebug("Discovered FRITZ!Box router '{Name}' via mDNS.", config.Name);
 
-                await CreateFRITZBoxRouter(ctx, config);
+                if (await CreateFRITZBoxRouter(ctx, config) is { } router)
+                    yield return router;
             }
         }
 

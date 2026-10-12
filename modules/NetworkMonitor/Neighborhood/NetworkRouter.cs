@@ -11,7 +11,10 @@ namespace MadWizard.Desomnia.Network.Neighborhood
 
         public DateTime? LastSeenVPN    { get; internal set; }
 
-        public DateTime? ValidUntil      { get; set; }
+        public DateTime? ValidUntil
+        {
+            get; set { if (field != value) { field = value; TriggerChanged(); } }
+        }
 
         public NetworkHost? FindVPNClient(IPAddress? ip)
         {

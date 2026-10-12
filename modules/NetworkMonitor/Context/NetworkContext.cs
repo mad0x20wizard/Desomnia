@@ -154,7 +154,6 @@ namespace MadWizard.Desomnia.Network.Context
                     .AsSelf();
 
                 builder.RegisterType<NetworkJanitor>()
-                    .WithParameter(TypedParameter.From(config.MakeSweepOptions()))
                     .SingleInstance()
                     .AsSelf();
 

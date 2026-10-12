@@ -77,8 +77,6 @@ namespace MadWizard.Desomnia.Network
             foreach (var service in Services)
                 await service.Startup();
 
-            Janitor.StartSweeping();
-
             Logger.LogDebug($"Monitoring of '{Name}' has been started.");
         }
 
@@ -88,6 +86,9 @@ namespace MadWizard.Desomnia.Network
             {
                 await watch.StartWatch();
             }
+
+            // Discovery and filter resolution have finished before cleanup can retire hosts.
+            Janitor.StartSweeping();
         }
 
         internal async Task TriggerAfterStartup()

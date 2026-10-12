@@ -292,7 +292,7 @@ public class ReconfigurationLifecycleTests
             Device.Filter = "arp";
             var network = new NetworkSegment { Logger = NullLogger<NetworkSegment>.Instance,
                 Device = Device, LocalRange = null!, Ranges = null! };
-            Janitor = new(new SweepOptions { Frequency = TimeSpan.FromHours(1) })
+            Janitor = new()
                 { Logger = NullLogger<NetworkJanitor>.Instance, Network = network };
             Janitor.StartSweeping();
             Monitor = new() { Logger = NullLogger<NetworkMonitor>.Instance, Name = "test",

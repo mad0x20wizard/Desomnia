@@ -1,12 +1,13 @@
 ﻿using MadWizard.Desomnia.Network.Configuration.Hosts;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Context;
-using MadWizard.Desomnia.Network.Extensions;
 using MadWizard.Desomnia.Network.Neighborhood;
+using MadWizard.Desomnia.Network.Neighborhood.Events;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
 using System.Net;
 using System.Net.NetworkInformation;
+using System.Threading.Channels;
 
 namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
 {
@@ -17,103 +18,114 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
         public required NetworkDevice   Device { private get; init; }
         public required NetworkSegment  Network { private get; init; }
 
-        public required NetworkContext  NetworkContext { private get; init; }
-
         private int _routerNr = 1;
 
-        private SemaphoreSlim? _semaphore;
+        volatile ChannelWriter<RouterAdvertisement>? _advertisements;
 
-        private bool _discoverPassively = false;
-
-        async Task IRouterDiscovery.DiscoverRouters(NetworkContext ctx)
+        async IAsyncEnumerable<NetworkRouterContext> IRouterDiscovery.DiscoverRouters(NetworkContext ctx)
         {
-            if (Device.IPv6LinkLocalAddress != null)
+            if (!auto.HasFlag(AutoDiscoveryType.Router) || Device.IPv6LinkLocalAddress is null)
+                yield break;
+
+            Dictionary<PhysicalAddress, DiscoveredRouterInfo> routers = [];
+            using (LocalChannel<RouterAdvertisement> channel = Channel.CreateUnbounded<RouterAdvertisement>(new() { SingleReader = true }))
             {
-                _semaphore = new(0);
+                // Discovery passes are serialized; packet processing only reads this writer.
+                _advertisements = channel.Writer;
 
                 try
                 {
+                    using var timeout = new CancellationTokenSource(options.Timeout);
+                    using var completion = timeout.Token.Register(() => channel.Writer.TryComplete());
+
                     SendNDPRouterSolicitation();
 
-                    await _semaphore.WaitAsync(options.Timeout);
+                    await foreach (var advertisement in channel.Reader.ReadAllAsync())
+                    {
+                        if (!routers.TryGetValue(advertisement.PhysicalAddress, out var router))
+                        {
+                            routers.Add(advertisement.PhysicalAddress, router = new()
+                            {
+                                AutoDetect = auto,
+                                Name = $"UnkownRouter#{_routerNr++}",
+                                MAC = advertisement.PhysicalAddress,
+                            });
+                        }
+
+                        router.Addresses.Add(advertisement.IPAddress);
+                        router.ValidUntil = advertisement.ValidUntil;
+                    }
                 }
                 finally
                 {
-                    _discoverPassively = true;
-
-                    _semaphore = null;
+                    _advertisements = null;
                 }
+            }
+
+            foreach (var info in routers.Values)
+            {
+                NetworkRouterContext? context;
+
+                try
+                {
+                    info.Name = await info.Addresses.First().LookupName() ?? info.Name;
+
+                    // Lookup may take time. Do not recreate a known router or extend an expired advertisement.
+                    if (IsKnownRouter(info) || info.ValidUntil <= DateTime.Now)
+                        continue;
+
+                    context = ctx.CreateDynamicRouter<NetworkRouterContext>(info, info.ValidUntil);
+
+                    Logger.LogDebug($"Dynamically found router '{context.Host.Name}' at {context.Host.PhysicalAddress?.ToHexString()}");
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Failed to create router from advertisement at {Address}", info.Addresses.First());
+
+                    continue;
+                }
+
+                yield return context;
             }
         }
 
-        async void INetworkService.ProcessPacket(EthernetPacket packet)
+        private bool IsKnownRouter(DiscoveredRouterInfo info) => Network[info.MAC] is NetworkRouter || info.Addresses.Any(ip => Network[ip] is NetworkRouter);
+
+        void INetworkService.ProcessPacket(EthernetPacket packet)
         {
-            if (_semaphore != null || _discoverPassively)
+            if (packet.Extract<NdpPacket>() is NdpRouterAdvertisementPacket ndp)
             {
-                if (packet.Extract<NdpPacket>() is NdpRouterAdvertisementPacket ndp)
+                if (packet.FindSourcePhysicalAddress() is PhysicalAddress mac && packet.FindSourceIPAddress() is IPAddress ip)
                 {
-                    if (packet.FindSourcePhysicalAddress() is PhysicalAddress mac && packet.FindSourceIPAddress() is IPAddress ip)
+                    var lifetime = TimeSpan.FromSeconds(ndp.RouterLifetime);
+
+                    if ((Network[mac] as NetworkRouter ?? Network[ip] as NetworkRouter) is NetworkRouter router)
                     {
-                        var lifetime = TimeSpan.FromSeconds(ndp.RouterLifetime);
-
-                        //Logger.LogTrace($"Received NDP router advertisement from {ip} -> {mac.ToHexString()} with lifetime = {lifetime}");
-
-                        await RememberRouterAddress(mac, ip, lifetime);
-
-                        _semaphore?.ReleaseFinally();
+                        RememberRouterAddress(router, mac, ip, lifetime);
+                    }
+                    else
+                    {
+                        _advertisements?.TryWrite(new(mac, ip, lifetime));
                     }
                 }
             }
         }
 
-        private async Task RememberRouterAddress(PhysicalAddress mac, IPAddress ip, TimeSpan lifetime)
+        private void RememberRouterAddress(NetworkRouter router, PhysicalAddress mac, IPAddress ip, TimeSpan lifetime)
         {
-            if (Network[mac] is not NetworkRouter router)
+            if (router.PhysicalAddress is null)
             {
-                if (Network[ip] is NetworkRouter routerByIP)
-                {
-                    if (routerByIP.PhysicalAddress is null)
-                    {
-                        Logger.LogHostPhysicalAddressChanged(routerByIP, mac);
+                Logger.LogHostPhysicalAddressChanged(router, mac);
 
-                        routerByIP.PhysicalAddress = mac;
-                    }
-
-                    router = routerByIP;
-                }
-                else if (auto.HasFlag(AutoDiscoveryType.Router))
-                {
-                    var config = new NetworkRouterInfo()
-                    {
-                        AutoDetect = auto,
-
-                        Name = await ip.LookupName() ?? $"UnkownRouter#{_routerNr++}",
-
-                        MAC = mac,
-                        IPv6 = ip
-                    };
-
-                    var context = await NetworkContext.CreateDynamicRouter<NetworkRouterContext>(config);
-
-                    router = (NetworkRouter)context.Host;
-
-                    Logger.LogDebug($"Dynamically found router '{router.Name}' at {router.PhysicalAddress?.ToHexString()}");
-                }
-                else
-                {
-                    router = null!;
-                }
+                router.PhysicalAddress = mac;
             }
 
-            if (router is not null)
+            if (router.AddAddress(ip, new(lifetime)))
             {
-                router.ValidUntil = DateTime.Now + lifetime;
-
-                if (router.AddAddress(ip, new(lifetime)))
-                {
-                    Logger.LogHostAddressAdded(router, ip);
-                }
+                Logger.LogHostAddressAdded(router, ip);
             }
+
+            router.ValidUntil = DateTime.Now + lifetime;
         }
 
         private void SendNDPRouterSolicitation()
@@ -132,6 +144,14 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
             };
 
             Device.SendPacket(request);
+        }
+
+        private sealed class DiscoveredRouterInfo : NetworkRouterInfo
+        {
+            internal HashSet<IPAddress> Addresses { get; } = [];
+            internal DateTime ValidUntil { get; set; }
+
+            public override IEnumerable<IPAddress> IPAddresses => Addresses;
         }
     }
 }

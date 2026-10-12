@@ -9,7 +9,7 @@ using System.Net.Sockets;
 
 namespace MadWizard.Desomnia.Network.Neighborhood
 {
-    public class NetworkHost(string name)
+    public class NetworkHost(string name) : NetworkResource
     {
         public required NetworkSegment Network { get; init; }
 
@@ -21,7 +21,16 @@ namespace MadWizard.Desomnia.Network.Neighborhood
 
         public virtual PhysicalAddress? PhysicalAddress { get; set { field = value;  PhysicalAddressChanged?.Invoke(this, new(value!)); } }
 
-        internal int FilterRefCount { get; set; } = 0;
+        #region Change management
+        protected override void SubscribeToSelfChanges()
+        {
+            // delegate Address/Service events to Changed
+            AddressAdded    += (_, args) => TriggerChanged(args);
+            AddressRemoved  += (_, args) => TriggerChanged(args);
+            ServiceAdded    += (_, args) => TriggerChanged(args);
+            ServiceRemoved  += (_, args) => TriggerChanged(args);
+        }
+        #endregion
 
         #region IP addresses
         readonly ConcurrentDictionary<IPAddress, IPAddressOptions> _addresses = [];
@@ -62,6 +71,8 @@ namespace MadWizard.Desomnia.Network.Neighborhood
                         existing.Expires = options.Expires;
 
                         _addresses[ip] = existing;
+
+                        TriggerChanged();
                     }
                 }
 
@@ -149,6 +160,8 @@ namespace MadWizard.Desomnia.Network.Neighborhood
                         existing.Expires = options.Expires;
 
                         _services[service] = existing;
+
+                        TriggerChanged();
                     }
                 }
 

@@ -60,17 +60,6 @@ namespace MadWizard.Desomnia.Network.Configuration
         };
         #endregion
 
-        #region Network :: SweepOptions
-        private TimeSpan            SweepFrequency              { get; set; } = TimeSpan.FromMinutes(1);
-        private TimeSpan            SweepDelay                  { get; set; } = TimeSpan.FromMinutes(5);
-
-        public SweepOptions MakeSweepOptions() => new()
-        {
-            Frequency = this.SweepFrequency,
-            Delay = this.SweepDelay
-        };
-        #endregion
-
         #region Network :: DemandOptions 
         internal DemandSource       DemandSource            { get; set; } = DemandSource.Host;
         internal TimeSpan           DemandTimeout           { get; set; } = TimeSpan.FromSeconds(5);

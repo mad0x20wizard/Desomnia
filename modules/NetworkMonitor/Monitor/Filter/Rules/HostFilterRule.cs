@@ -32,9 +32,9 @@ namespace MadWizard.Desomnia.Network.Filter.Rules
     {
         public required NetworkHost Host
         {
-            get; set
+            get; init
             {
-                (field = value).FilterRefCount++;
+                (field = value).AddDynamicFilterRule(this);
             }
         }
 
@@ -45,7 +45,7 @@ namespace MadWizard.Desomnia.Network.Filter.Rules
 
         void IDisposable.Dispose()
         {
-            Host.FilterRefCount--;
+            Host.RemoveDynamicFilterRule(this);
         }
     }
 }

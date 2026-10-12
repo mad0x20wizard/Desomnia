@@ -1,8 +1,7 @@
 using Autofac;
 using MadWizard.Desomnia.Network.Configuration;
-using MadWizard.Desomnia.Network.Configuration.Knocking;
 using MadWizard.Desomnia.Network.Configuration.Filter;
-using MadWizard.Desomnia.Network.Configuration.Options;
+using MadWizard.Desomnia.Network.Configuration.Knocking;
 using MadWizard.Desomnia.Network.Context;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
@@ -125,7 +124,7 @@ namespace MadWizard.Desomnia.Network.Tests
                 : fixture.Context.CreateDynamicFilterHosts(context);
             var host = Assert.Single(created).Host;
             Assert.Same(host, fixture.Context.Network["allowed"]);
-            Assert.Equal(1, host.FilterRefCount);
+            Assert.True(host.IsReferencedByFilterRules);
             fixture.Process();
             Assert.Empty(ranges);
 
@@ -133,7 +132,7 @@ namespace MadWizard.Desomnia.Network.Tests
             fixture.Process();
             Assert.True(ranges.Contains(Peer));
             context.Dispose();
-            Assert.Equal(0, host.FilterRefCount);
+            Assert.False(host.IsReferencedByFilterRules);
         }
 
         [Fact]
@@ -215,7 +214,7 @@ namespace MadWizard.Desomnia.Network.Tests
                 builder.RegisterType<NetworkHostContext>()
                     .WithParameter(TypedParameter.From(new NetworkMonitorConfig())).ExternallyOwned();
                 builder.RegisterType<NetworkJanitor>()
-                    .WithParameter(TypedParameter.From(new SweepOptions())).SingleInstance();
+                    .SingleInstance();
                 builder.RegisterType<NetworkKnockContext>()
                     .WithParameter(TypedParameter.From(new NetworkMonitorConfig())).ExternallyOwned();
                 if (unresolvableParentRule)
