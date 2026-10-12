@@ -5,7 +5,7 @@ namespace MadWizard.Desomnia.Network.Monitor.Filter.Rules
 {
     public class EveryHostFilterRule : PacketFilterRule
     {
-        public IEnumerable<HostFilterRule> HostRules { get; set; } = [];
+        public IEnumerable<HostFilterRule> HostRules { get; init; } = [];
 
         override public bool Matches(EthernetPacket packet, PacketDirection direction = PacketDirection.Inbound)
         {

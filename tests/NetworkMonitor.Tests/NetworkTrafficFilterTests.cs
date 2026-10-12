@@ -98,10 +98,12 @@ namespace MadWizard.Desomnia.Network.Tests
         public void ServiceTraffic_UsesItsPortAndPeerRulesInBothDirections(PacketDirection direction, IPProtocol protocol)
         {
             var watch = CreateWatch(new StaticHostFilterRule { Type = FilterRuleType.MustNot, Addresses = [WatchedIP] });
+
+            IEnumerable<HostFilterRule> hostRules = [new StaticHostFilterRule { Type = FilterRuleType.Must, Addresses = [PeerIP] }];
+
             TransportFilterRule rule = protocol == IPProtocol.TCP
-                ? new TCPServiceFilterRule(445) { Type = FilterRuleType.Must }
-                : new UDPServiceFilterRule(445) { Type = FilterRuleType.Must };
-            rule.HostRules = [new StaticHostFilterRule { Type = FilterRuleType.Must, Addresses = [PeerIP] }];
+                ? new TCPServiceFilterRule(445) { Type = FilterRuleType.Must, HostRules = hostRules }
+                : new UDPServiceFilterRule(445) { Type = FilterRuleType.Must, HostRules = hostRules };
             var service = AddService(watch, protocol, rule);
 
             watch.ReportNetworkTraffic(Packet(direction, protocol, peer: IPAddress.Parse("192.0.2.30")), direction);

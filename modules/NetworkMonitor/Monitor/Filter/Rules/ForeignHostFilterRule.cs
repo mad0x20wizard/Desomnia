@@ -3,8 +3,10 @@ using PacketDotNet;
 
 namespace MadWizard.Desomnia.Network.Monitor.Filter.Rules
 {
-    internal class ForeignHostFilterRule(LocalNetworkRange lan) : EveryHostFilterRule
+    internal class ForeignHostFilterRule : EveryHostFilterRule
     {
+        public required LocalNetworkRange LocalRange { get; init; }
+
         override public bool Matches(EthernetPacket packet, PacketDirection direction = PacketDirection.Inbound)
         {
             if (packet.PayloadPacket is IPPacket ip)
@@ -13,7 +15,7 @@ namespace MadWizard.Desomnia.Network.Monitor.Filter.Rules
                     ? ip.SourceAddress 
                     : ip.DestinationAddress;
 
-                if (!lan.Contains(address))
+                if (!LocalRange.Contains(address))
                 {
                     return base.Matches(packet, direction);
                 }

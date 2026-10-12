@@ -2,6 +2,6 @@
 {
     public abstract class FilterRule
     {
-        public required FilterRuleType Type { get; set; }
+        public required FilterRuleType Type { get; init; }
     }
 }
