@@ -17,9 +17,15 @@ namespace MadWizard.Desomnia.Network.Filter.Rules
         }
     }
 
-    public class DynamicHostRangeFilterRule : HostRangeFilterRule
+    public class DynamicHostRangeFilterRule : HostRangeFilterRule, IDisposable
     {
-        public required NetworkHostRange Range { get; init; }
+        public required NetworkHostRange Range
+        {
+            get; init
+            {
+                (field = value).AddDynamicFilterRule(this);
+            }
+        }
 
         public override bool Matches(EthernetPacket packet, PacketDirection direction = PacketDirection.Inbound)
         {
@@ -39,6 +45,11 @@ namespace MadWizard.Desomnia.Network.Filter.Rules
         public override bool MatchesAddress(IPAddress? ip = null)
         {
             return ip != null && Range.Contains(ip);
+        }
+
+        void IDisposable.Dispose()
+        {
+            Range.RemoveDynamicFilterRule(this);
         }
     }
 }
