@@ -283,10 +283,11 @@ namespace MadWizard.Desomnia.Network.Neighborhood
             {
                 IsDisposed = true;
 
+                // remove all host and address ranges
                 foreach (var host in _hosts.ToArray())
-                {
                     RemoveHostAddressRange(host);
-                }
+                foreach (var range in _ranges.Keys.ToArray())
+                    RemoveAddressRange(range);
 
                 PublishChanges(default, true);
             }
