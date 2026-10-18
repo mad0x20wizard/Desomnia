@@ -2,6 +2,7 @@
 using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Network.Configuration.Options;
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Manager;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Watch;
@@ -122,7 +123,7 @@ namespace MadWizard.Desomnia.Network
             Janitor.StartSweeping();
         }
 
-        private void HandlePacket(object? sender, EthernetPacket packet)
+        private void HandlePacket(object? sender, in EthernetPacket packet)
         {
             using (Network.Mutex.Lock())
             {

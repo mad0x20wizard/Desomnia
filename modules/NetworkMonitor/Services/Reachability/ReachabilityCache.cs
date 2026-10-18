@@ -9,13 +9,13 @@ namespace MadWizard.Desomnia.Network.Reachability
 
         readonly MemoryCache _cache = new(new MemoryCacheOptions());
 
-        internal void Write(IPAddress ip, IPPort? port, bool reachable)
+        internal void Write(IPAddress ip, IPService? port, bool reachable)
         {
             var entry = new ReachabilityCacheEntry(reachable);
 
             _cache.Set(ip, entry, IP_CACHE_MAX_TTL);
 
-            if (port is IPPort p)
+            if (port is IPService p)
             {
                 if (p.Protocol == IPProtocol.TCP)
                     _cache.Set(new TCPEndPoint(ip, p.Port), entry, IP_CACHE_MAX_TTL);

@@ -34,7 +34,7 @@
     <PackageReference Include="Autofac" Version="9.3.1" />
     <PackageReference Include="Autofac.Extensions.DependencyInjection" Version="11.0.2" />
     <PackageReference Include="ConcurrentHashSet" Version="1.3.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Xml" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Xml" Version="10.0.13" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.10" />
     <PackageReference Include="Nito.AsyncEx" Version="5.1.2" />

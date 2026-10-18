@@ -21,7 +21,7 @@ namespace MadWizard.Desomnia.Network.Context
             }
         } = null!;
 
-        protected void RegisterTrafficFilter(ContainerBuilder builder, IPPort port)
+        protected void RegisterTrafficFilter(ContainerBuilder builder, IPService port)
         {
             RegisterTrafficFilter(builder, port.Protocol switch
             {

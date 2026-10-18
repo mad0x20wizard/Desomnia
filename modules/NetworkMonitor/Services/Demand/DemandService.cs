@@ -1,5 +1,6 @@
 ﻿using MadWizard.Desomnia.Network.Address;
 using MadWizard.Desomnia.Network.Configuration.Options;
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Watch;
@@ -79,7 +80,7 @@ namespace MadWizard.Desomnia.Network.Demand
             {
                 if (Network[packet.SourceAddress] is NetworkHost host && Monitor[host] is NetworkHostWatch watch)
                 {
-                    watch.ReportNetworkTraffic(packet.Ethernet, PacketDirection.Outbound);
+                    watch.ReportNetworkTraffic(packet.Ethernet, FlowDirection.Outbound);
                 }
             }
         }

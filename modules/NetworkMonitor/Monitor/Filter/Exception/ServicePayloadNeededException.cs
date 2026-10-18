@@ -2,8 +2,8 @@
 
 namespace MadWizard.Desomnia.Network.Filter
 {
-    internal class ServicePayloadNeededException(IPPort port) : AdditionalDataNeededException
+    internal class ServicePayloadNeededException(IPService port) : AdditionalDataNeededException
     {
-        public IPPort Port { get; set; } = port;
+        public IPService Port { get; set; } = port;
     }
 }

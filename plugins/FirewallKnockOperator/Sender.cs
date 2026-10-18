@@ -13,7 +13,7 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
     {
         public required ILogger<Sender> Logger { private get; init; }
 
-        void IKnockMethod.Knock(IPAddress source, IPEndPoint target, IPPort knock, SharedSecret secret)
+        void IKnockMethod.Knock(IPAddress source, IPEndPoint target, IPService knock, SharedSecret secret)
         {
             using UdpClient udp = new(target.AddressFamily);
 
@@ -24,7 +24,7 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
             var bytes = udp.Send(payload, new IPEndPoint(target.Address, knock.Port));
         }
 
-        static byte[] BuildFKOPayload(SharedSecret secret, IPAddress source, IPPort? target, string username = "desomnia")
+        static byte[] BuildFKOPayload(SharedSecret secret, IPAddress source, IPService? target, string username = "desomnia")
         {
             // Belt and braces: KnockService validates via IKnockMethod.ValidateSecret before it ever
             // gets here, but this is the method that actually depends on the secret's length.

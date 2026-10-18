@@ -21,7 +21,7 @@ namespace MadWizard.Desomnia.Network.Naming
         public DomainName DomainName { get; init; }
         public DomainName ServiceDomainName { get; init; }
 
-        public IPPort Port { get; init; }
+        public IPService Port { get; init; }
 
         public DomainName HostDomainName { get; private init; } // "host.local"
         public string HostName => HostDomainName.Labels[0]; // "host"

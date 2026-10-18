@@ -1,9 +1,9 @@
 ﻿using SharpPcap;
 using System.Collections.Concurrent;
 
-namespace MadWizard.Desomnia.Network
+namespace MadWizard.Desomnia.Network.Device
 {
-    internal class PacketCaptureContext : IIEnumerable<RawCapture>, IDisposable
+    internal class PacketCaptureQueue : IIEnumerable<RawCapture>, IDisposable
     {
         private string Name { get; }
 
@@ -13,7 +13,7 @@ namespace MadWizard.Desomnia.Network
 
         private Thread? ProcessingThread { get; set; }
 
-        internal PacketCaptureContext(string name, int capacity)
+        internal PacketCaptureQueue(string name, int capacity)
         {
             Name = name;
 
@@ -22,7 +22,7 @@ namespace MadWizard.Desomnia.Network
             PacketQueue = new BlockingCollection<RawCapture>(new ConcurrentQueue<RawCapture>(), capacity);
         }
 
-        internal void StartProcessing(Action<PacketCaptureContext> processor)
+        internal void StartProcessing(Action<PacketCaptureQueue> processor)
         {
             ProcessingThread = new Thread(() => processor(this))
             {
@@ -115,7 +115,7 @@ namespace MadWizard.Desomnia.Network
             PacketQueue.Dispose();
         }
 
-        private ref struct QueueSlot(PacketCaptureContext ctx) : IDisposable
+        private ref struct QueueSlot(PacketCaptureQueue ctx) : IDisposable
         {
             bool _releaseOnDisposal = true;
 

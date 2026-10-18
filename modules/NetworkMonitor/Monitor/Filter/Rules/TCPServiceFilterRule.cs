@@ -3,9 +3,9 @@ using System.Net;
 
 namespace MadWizard.Desomnia.Network.Filter.Rules
 {
-    public class TCPServiceFilterRule(ushort port) : TransportFilterRule(new IPPort(IPProtocol.TCP, port))
+    public class TCPServiceFilterRule(ushort port) : ServiceFilterRule(new IPService(IPProtocol.TCP, port))
     {
-        public override bool Matches(EthernetPacket packet, PacketDirection direction = PacketDirection.Inbound)
+        public override bool Matches(EthernetPacket packet, FlowDirection direction = FlowDirection.Inbound)
         {
             if (base.Matches(packet, direction) && packet.Extract<TcpPacket>() is TcpPacket tcp)
             {

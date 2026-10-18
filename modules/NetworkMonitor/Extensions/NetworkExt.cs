@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Manager;
+﻿using MadWizard.Desomnia.Network.Device;
+using MadWizard.Desomnia.Network.Manager;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Watch;
 using PacketDotNet;

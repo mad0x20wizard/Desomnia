@@ -2,7 +2,7 @@
 
 namespace MadWizard.Desomnia.Network.Filter.Rules
 {
-    public class UDPServiceFilterRule(ushort port) : TransportFilterRule(new IPPort(IPProtocol.UDP, port))
+    public class UDPServiceFilterRule(ushort port) : ServiceFilterRule(new IPService(IPProtocol.UDP, port))
     {
 
     }

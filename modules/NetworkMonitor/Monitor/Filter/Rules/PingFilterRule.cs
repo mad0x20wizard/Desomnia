@@ -4,14 +4,14 @@ namespace MadWizard.Desomnia.Network.Filter.Rules
 {
     internal class PingFilterRule : IPFilterRule
     {
-        override public bool Matches(EthernetPacket packet, PacketDirection direction = PacketDirection.Inbound)
+        override public bool Matches(EthernetPacket packet, FlowDirection direction = FlowDirection.Inbound)
         {
             if (base.Matches(packet, direction))
             {
                 // IPv4-Support
                 if (packet.PayloadPacket is IPv4Packet ip4 && ip4.PayloadPacket is IcmpV4Packet icmp4)
                 {
-                    var code = direction == PacketDirection.Inbound 
+                    var code = direction == FlowDirection.Inbound 
                         ? IcmpV4TypeCode.EchoRequest 
                         : IcmpV4TypeCode.EchoReply;
 
@@ -22,7 +22,7 @@ namespace MadWizard.Desomnia.Network.Filter.Rules
                 // IPv6-Support
                 else if (packet.PayloadPacket is IPv6Packet ip6 && ip6.PayloadPacket is IcmpV6Packet icmp6)
                 {
-                    var code = direction == PacketDirection.Inbound
+                    var code = direction == FlowDirection.Inbound
                         ? IcmpV6Type.EchoRequest
                         : IcmpV6Type.EchoReply;
 

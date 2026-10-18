@@ -1,4 +1,4 @@
-﻿using MadWizard.Desomnia.Network.Filter;
+﻿using MadWizard.Desomnia.Network.Device.Filter;
 using MadWizard.Desomnia.Network.Neighborhood;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;

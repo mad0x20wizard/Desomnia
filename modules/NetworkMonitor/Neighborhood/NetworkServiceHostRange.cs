@@ -4,6 +4,6 @@ namespace MadWizard.Desomnia.Network.Neighborhood
 {
     internal class NetworkServiceHostRange : NetworkHostRange
     {
-        public required IEnumerable<TransportFilterRule> Rules { internal get; init; }
+        public required IEnumerable<ServiceFilterRule> Rules { internal get; init; }
     }
 }

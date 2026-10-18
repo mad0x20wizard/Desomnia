@@ -8,9 +8,9 @@ namespace MadWizard.Desomnia.Network.Filter.Rules
     {
         public abstract bool MatchesAddress(IPAddress? ip = null);
 
-        override public bool Matches(EthernetPacket packet, PacketDirection direction = PacketDirection.Inbound)
+        override public bool Matches(EthernetPacket packet, FlowDirection direction = FlowDirection.Inbound)
         {
-            var ip = direction == PacketDirection.Inbound
+            var ip = direction == FlowDirection.Inbound
                 ? packet.FindSourceIPAddress()
                 : packet.FindTargetIPAddress();
 

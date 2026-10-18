@@ -14,11 +14,11 @@ namespace MadWizard.Desomnia.Network.Filter
 
         public required ReachabilityService Reachability { private get; init; }
 
-        bool IPacketFilter.ShouldFilter(EthernetPacket packet, PacketFilterOptions options, PacketDirection direction)
+        bool IPacketFilter.ShouldFilter(EthernetPacket packet, PacketFilterOptions options, FlowDirection direction)
         {
             if (FindPeerRouter(packet, direction) is NetworkRouter router)
             {
-                if (direction == PacketDirection.Inbound)
+                if (direction == FlowDirection.Inbound)
                 {
                     if (!packet.IsIPUnicast() && ShouldAllow(router, packet) && packet.FindTargetIPAddress() is IPAddress ip)
                     {
@@ -70,9 +70,9 @@ namespace MadWizard.Desomnia.Network.Filter
             return false;
         }
 
-        private NetworkRouter? FindPeerRouter(EthernetPacket packet, PacketDirection direction)
+        private NetworkRouter? FindPeerRouter(EthernetPacket packet, FlowDirection direction)
         {
-            var peer = direction == PacketDirection.Inbound ? packet.FindSourceIPAddress() : packet.FindTargetIPAddress();
+            var peer = direction == FlowDirection.Inbound ? packet.FindSourceIPAddress() : packet.FindTargetIPAddress();
 
             return Network.OfType<NetworkRouter>().FirstOrDefault(router => router.HasAddress(ip: peer));
         }

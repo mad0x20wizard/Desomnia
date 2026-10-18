@@ -1,4 +1,5 @@
 using ConcurrentCollections;
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Watch;
 using Microsoft.Extensions.Logging;

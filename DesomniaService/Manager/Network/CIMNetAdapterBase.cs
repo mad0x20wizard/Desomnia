@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Network.Device;
 using Microsoft.Management.Infrastructure;
 using System.Net.NetworkInformation;
 

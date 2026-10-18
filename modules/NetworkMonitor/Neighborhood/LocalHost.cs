@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Neighborhood.Options;
+﻿using MadWizard.Desomnia.Network.Device;
+using MadWizard.Desomnia.Network.Neighborhood.Options;
 using System.Net;
 using System.Net.NetworkInformation;
 

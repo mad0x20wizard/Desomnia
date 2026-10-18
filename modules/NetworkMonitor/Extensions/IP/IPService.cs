@@ -1,9 +1,9 @@
-﻿using MadWizard.Desomnia.Network;
+﻿using MadWizard.Desomnia.Network.Filter;
 using PacketDotNet;
 
 namespace System.Net
 {
-    public readonly record struct IPPort(IPProtocol Protocol, ushort Port)
+    public readonly record struct IPService(IPProtocol Protocol, ushort Port)
     {
         public bool Accepts(TransportPacket packet)
         {
@@ -18,9 +18,9 @@ namespace System.Net
             return false;
         }
 
-        public bool Accepts(TransportPacket packet, PacketDirection direction)
+        public bool Accepts(TransportPacket packet, FlowDirection direction)
         {
-            if (direction == PacketDirection.Inbound)
+            if (direction == FlowDirection.Inbound)
                 return Accepts(packet);
 
             switch (packet) // outbound: the service answers from its own port
@@ -34,33 +34,33 @@ namespace System.Net
             return false;
         }
 
-        public static IPPort? SourceOf(TransportPacket packet)
+        public static IPService? SourceOf(TransportPacket packet)
         {
             switch (packet)
             {
                 case TcpPacket tcp:
-                    return new IPPort(IPProtocol.TCP, tcp.SourcePort);
+                    return new IPService(IPProtocol.TCP, tcp.SourcePort);
                 case UdpPacket udp:
-                    return new IPPort(IPProtocol.UDP, udp.SourcePort);
+                    return new IPService(IPProtocol.UDP, udp.SourcePort);
             }
 
             return null;
         }
 
-        public static IPPort? DestinationOf(TransportPacket packet)
+        public static IPService? DestinationOf(TransportPacket packet)
         {
             switch (packet)
             {
                 case TcpPacket tcp:
-                    return new IPPort(IPProtocol.TCP, tcp.DestinationPort);
+                    return new IPService(IPProtocol.TCP, tcp.DestinationPort);
                 case UdpPacket udp:
-                    return new IPPort(IPProtocol.UDP, udp.DestinationPort);
+                    return new IPService(IPProtocol.UDP, udp.DestinationPort);
             }
 
             return null;
         }
 
-        public static implicit operator ushort(IPPort port) => port.Port;
+        public static implicit operator ushort(IPService port) => port.Port;
 
         private string ToProtocolString()
         {

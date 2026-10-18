@@ -27,7 +27,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Services
         public IPProtocol       Protocol            { get; set; } = IPProtocol.TCP;
         public ushort           Port                { get; set; }
 
-        public IPPort IPPort => new(Protocol, Port);
+        public IPService IPPort => new(Protocol, Port);
 
         public virtual TransportNetworkService Service => new(Name, IPPort)
         {

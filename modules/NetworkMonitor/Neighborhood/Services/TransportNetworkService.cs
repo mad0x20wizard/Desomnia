@@ -1,10 +1,11 @@
-﻿using Makaretu.Dns;
+﻿using MadWizard.Desomnia.Network.Filter;
+using Makaretu.Dns;
 using PacketDotNet;
 using System.Net;
 
 namespace MadWizard.Desomnia.Network.Neighborhood.Services
 {
-    public class TransportNetworkService(string name, IPPort port) : NetworkService(name)
+    public class TransportNetworkService(string name, IPService port) : NetworkService(name)
     {
         public virtual string ServiceName
         {
@@ -40,9 +41,9 @@ namespace MadWizard.Desomnia.Network.Neighborhood.Services
         /// </summary>
         public IDictionary<string, string> Properties { get; init; } = new Dictionary<string, string>();
 
-        public IPPort Port => port;
+        public IPService Port => port;
 
-        protected internal virtual IEnumerable<IPPort> Ports
+        protected internal virtual IEnumerable<IPService> Ports
         {
             get
             {
@@ -50,7 +51,10 @@ namespace MadWizard.Desomnia.Network.Neighborhood.Services
             }
         }
 
-        public override bool Accepts(Packet packet, PacketDirection direction)
+        /// <summary>Enumerates every port accepted by this service, including derived service ports.</summary>
+        public IEnumerable<IPService> GetPorts() => Ports;
+
+        public override bool Accepts(Packet packet, FlowDirection direction)
         {
             if (packet.Extract<TransportPacket>() is TransportPacket transport)
             {
@@ -60,7 +64,7 @@ namespace MadWizard.Desomnia.Network.Neighborhood.Services
             return false;
         }
 
-        public bool Serves(IPPort another) => Ports.Any(service => service == another);
+        public bool Serves(IPService another) => Ports.Any(service => service == another);
 
         public override string ToString()
         {
@@ -72,7 +76,7 @@ namespace MadWizard.Desomnia.Network.Neighborhood.Services
     {
         extension (IEnumerable<NetworkService> services)
         {
-            public TransportNetworkService? WithPort(IPPort port)
+            public TransportNetworkService? WithPort(IPService port)
             {
                 return services.OfType<TransportNetworkService>().Where(t => t.Serves(port)).FirstOrDefault();
             }

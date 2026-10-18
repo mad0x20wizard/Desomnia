@@ -21,7 +21,7 @@ namespace MadWizard.Desomnia.Network.Demand
         public IPAddress SourceAddress { get; init; }
         public IPAddress TargetAddress { get; init; }
 
-        public IPPort? Service { get; set; }
+        public IPService? Service { get; set; }
 
         public TimeSpan Duration => _stopwatch.Elapsed;
 

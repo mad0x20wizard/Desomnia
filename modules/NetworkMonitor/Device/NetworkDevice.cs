@@ -1,5 +1,6 @@
 ﻿using Autofac;
-using MadWizard.Desomnia.Network.Filter;
+using MadWizard.Desomnia.Extensions.EventHandler;
+using MadWizard.Desomnia.Network.Device.Filter;
 using MadWizard.Desomnia.Network.Manager;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
@@ -8,7 +9,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 
-namespace MadWizard.Desomnia.Network
+namespace MadWizard.Desomnia.Network.Device
 {
     public class NetworkDevice : IDisposable
     {
@@ -63,10 +64,10 @@ namespace MadWizard.Desomnia.Network
             }
         }
 
-        public event EventHandler<EthernetPacket>?  PacketCaptured;
-        public event EventHandler<PacketCapture>?   PacketDropped;
+        public event ReadonlyEventHandler<EthernetPacket>?  PacketCaptured;
+        public event ReadonlyEventHandler<PacketCapture>?   PacketDropped;
 
-        private PacketCaptureContext? _context;
+        private PacketCaptureQueue? _context;
 
         private bool _shouldBeCapturing;
 
@@ -95,7 +96,7 @@ namespace MadWizard.Desomnia.Network
 
             if (!_shouldBeCapturing)
             {
-                _context = new PacketCaptureContext(Name, PacketQueueCapacity);
+                _context = new PacketCaptureQueue(Name, PacketQueueCapacity);
                 _context.StartProcessing(ProcessQueuedPackets);
 
                 _shouldBeCapturing = true;
@@ -195,7 +196,7 @@ namespace MadWizard.Desomnia.Network
         /// order via <see cref="PacketCaptured"/>. Running off the capture thread means a slow
         /// handler no longer stalls capture or overflows the kernel ring buffer.
         /// </summary>
-        private void ProcessQueuedPackets(PacketCaptureContext ctx)
+        private void ProcessQueuedPackets(PacketCaptureQueue ctx)
         {
             try
             {
@@ -207,7 +208,7 @@ namespace MadWizard.Desomnia.Network
                         {
                             try
                             {
-                                PacketCaptured?.Invoke(this, ethernet);
+                                PacketCaptured?.Invoke(this, in ethernet);
                             }
                             catch (Exception ex)
                             {

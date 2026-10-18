@@ -64,12 +64,12 @@ namespace PacketDotNet
             return null;
         }
 
-        public static IPPort? FindTargetService(this Packet? packet)
+        public static IPService? FindTargetService(this Packet? packet)
         {
             if (packet?.Extract<TcpPacket>() is TcpPacket tcp)
-                return new IPPort(IPProtocol.TCP, tcp.DestinationPort);
+                return new IPService(IPProtocol.TCP, tcp.DestinationPort);
             if (packet?.Extract<UdpPacket>() is UdpPacket udp)
-                return new IPPort(IPProtocol.UDP, udp.DestinationPort);
+                return new IPService(IPProtocol.UDP, udp.DestinationPort);
             return null;
         }
 

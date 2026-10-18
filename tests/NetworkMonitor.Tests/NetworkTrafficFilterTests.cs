@@ -1,5 +1,6 @@
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Demand;
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Network.Neighborhood;
@@ -69,10 +70,10 @@ namespace MadWizard.Desomnia.Network.Tests
             return service;
         }
 
-        private static EthernetPacket Packet(PacketDirection direction, IPProtocol protocol = IPProtocol.TCP,
+        private static EthernetPacket Packet(FlowDirection direction, IPProtocol protocol = IPProtocol.TCP,
             ushort watchedPort = 445, IPAddress? peer = null, bool ipv6 = false)
         {
-            var inbound = direction == PacketDirection.Inbound;
+            var inbound = direction == FlowDirection.Inbound;
             var watched = ipv6 ? IPAddress.Parse("2001:db8::20") : WatchedIP;
             peer ??= ipv6 ? IPAddress.Parse("2001:db8::10") : PeerIP;
             ushort peerPort = watchedPort == 445 ? (ushort)50000 : (ushort)445;
@@ -91,17 +92,17 @@ namespace MadWizard.Desomnia.Network.Tests
         }
 
         [Theory]
-        [InlineData(PacketDirection.Inbound, IPProtocol.TCP)]
-        [InlineData(PacketDirection.Outbound, IPProtocol.TCP)]
-        [InlineData(PacketDirection.Inbound, IPProtocol.UDP)]
-        [InlineData(PacketDirection.Outbound, IPProtocol.UDP)]
-        public void ServiceTraffic_UsesItsPortAndPeerRulesInBothDirections(PacketDirection direction, IPProtocol protocol)
+        [InlineData(FlowDirection.Inbound, IPProtocol.TCP)]
+        [InlineData(FlowDirection.Outbound, IPProtocol.TCP)]
+        [InlineData(FlowDirection.Inbound, IPProtocol.UDP)]
+        [InlineData(FlowDirection.Outbound, IPProtocol.UDP)]
+        public void ServiceTraffic_UsesItsPortAndPeerRulesInBothDirections(FlowDirection direction, IPProtocol protocol)
         {
             var watch = CreateWatch(new StaticHostFilterRule { Type = FilterRuleType.MustNot, Addresses = [WatchedIP] });
 
             IEnumerable<HostFilterRule> hostRules = [new StaticHostFilterRule { Type = FilterRuleType.Must, Addresses = [PeerIP] }];
 
-            TransportFilterRule rule = protocol == IPProtocol.TCP
+            ServiceFilterRule rule = protocol == IPProtocol.TCP
                 ? new TCPServiceFilterRule(445) { Type = FilterRuleType.Must, HostRules = hostRules }
                 : new UDPServiceFilterRule(445) { Type = FilterRuleType.Must, HostRules = hostRules };
             var service = AddService(watch, protocol, rule);
@@ -120,11 +121,11 @@ namespace MadWizard.Desomnia.Network.Tests
         }
 
         [Theory]
-        [InlineData(PacketDirection.Inbound, false)]
-        [InlineData(PacketDirection.Outbound, false)]
-        [InlineData(PacketDirection.Inbound, true)]
-        [InlineData(PacketDirection.Outbound, true)]
-        public void SMBClientKeepalive_DoesNotCountAsWatchedHostOrServiceUsage(PacketDirection direction, bool ipv6)
+        [InlineData(FlowDirection.Inbound, false)]
+        [InlineData(FlowDirection.Outbound, false)]
+        [InlineData(FlowDirection.Inbound, true)]
+        [InlineData(FlowDirection.Outbound, true)]
+        public void SMBClientKeepalive_DoesNotCountAsWatchedHostOrServiceUsage(FlowDirection direction, bool ipv6)
         {
             var watch = CreateWatch();
             var service = AddService(watch, IPProtocol.TCP, new TCPServiceFilterRule(445) { Type = FilterRuleType.Must });
@@ -140,9 +141,9 @@ namespace MadWizard.Desomnia.Network.Tests
         }
 
         [Theory]
-        [InlineData(PacketDirection.Inbound)]
-        [InlineData(PacketDirection.Outbound)]
-        public void HostRules_CanAllowUnmatchedTrafficButMustNotStillVetoesIt(PacketDirection direction)
+        [InlineData(FlowDirection.Inbound)]
+        [InlineData(FlowDirection.Outbound)]
+        public void HostRules_CanAllowUnmatchedTrafficButMustNotStillVetoesIt(FlowDirection direction)
         {
             var blocked = IPAddress.Parse("192.0.2.30");
             var watch = CreateWatch(
@@ -166,16 +167,16 @@ namespace MadWizard.Desomnia.Network.Tests
         }
 
         [Theory]
-        [InlineData(PacketDirection.Inbound)]
-        [InlineData(PacketDirection.Outbound)]
-        public void MissingPayload_DoesNotCountOrStartARequest(PacketDirection direction)
+        [InlineData(FlowDirection.Inbound)]
+        [InlineData(FlowDirection.Outbound)]
+        public void MissingPayload_DoesNotCountOrStartARequest(FlowDirection direction)
         {
             var watch = CreateWatch();
             var service = AddService(watch, IPProtocol.TCP, new PayloadFilterRule { Type = FilterRuleType.Must });
             var packet = Packet(direction);
 
             Assert.Throws<ServicePayloadNeededException>(() => watch.Verify(packet, direction));
-            if (direction == PacketDirection.Inbound)
+            if (direction == FlowDirection.Inbound)
                 Assert.Null(watch.Evaluate(new CaptureSummary(packet)));
             else
                 watch.ReportNetworkTraffic(packet, direction);
@@ -190,7 +191,7 @@ namespace MadWizard.Desomnia.Network.Tests
             var watch = CreateWatch();
             AddService(watch, IPProtocol.TCP, new TCPServiceFilterRule(445) { Type = FilterRuleType.Must });
             watch.Report(new DemandEvent(watch.Host, packets:
-                [Packet(PacketDirection.Inbound), Packet(PacketDirection.Inbound, watchedPort: 50000)]));
+                [Packet(FlowDirection.Inbound), Packet(FlowDirection.Inbound, watchedPort: 50000)]));
 
             var usage = Assert.IsType<NetworkHostUsage>(Assert.Single(watch.Inspect(Interval)));
             Assert.Equal(4, usage.Bytes);
@@ -198,11 +199,11 @@ namespace MadWizard.Desomnia.Network.Tests
         }
 
         [Theory]
-        [InlineData(PacketDirection.Inbound, false)]
-        [InlineData(PacketDirection.Outbound, false)]
-        [InlineData(PacketDirection.Inbound, true)]
-        [InlineData(PacketDirection.Outbound, true)]
-        public void RouterPolicy_UsesThePeerAddress(PacketDirection direction, bool allowWake)
+        [InlineData(FlowDirection.Inbound, false)]
+        [InlineData(FlowDirection.Outbound, false)]
+        [InlineData(FlowDirection.Inbound, true)]
+        [InlineData(FlowDirection.Outbound, true)]
+        public void RouterPolicy_UsesThePeerAddress(FlowDirection direction, bool allowWake)
         {
             var watch = CreateWatch();
             var router = new NetworkRouter("router")

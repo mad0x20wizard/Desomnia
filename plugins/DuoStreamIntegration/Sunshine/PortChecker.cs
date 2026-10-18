@@ -162,7 +162,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine
             return false;
         }
 
-        internal static bool IsAnyPortInUse(params IPPort[] services)
+        internal static bool IsAnyPortInUse(params IPService[] services)
         {
             foreach (var service in services)
             {

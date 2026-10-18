@@ -3,11 +3,11 @@ using System.Net;
 
 namespace MadWizard.Desomnia.Network.Filter.Rules
 {
-    public abstract class TransportFilterRule(IPPort port) : IPFilterRule
+    public abstract class ServiceFilterRule(IPService port) : IPFilterRule
     {
-        public IPPort Port => port;
+        public IPService Port => port;
 
-        override public bool Matches(EthernetPacket packet, PacketDirection direction = PacketDirection.Inbound)
+        override public bool Matches(EthernetPacket packet, FlowDirection direction = FlowDirection.Inbound)
         {
             if (packet.PayloadPacket is IPPacket ip && ip.PayloadPacket is TransportPacket transport)
             {

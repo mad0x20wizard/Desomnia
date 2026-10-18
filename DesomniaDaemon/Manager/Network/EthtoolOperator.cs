@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using MadWizard.Desomnia.Network.Device;
+using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
 namespace MadWizard.Desomnia.Network.Manager

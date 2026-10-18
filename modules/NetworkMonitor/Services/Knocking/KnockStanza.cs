@@ -18,7 +18,7 @@ namespace MadWizard.Desomnia.Network.Services.Knocking
         public required IKnockFilter        KnockFilter     { internal get; init; }
 
         // Method agnostic parameters
-        public required IPPort              Port            { get; init; }
+        public required IPService              Port            { get; init; }
         public required TimeSpan            Timeout         { internal get; init; }
         public required SharedSecret        Secret          { internal get; init; }
 

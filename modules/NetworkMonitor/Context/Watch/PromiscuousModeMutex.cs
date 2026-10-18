@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Hosting;
+﻿using MadWizard.Desomnia.Network.Device;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
 using System.Net.NetworkInformation;

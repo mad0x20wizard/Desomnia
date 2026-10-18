@@ -133,7 +133,7 @@ namespace Makaretu.Dns
             public string ProtocolName => srv.Name.Labels[2].Replace("_", "");
 
             public IPProtocol Protocol => ToProtocol(srv.ProtocolName);
-            public IPPort IPPort => new(srv.Protocol, srv.Port);
+            public IPService IPPort => new(srv.Protocol, srv.Port);
 
             public string InstanceName => srv.Name.Labels[0];
             public string HostName => srv.Target.Labels[0];

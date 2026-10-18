@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.HyperV.Configuration;
 using MadWizard.Desomnia.Network.HyperV.Middleware;
 using MadWizard.Desomnia.Network.Manager;
@@ -492,7 +493,7 @@ namespace MadWizard.Desomnia.Network.HyperV.Tests
 
             var received = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var receivedCount = 0;
-            networkDevice.PacketCaptured += (sender, packet) =>
+            networkDevice.PacketCaptured += (sender, in packet) =>
             {
                 if (Interlocked.Increment(ref receivedCount) == 2)
                     received.SetResult();

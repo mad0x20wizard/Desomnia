@@ -1,6 +1,7 @@
 ﻿using Autofac;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Demand;
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Network.Neighborhood;
@@ -64,7 +65,7 @@ namespace MadWizard.Desomnia.Network.Watch
         {
             switch (DemandOptions.Source)
             {
-                case DemandSource.Host when Host.Network[source] is NetworkHost host:
+                case DemandSource.Host when Network[source] is NetworkHost host:
                     return host;
 
                 default:
@@ -72,7 +73,7 @@ namespace MadWizard.Desomnia.Network.Watch
             }
         }
 
-        internal virtual DemandRequest? Evaluate(in CaptureSummary packet)
+        internal virtual DemandRequest? Evaluate(in CaptureSummary capture)
         {
             /**
              * Magic Packets should never start a demand request,
@@ -81,34 +82,34 @@ namespace MadWizard.Desomnia.Network.Watch
              * or responding with an address advertisement in order
              * to signal the presence of the target host.
              */
-            if (packet.Ethernet.IsMagicPacket())
+            if (capture.Ethernet.IsMagicPacket())
             {
-                HandleMagicPacket(packet.Ethernet);
+                HandleMagicPacket(capture.Ethernet);
             }
 
             /**
-             * Only packets with a valid source Options address will be processed
+             * Only packets with a valid source IP address will be processed
              * and can trigger a demand request.
              */
-            else if (packet.SourceAddress is IPAddress source)
+            else if (capture.SourceAddress is IPAddress source)
             {
                 // do we already have an ongoing request for that source?
                 if (_ongoingRequests.TryGetValue(DetermineSource(source), out DemandRequest? ongoing))
                 {
-                    ongoing.EnqueuePacket(packet.Ethernet);
+                    ongoing.EnqueuePacket(capture.Ethernet);
                 }
 
                 // An established TCP stream can no longer start a demand request. Account for it
                 // through the same filters, without starting a request.
-                else if (packet.Extract<TcpPacket>() is { Synchronize: false })
+                else if (capture.Extract<TcpPacket>() is { Synchronize: false })
                 {
-                    ReportNetworkTraffic(packet.Ethernet, PacketDirection.Inbound);
+                    ReportNetworkTraffic(capture.Ethernet, FlowDirection.Inbound);
                 }
 
                 // can we start a new request for that source Options?
-                else if (MaybeStartRequest(packet) is DemandRequest request)
+                else if (MaybeStartRequest(capture) is DemandRequest request)
                 {
-                    request.EnqueuePacket(packet.Ethernet);
+                    request.EnqueuePacket(capture.Ethernet);
 
                     return request;
                 }
@@ -125,9 +126,14 @@ namespace MadWizard.Desomnia.Network.Watch
             });
         }
 
-        private bool CanTriggerDemand(in CaptureSummary packet)
+        private bool CanTriggerDemand(in CaptureSummary capture)
         {
-            if (packet.Extract<TcpPacket>() is TcpPacket tcp)
+            if (capture.HasPacket(out TcpPacket? tcp2))
+            {
+                tcp2.Reset = true;
+            }
+
+            if (capture.Extract<TcpPacket>() is TcpPacket tcp)
             {
                 if (tcp.Synchronize) // ongoing TCP connections never trigger demand requests
                 {
@@ -153,7 +159,7 @@ namespace MadWizard.Desomnia.Network.Watch
                     if (CanTriggerDemand(capture))
                         return true;
 
-                    ReportNetworkTraffic(capture.Ethernet, PacketDirection.Inbound);
+                    ReportNetworkTraffic(capture.Ethernet, FlowDirection.Inbound);
 
                     return false;
                 }
@@ -188,7 +194,7 @@ namespace MadWizard.Desomnia.Network.Watch
             return null;
         }
 
-        public bool Verify(EthernetPacket packet, PacketDirection direction = PacketDirection.Inbound)
+        public bool Verify(EthernetPacket packet, FlowDirection direction = FlowDirection.Inbound)
         {
             /*
              * Packets accepted by a service watch are judged by that service's own filter, starting
@@ -203,7 +209,7 @@ namespace MadWizard.Desomnia.Network.Watch
             return !Filter.Value.ShouldFilter(packet, FilterOptions, direction);
         }
 
-        protected internal override void ReportNetworkTraffic(EthernetPacket packet, PacketDirection direction)
+        protected internal override void ReportNetworkTraffic(EthernetPacket packet, FlowDirection direction)
         {
             try
             {

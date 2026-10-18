@@ -1,6 +1,6 @@
 ﻿using MadWizard.Desomnia.Network.Address;
 using MadWizard.Desomnia.Network.Configuration.Options;
-using MadWizard.Desomnia.Network.Extensions;
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Reachability;
 using Microsoft.Extensions.Logging;
@@ -31,7 +31,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
 
                 Logger.LogDebug("Host '{HostName}' has no MAC address configured, try to resolve dynamically...", host.Name);
 
-                async void Capture(object? sender, EthernetPacket packet)
+                void Capture(object? sender, in EthernetPacket packet)
                 {
                     if (AnalyzePacket(packet) is AddressMapping mapping)
                     {

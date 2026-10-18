@@ -1,4 +1,5 @@
 ﻿using Autofac;
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.HyperV.Configuration;
 using MadWizard.Desomnia.Network.HyperV.Events;
 using MadWizard.Desomnia.Network.HyperV.Manager;

@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Neighborhood;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;

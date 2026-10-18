@@ -1,4 +1,5 @@
-﻿using PacketDotNet;
+﻿using MadWizard.Desomnia.Network.Filter;
+using PacketDotNet;
 
 namespace MadWizard.Desomnia.Network.Neighborhood
 {
@@ -6,6 +7,6 @@ namespace MadWizard.Desomnia.Network.Neighborhood
     {
         public string Name { get; init; } = name;
 
-        public abstract bool Accepts(Packet packet, PacketDirection direction = PacketDirection.Inbound);
+        public abstract bool Accepts(Packet packet, FlowDirection direction = FlowDirection.Inbound);
     }
 }

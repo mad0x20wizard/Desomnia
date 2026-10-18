@@ -15,6 +15,7 @@
 <linker>
   <assembly fullname="DesomniaCore" preserve="all" />
   <assembly fullname="DesomniaNetworkMonitor" preserve="all" />
+  <assembly fullname="DesomniaFirewallMonitor" preserve="all" />
   <assembly fullname="DesomniaPowerRequestMonitor" preserve="all" />
   <assembly fullname="DesomniaProcessMonitor" preserve="all" />
 

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Replace the interface name and source addresses before using this example. -->
+<SystemMonitor version="3">
+    <NetworkMonitor interface="Ethernet">
+        <LocalHost>
+            <Service name="Firewall TCP test" protocol="TCP" port="8443">
+                <HostRangeFilterRule network="192.0.2.0/24" type="Must" />
+            </Service>
+            <ServiceFilterRule protocol="TCP" port="8443" type="MustNot">
+                <HostFilterRule IPv4="192.0.2.13" type="Must" />
+            </ServiceFilterRule>
+            <Service name="Firewall UDP test" protocol="UDP" port="8444">
+                <HostFilterRule IPv4="192.0.2.10" type="Must" />
+            </Service>
+        </LocalHost>
+    </NetworkMonitor>
+</SystemMonitor>

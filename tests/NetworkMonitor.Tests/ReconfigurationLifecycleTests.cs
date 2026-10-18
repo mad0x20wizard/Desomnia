@@ -3,6 +3,7 @@ using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Interfaces;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Context;
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Interface;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Power.Guard;

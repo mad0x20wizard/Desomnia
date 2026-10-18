@@ -5,6 +5,6 @@ namespace MadWizard.Desomnia.Network.Knocking
 {
     public interface IKnockMethod
     {
-        public void Knock(IPAddress source, IPEndPoint target, IPPort knock, SharedSecret secret);
+        public void Knock(IPAddress source, IPEndPoint target, IPService knock, SharedSecret secret);
     }
 }

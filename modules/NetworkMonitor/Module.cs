@@ -11,6 +11,7 @@ using MadWizard.Desomnia.Network.Context.Bridges;
 using MadWizard.Desomnia.Network.Datagram;
 using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Network.Demand.Detector;
+using MadWizard.Desomnia.Network.Device.Filter;
 using MadWizard.Desomnia.Network.Environments;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Handoff;

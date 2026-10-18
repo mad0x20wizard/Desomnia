@@ -6,7 +6,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Options
     public struct KnockOptions
     {
         public string           Method      { get; init; }
-        public IPPort           Port        { get; init; }
+        public IPService           Port        { get; init; }
 
         public TimeSpan         Delay       { get; init; }
         public TimeSpan?        Repeat      { get; init; }

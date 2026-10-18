@@ -1,17 +1,14 @@
+﻿using MadWizard.Desomnia.Network.Filter;
 using PacketDotNet;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.NetworkInformation;
 
-namespace MadWizard.Desomnia.Network
+namespace MadWizard.Desomnia.Network.Device
 {
-    /// <summary>
-    /// Metadata used by the demand/accounting hot path. PacketDotNet materializes several packet
-    /// properties (notably IP and hardware addresses), so reading those values once avoids their
-    /// repeated allocation in every detector and watch.
-    /// </summary>
-    internal readonly struct CaptureSummary
+    public struct EthernetCapture
     {
-        public EthernetPacket Ethernet { get; }
+        internal EthernetPacket Packet { get; }
 
         public PhysicalAddress SourcePhysicalAddress { get; }
         public PhysicalAddress TargetPhysicalAddress { get; }
@@ -19,8 +16,8 @@ namespace MadWizard.Desomnia.Network
         public IPAddress? SourceAddress { get; }
         public IPAddress? TargetAddress { get; }
 
-        public IPPort? SourceService { get; }
-        public IPPort? TargetService { get; }
+        public IPService? SourcePort { get; }
+        public IPService? TargetPort { get; }
 
         public bool IsIPUnicast { get; }
 
@@ -30,9 +27,12 @@ namespace MadWizard.Desomnia.Network
 
         public bool IsDuplicateAddressDetection { get; }
 
-        public CaptureSummary(EthernetPacket packet)
+        public IFilterContext Inbound   { get; }
+        public IFilterContext Outbound  { get; }
+
+        public EthernetCapture(EthernetPacket packet)
         {
-            Ethernet = packet;
+            Packet = packet;
 
             SourcePhysicalAddress = packet.SourceHardwareAddress;
 
@@ -51,8 +51,8 @@ namespace MadWizard.Desomnia.Network
             SourceAddress = arp?.SenderProtocolAddress ?? ipSource;
             TargetAddress = arp?.TargetProtocolAddress ?? solicitation?.TargetAddress ?? ipTarget;
 
-            SourceService = transport is null ? null : IPPort.SourceOf(transport);
-            TargetService = transport is null ? null : IPPort.DestinationOf(transport);
+            SourcePort = transport is null ? null : IPService.SourceOf(transport);
+            TargetPort = transport is null ? null : IPService.DestinationOf(transport);
 
             TargetPhysicalAddress = wol?.DestinationAddress ?? packet.DestinationHardwareAddress;
 
@@ -74,10 +74,13 @@ namespace MadWizard.Desomnia.Network
             }
         }
 
-        /// <summary>
-        /// Forwards PacketDotNet's shallow packet-tree lookup without materializing address values
-        /// or payload arrays.
-        /// </summary>
-        public T? Extract<T>() where T : Packet => Ethernet.Extract<T>();
+        public bool HasPacket<T>() where T : Packet => HasPacket<T>(out _);
+
+        public bool HasPacket<T>([NotNullWhen(true)] out T? packet) where T : Packet
+        {
+            return (packet = FindPacket<T>()) != null;
+        }
+
+        public T? FindPacket<T>() where T : Packet => Packet.Extract<T>();
     }
 }

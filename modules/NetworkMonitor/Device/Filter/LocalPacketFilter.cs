@@ -1,8 +1,7 @@
-﻿using MadWizard.Desomnia.Network.Filter;
-using PacketDotNet;
+﻿using PacketDotNet;
 using SharpPcap;
 
-namespace MadWizard.Desomnia.Network
+namespace MadWizard.Desomnia.Network.Device.Filter
 {
     /// <summary>
     /// This Filter prevent packets sent by us, being processed as incoming packets again,

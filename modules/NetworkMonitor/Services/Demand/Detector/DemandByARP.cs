@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Neighborhood;
+﻿using MadWizard.Desomnia.Network.Device;
+using MadWizard.Desomnia.Network.Neighborhood;
 using PacketDotNet;
 
 namespace MadWizard.Desomnia.Network.Demand.Detector

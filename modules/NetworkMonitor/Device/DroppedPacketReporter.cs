@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using SharpPcap;
 
-namespace MadWizard.Desomnia.Network
+namespace MadWizard.Desomnia.Network.Device
 {
     internal class DroppedPacketReporter
     {
@@ -26,7 +26,7 @@ namespace MadWizard.Desomnia.Network
             device.PacketDropped += Device_PacketDropped;
         }
 
-        private void Device_PacketDropped(object? sender, PacketCapture capture)
+        private void Device_PacketDropped(object? sender, in PacketCapture capture)
         {
             int bytes = capture.Data.Length;
 

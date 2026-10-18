@@ -1,6 +1,7 @@
 ﻿using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network.Demand;
+using MadWizard.Desomnia.Network.Filter;
 using PacketDotNet;
 
 namespace MadWizard.Desomnia.Network.Watch
@@ -32,9 +33,9 @@ namespace MadWizard.Desomnia.Network.Watch
             IsWatching = false;
         }
 
-        protected void ReportNetworkTraffic(long? bytes = null, PacketDirection direction = PacketDirection.Inbound)
+        protected void ReportNetworkTraffic(long? bytes = null, FlowDirection direction = FlowDirection.Inbound)
         {
-            if (direction == PacketDirection.Inbound)
+            if (direction == FlowDirection.Inbound)
             {
                 _countBytesIn += bytes ?? 0;
                 _countPacketsIn += 1;
@@ -53,7 +54,7 @@ namespace MadWizard.Desomnia.Network.Watch
             }
         }
 
-        protected internal virtual void ReportNetworkTraffic(EthernetPacket packet, PacketDirection direction)
+        protected internal virtual void ReportNetworkTraffic(EthernetPacket packet, FlowDirection direction)
         {
             if (packet.Extract<TransportPacket>() is TransportPacket transport)
             {

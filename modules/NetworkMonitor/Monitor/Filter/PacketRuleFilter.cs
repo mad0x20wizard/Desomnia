@@ -10,7 +10,7 @@ namespace MadWizard.Desomnia.Network.Filter
         readonly bool _blocksByDefault  = rules.Any(rule => rule.Type == FilterRuleType.Must);
         readonly bool _needsIPTraffic   = rules.Any(rule => rule is IPFilterRule);
 
-        public virtual bool ShouldFilter(EthernetPacket packet, PacketFilterOptions options, PacketDirection direction = PacketDirection.Inbound)
+        public virtual bool ShouldFilter(EthernetPacket packet, PacketFilterOptions options, FlowDirection direction = FlowDirection.Inbound)
         {
             options.BlockByDefault |= _blocksByDefault;
             options.NeedsIPTraffic |= _needsIPTraffic;
@@ -31,7 +31,7 @@ namespace MadWizard.Desomnia.Network.Filter
                 }
             }
 
-            if (direction == PacketDirection.Inbound)
+            if (direction == FlowDirection.Inbound)
             {
                 if (options.NeedsIPTraffic && !packet.IsIPUnicast())
                 {

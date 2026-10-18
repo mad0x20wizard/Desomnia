@@ -3,6 +3,7 @@ using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Filter;
 using MadWizard.Desomnia.Network.Configuration.Knocking;
 using MadWizard.Desomnia.Network.Context;
+using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Network.Neighborhood;
 using PacketDotNet;
@@ -20,9 +21,9 @@ namespace MadWizard.Desomnia.Network.Tests
         private static readonly IPAddress Target = IPAddress.Parse("192.0.2.20");
 
         [Theory]
-        [InlineData(PacketDirection.Inbound)]
-        [InlineData(PacketDirection.Outbound)]
-        public void RegisteredRangeAppliesOnlyBaseServiceRules(PacketDirection direction)
+        [InlineData(FlowDirection.Inbound)]
+        [InlineData(FlowDirection.Outbound)]
+        public void RegisteredRangeAppliesOnlyBaseServiceRules(FlowDirection direction)
         {
             var info = new DynamicHostRangeInfo { Name = "services" };
             info.ServiceFilterRule.Add(new ServiceFilterRuleInfo
@@ -65,8 +66,8 @@ namespace MadWizard.Desomnia.Network.Tests
             var range = container.ResolveNamed<NetworkHostRange>(info.Name);
             range.AddAddress(Peer);
             var rule = new DynamicHostRangeFilterRule { Range = range, Type = FilterRuleType.Must };
-            Assert.True(rule.Matches(Packet(PacketDirection.Inbound, protocol, 53)));
-            Assert.False(rule.Matches(Packet(PacketDirection.Inbound, protocol, 54)));
+            Assert.True(rule.Matches(Packet(FlowDirection.Inbound, protocol, 53)));
+            Assert.False(rule.Matches(Packet(FlowDirection.Inbound, protocol, 54)));
         }
 
         [Fact]
@@ -78,7 +79,7 @@ namespace MadWizard.Desomnia.Network.Tests
             Assert.Empty(range.Rules);
             range.AddAddress(Peer);
             var rule = new DynamicHostRangeFilterRule { Range = range, Type = FilterRuleType.Must };
-            Assert.True(rule.Matches(Packet(PacketDirection.Inbound, IPProtocol.UDP, 123)));
+            Assert.True(rule.Matches(Packet(FlowDirection.Inbound, IPProtocol.UDP, 123)));
         }
 
         private static IContainer Register(DynamicHostRangeInfo info)
@@ -86,16 +87,16 @@ namespace MadWizard.Desomnia.Network.Tests
             var config = new NetworkMonitorConfig();
             config.DynamicHostRange.Add(info);
             var builder = new ContainerBuilder();
-            builder.Register<TransportFilterRule>(_ => throw new InvalidOperationException("Must not resolve container service rules"));
+            builder.Register<ServiceFilterRule>(_ => throw new InvalidOperationException("Must not resolve container service rules"));
             var context = (NetworkContext)RuntimeHelpers.GetUninitializedObject(typeof(NetworkContext));
             typeof(NetworkContext).GetMethod("RegisterHostRanges", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .Invoke(context, [builder, config]);
             return builder.Build();
         }
 
-        private static EthernetPacket Packet(PacketDirection direction, IPProtocol protocol, ushort port)
+        private static EthernetPacket Packet(FlowDirection direction, IPProtocol protocol, ushort port)
         {
-            bool inbound = direction == PacketDirection.Inbound;
+            bool inbound = direction == FlowDirection.Inbound;
             ushort source = inbound ? (ushort)50000 : port;
             ushort destination = inbound ? port : (ushort)50000;
             TransportPacket transport = protocol == IPProtocol.TCP ? new TcpPacket(source, destination) : new UdpPacket(source, destination);

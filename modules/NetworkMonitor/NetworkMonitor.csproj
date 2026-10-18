@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="NetworkMonitor.Tests" />
+    <InternalsVisibleTo Include="FirewallMonitor.Tests" />
   </ItemGroup>
 
 </Project>

@@ -61,7 +61,7 @@ namespace MadWizard.Desomnia.Network.Middleware
         private static void ExtractFlattenFilterRules(HandoffServiceInfo info, IEnumerable<PacketFilterRule> rules)
         {
             // first we map the direct host filter rules of the service, these are easy
-            foreach (var rule in rules.OfType<TransportFilterRule>().Where(r => r.Type == FilterRuleType.Must && r.Port == info.Port).SelectMany(r => r.HostRules))
+            foreach (var rule in rules.OfType<ServiceFilterRule>().Where(r => r.Type == FilterRuleType.Must && r.Port == info.Port).SelectMany(r => r.HostRules))
             {
                 switch (rule)
                 {

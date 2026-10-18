@@ -1,5 +1,6 @@
 ﻿using MadWizard.Desomnia.Network.Address;
 using MadWizard.Desomnia.Network.Configuration.Options;
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Naming;
 using MadWizard.Desomnia.Network.Naming.Options;
 using MadWizard.Desomnia.Network.Neighborhood;

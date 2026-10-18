@@ -40,6 +40,9 @@ try
 
     builder.RegisterPluginModules();
 
+    // Platform plugins register the backend before the optional firewall module is loaded.
+    builder.RegisterModule<MadWizard.Desomnia.Firewall.Module>();
+
     using (var host = builder.Build())
     {
         host.Run();

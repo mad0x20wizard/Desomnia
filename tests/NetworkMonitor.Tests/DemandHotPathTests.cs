@@ -1,4 +1,5 @@
 using MadWizard.Desomnia.Network.Configuration.Options;
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Network.Neighborhood;
@@ -62,8 +63,8 @@ namespace MadWizard.Desomnia.Network.Tests
 
             Assert.Equal(SourceIP, summary.SourceAddress);
             Assert.Equal(TargetIP, summary.TargetAddress);
-            Assert.Equal(new IPPort(IPProtocol.TCP, 50000), summary.SourceService);
-            Assert.Equal(new IPPort(IPProtocol.TCP, 445), summary.TargetService);
+            Assert.Equal(new IPService(IPProtocol.TCP, 50000), summary.SourcePort);
+            Assert.Equal(new IPService(IPProtocol.TCP, 445), summary.TargetPort);
             Assert.Equal(payload.Length, summary.Extract<TransportPacket>()?.PayloadLength);
             Assert.False(summary.Extract<TcpPacket>()!.Synchronize);
         }

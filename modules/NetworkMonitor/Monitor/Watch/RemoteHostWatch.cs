@@ -3,6 +3,7 @@ using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network.Address;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Demand;
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Knocking;
 using MadWizard.Desomnia.Network.Reachability;
 using Microsoft.Extensions.Hosting;

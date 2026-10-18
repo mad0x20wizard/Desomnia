@@ -12,7 +12,7 @@ namespace MadWizard.Desomnia.Network
             return scope.Resolve<TrafficFilterRequest>(new TypedParameter(typeof(ITrafficType[]), types));
         }
 
-        public static TrafficFilterRequest UseTrafficType(this ILifetimeScope scope, IPPort port)
+        public static TrafficFilterRequest UseTrafficType(this ILifetimeScope scope, IPService port)
         {
             return UseTrafficType(scope, port.Protocol switch
             {

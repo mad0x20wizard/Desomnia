@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using MadWizard.Desomnia.Network.Device;
+using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;

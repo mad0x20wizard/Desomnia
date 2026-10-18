@@ -19,6 +19,6 @@
             return base.ToString() + "/" + protocol.ToString().ToLower();
         }
 
-        public static implicit operator IPPort(TransportEndPoint endpoint) => new(endpoint.Protocol, (ushort)endpoint.Port);
+        public static implicit operator IPService(TransportEndPoint endpoint) => new(endpoint.Protocol, (ushort)endpoint.Port);
     }
 }

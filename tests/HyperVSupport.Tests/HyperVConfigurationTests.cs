@@ -3,6 +3,7 @@ using Autofac.Builder;
 using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Configuration.Binding;
 using MadWizard.Desomnia.Configuration.Xml;
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.HyperV.Configuration;
 using Microsoft.Extensions.Configuration;
 using Xunit;

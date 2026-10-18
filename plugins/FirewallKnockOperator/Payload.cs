@@ -15,7 +15,7 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
         public MessageType Type { get; init; } = MessageType.Access;
 
         public IPAddress SourceAddress { get; init; }
-        public IPPort? TargetPort { get; init; }
+        public IPService? TargetPort { get; init; }
 
         public byte[]? Digest { get; set; }
 
@@ -39,8 +39,8 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
                 var nr = ushort.Parse(splitPort[1]);
                 TargetPort = splitPort[0].ToLower() switch
                 {
-                    "tcp" => (IPPort?)new IPPort(IPProtocol.TCP, nr),
-                    "udp" => (IPPort?)new IPPort(IPProtocol.UDP, nr),
+                    "tcp" => (IPService?)new IPService(IPProtocol.TCP, nr),
+                    "udp" => (IPService?)new IPService(IPProtocol.UDP, nr),
 
                     _ => throw new ArgumentException("Invalid protocol in FKO string"),
                 };
@@ -49,7 +49,7 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
             Digest = split.Length > 6 ? Base.DecodeBase64(split[6]) : null;
         }
 
-        public Payload(IPAddress source, IPPort? target)
+        public Payload(IPAddress source, IPService? target)
         {
             Random = string.Join(null, RandomNumberGenerator.GetItems(NUMBERS, 16));
 
@@ -65,7 +65,7 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
             {
                 string message = $"{SourceAddress}";
 
-                if (TargetPort is IPPort port)
+                if (TargetPort is IPService port)
                 {
                     message += $",{port.Protocol.ToString().ToLower()}/{port.Port}";
                 }

@@ -1,4 +1,5 @@
 ﻿using Autofac.Features.Indexed;
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Neighborhood.Events;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;

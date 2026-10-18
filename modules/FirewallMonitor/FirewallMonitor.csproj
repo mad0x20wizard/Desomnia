@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>MadWizard.Desomnia.Firewall</RootNamespace>
+    <AssemblyName>DesomniaFirewallMonitor</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NetworkMonitor\NetworkMonitor.csproj" />
+    <InternalsVisibleTo Include="FirewallMonitor.Tests" />
+  </ItemGroup>
+
+</Project>

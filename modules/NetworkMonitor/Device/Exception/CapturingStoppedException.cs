@@ -1,4 +1,4 @@
-﻿namespace MadWizard.Desomnia.Network
+﻿namespace MadWizard.Desomnia.Network.Device
 {
     internal class CapturingStoppedException : CapturingException
     {

@@ -27,7 +27,7 @@ namespace MadWizard.Desomnia.Network.Filter.Rules
             }
         }
 
-        public override bool Matches(EthernetPacket packet, PacketDirection direction = PacketDirection.Inbound)
+        public override bool Matches(EthernetPacket packet, FlowDirection direction = FlowDirection.Inbound)
         {
             if (base.Matches(packet, direction))
             {

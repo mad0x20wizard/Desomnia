@@ -1,9 +1,8 @@
-﻿using MadWizard.Desomnia.Network.Filter;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using PacketDotNet;
 using SharpPcap;
 
-namespace MadWizard.Desomnia.Network
+namespace MadWizard.Desomnia.Network.Device.Filter
 {
     internal class SimulationPacketFilter : IDevicePacketFilter
     {

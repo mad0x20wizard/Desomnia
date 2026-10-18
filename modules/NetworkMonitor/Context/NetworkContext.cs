@@ -7,6 +7,7 @@ using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Context.Parameters;
 using MadWizard.Desomnia.Network.Context.Watch;
 using MadWizard.Desomnia.Network.Datagram;
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Network.Interface.Configuration;

@@ -76,9 +76,9 @@ namespace MadWizard.Desomnia.Network.Context
             return method;
         }
 
-        private static IPPort DeterminePort(NetworkMonitorConfig network, DynamicHostRangeInfo config)
+        private static IPService DeterminePort(NetworkMonitorConfig network, DynamicHostRangeInfo config)
         {
-            return new IPPort(config.KnockProtocol ?? network.KnockProtocol, config.KnockPort ?? network.KnockPort);
+            return new IPService(config.KnockProtocol ?? network.KnockProtocol, config.KnockPort ?? network.KnockPort);
         }
 
         private static TimeSpan DetermineTimeout(NetworkMonitorConfig network, DynamicHostRangeInfo config)

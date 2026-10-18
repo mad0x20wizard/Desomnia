@@ -1,4 +1,5 @@
 ﻿using ConcurrentCollections;
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Watch;
 using Microsoft.Extensions.Logging;
@@ -27,7 +28,7 @@ namespace MadWizard.Desomnia.Network.Reachability
             {
                 if (ip.PayloadPacket is TransportPacket transport)
                 {
-                    Notify(host, packet.SourceHardwareAddress, ip.SourceAddress, IPPort.SourceOf(transport));
+                    Notify(host, packet.SourceHardwareAddress, ip.SourceAddress, IPService.SourceOf(transport));
                 }
                 else
                 {
@@ -173,7 +174,7 @@ namespace MadWizard.Desomnia.Network.Reachability
 
             if (_pendingTests.TryRemove(test))
             {
-                IPPort? port = test is ServiceReachabilityTest srv ? srv.Port : null;
+                IPService? port = test is ServiceReachabilityTest srv ? srv.Port : null;
 
                 foreach (var ip in test) // collect remaining results
                 {
@@ -194,7 +195,7 @@ namespace MadWizard.Desomnia.Network.Reachability
             }
         }
 
-        public void Notify(NetworkHost host, PhysicalAddress mac, IPAddress ip, IPPort? port = null)
+        public void Notify(NetworkHost host, PhysicalAddress mac, IPAddress ip, IPService? port = null)
         {
             /**
              * We try to filter out all IP activity, were we should see the 

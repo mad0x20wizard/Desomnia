@@ -1,6 +1,7 @@
 using Autofac;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Context;
+using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Network.Neighborhood;
 using Microsoft.Extensions.Logging;
@@ -267,7 +268,7 @@ namespace MadWizard.Desomnia.Network.Tests
 
         private sealed class TestService() : NetworkService("test")
         {
-            public override bool Accepts(Packet packet, PacketDirection direction) => false;
+            public override bool Accepts(Packet packet, FlowDirection direction) => false;
         }
 
         private sealed class TestContext : NetworkHostContext

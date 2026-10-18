@@ -1,5 +1,6 @@
 ﻿using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network.Configuration.Options;
+using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Neighborhood;
 using PacketDotNet;
 
@@ -19,7 +20,7 @@ namespace MadWizard.Desomnia.Network.Watch
             return IsIdle && ((IEventSystem)this)[nameof(Demand)].HasHandlers && Service.Accepts(trigger);
         }
 
-        protected internal override void ReportNetworkTraffic(EthernetPacket packet, PacketDirection direction)
+        protected internal override void ReportNetworkTraffic(EthernetPacket packet, FlowDirection direction)
         {
             if (Service.Accepts(packet, direction))
             {

@@ -31,7 +31,7 @@ namespace MadWizard.Desomnia.Network.Context
                         .AsSelf();
 
                     // add static service filters
-                    reg.WithProperty(TypedParameter.From<IEnumerable<TransportFilterRule>>(
+                    reg.WithProperty(TypedParameter.From<IEnumerable<ServiceFilterRule>>(
                         [.. CreateStaticFilterRules(dynamicRange.ServiceFilterRule)]
                     ));
                 }
@@ -46,7 +46,7 @@ namespace MadWizard.Desomnia.Network.Context
             }
         }
 
-        private static IEnumerable<TransportFilterRule> CreateStaticFilterRules(IEnumerable<ServiceFilterRuleInfo> rules)
+        private static IEnumerable<ServiceFilterRule> CreateStaticFilterRules(IEnumerable<ServiceFilterRuleInfo> rules)
         {
             foreach (var filter in rules)
             {

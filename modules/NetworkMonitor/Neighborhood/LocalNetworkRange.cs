@@ -1,4 +1,5 @@
-﻿using NetTools;
+﻿using MadWizard.Desomnia.Network.Device;
+using NetTools;
 using System.Net;
 using System.Net.NetworkInformation;
 

@@ -33,7 +33,7 @@ namespace MadWizard.Desomnia.Network.Reachability
 
         public TimeSpan? this[IPAddress ip] => _latencyByIP[ip];
 
-        public virtual void NotifyReachable(IPAddress address, IPPort? port = null)
+        public virtual void NotifyReachable(IPAddress address, IPService? port = null)
         {
             if (_latencyByIP.TryGetValue(address, out TimeSpan? latency) && latency == null)
             {
@@ -88,11 +88,11 @@ namespace MadWizard.Desomnia.Network.Reachability
 
     public class ServiceReachabilityTest(IPEndPoint endpoint, TimeSpan timeout) : ReachabilityTest([endpoint.Address], timeout)
     {
-        public IPPort? Port => endpoint.ToIPPort();
+        public IPService? Port => endpoint.ToIPPort();
 
-        public override void NotifyReachable(IPAddress ip, IPPort? port = null)
+        public override void NotifyReachable(IPAddress ip, IPService? port = null)
         {
-            if (port is IPPort p && p.Port == endpoint.Port)
+            if (port is IPService p && p.Port == endpoint.Port)
             {
                 switch (endpoint)
                 {
