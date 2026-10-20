@@ -1,6 +1,6 @@
 using Autofac;
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Configuration;
-using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Filter;
 using PacketDotNet;
 using System.Net;

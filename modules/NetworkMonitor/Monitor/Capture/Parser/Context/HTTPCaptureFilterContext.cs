@@ -1,6 +1,7 @@
+using MadWizard.Desomnia.Network.Filter;
 using Microsoft.Extensions.Primitives;
 
-namespace MadWizard.Desomnia.Network.Filter
+namespace MadWizard.Desomnia.Network.Capture
 {
     internal sealed class HTTPCaptureFilterContext : ServiceCaptureFilterContext, IHTTPFilterContext
     {

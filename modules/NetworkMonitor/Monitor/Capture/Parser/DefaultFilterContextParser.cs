@@ -1,8 +1,8 @@
-using MadWizard.Desomnia.Network.Device;
+using MadWizard.Desomnia.Network.Filter;
 using PacketDotNet;
 using System.Net;
 
-namespace MadWizard.Desomnia.Network.Filter
+namespace MadWizard.Desomnia.Network.Capture
 {
     /// <summary>
     /// Creates independent evaluation snapshots without tracking connections between calls.

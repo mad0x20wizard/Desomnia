@@ -3,6 +3,7 @@ using Autofac.Core;
 using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Environments;
 using MadWizard.Desomnia.Network.Address;
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Interfaces;
 using MadWizard.Desomnia.Network.Configuration.Migration;

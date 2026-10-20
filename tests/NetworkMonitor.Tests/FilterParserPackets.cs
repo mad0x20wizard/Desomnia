@@ -1,4 +1,4 @@
-using MadWizard.Desomnia.Network.Device;
+using MadWizard.Desomnia.Network.Capture;
 using PacketDotNet;
 using System.Net;
 using System.Net.NetworkInformation;

@@ -1,6 +1,6 @@
-using MadWizard.Desomnia.Network.Device;
+using MadWizard.Desomnia.Network.Filter;
 
-namespace MadWizard.Desomnia.Network.Filter
+namespace MadWizard.Desomnia.Network.Capture
 {
     /// <summary>
     /// Stateless factory for capture-derived filter contexts. The selected host or service

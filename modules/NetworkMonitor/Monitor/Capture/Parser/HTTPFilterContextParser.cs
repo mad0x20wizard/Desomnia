@@ -1,13 +1,14 @@
 using HttpMachine;
 using IHttpMachine;
 using IHttpMachine.Model;
+using MadWizard.Desomnia.Network.Filter;
 using Microsoft.Extensions.Primitives;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
-namespace MadWizard.Desomnia.Network.Filter
+namespace MadWizard.Desomnia.Network.Capture
 {
     /// <summary>
     /// Interprets the first HTTP/1.0 or HTTP/1.1 request at the available TCP prefix.

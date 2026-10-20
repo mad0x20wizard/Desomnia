@@ -1,7 +1,8 @@
+using MadWizard.Desomnia.Network.Filter;
 using PacketDotNet;
 using System.Net;
 
-namespace MadWizard.Desomnia.Network.Filter
+namespace MadWizard.Desomnia.Network.Capture
 {
     // Snapshots retain immutable metadata/packet references, never an EthernetCapture copy
     // or a borrowed span. Payload arrays are owned by the snapshot or the capture cache.

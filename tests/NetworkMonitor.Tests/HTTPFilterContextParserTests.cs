@@ -1,4 +1,4 @@
-using MadWizard.Desomnia.Network.Device;
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Filter;
 using System.Net;
 using System.Text;

@@ -3,7 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.NetworkInformation;
 
-namespace MadWizard.Desomnia.Network.Device
+namespace MadWizard.Desomnia.Network.Capture
 {
     /// <summary>
     /// Lazy metadata for an immutable captured packet. Constructing this value does not
