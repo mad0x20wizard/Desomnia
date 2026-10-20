@@ -141,12 +141,10 @@ namespace MadWizard.Desomnia.Network.Demand
                         if (watch.IsOnline)
                         {
                             continue; // the host will accept the connection by itself
-
-                            // TODO: ConnectionService: watch in passive mode
                         }
                         else
                         {
-                            if (needed.Port.Protocol.HasFlag(IPProtocol.TCP)) // we need to answer on behalf of the watched host
+                            if (needed.Service.Protocol.HasFlag(IPProtocol.TCP)) // we need to answer on behalf of the watched host
                             {
                                 forward = false;
 

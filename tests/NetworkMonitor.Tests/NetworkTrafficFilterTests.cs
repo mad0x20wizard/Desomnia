@@ -32,7 +32,7 @@ namespace MadWizard.Desomnia.Network.Tests
 
         private sealed class PayloadFilterRule() : TCPServiceFilterRule(445)
         {
-            protected override bool MatchesPayload(byte[] payload) => throw new ServicePayloadNeededException(Port);
+            protected override bool MatchesPayload(byte[] payload) => throw new MalformedServicePayloadException(Port);
         }
 
         private static TestWatch CreateWatch(params PacketFilterRule[] rules)
@@ -175,7 +175,7 @@ namespace MadWizard.Desomnia.Network.Tests
             var service = AddService(watch, IPProtocol.TCP, new PayloadFilterRule { Type = FilterRuleType.Must });
             var packet = Packet(direction);
 
-            Assert.Throws<ServicePayloadNeededException>(() => watch.Verify(packet, direction));
+            Assert.Throws<MalformedServicePayloadException>(() => watch.Verify(packet, direction));
             if (direction == FlowDirection.Inbound)
                 Assert.Null(watch.Evaluate(new CaptureSummary(packet)));
             else

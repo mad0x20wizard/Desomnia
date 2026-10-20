@@ -126,6 +126,13 @@ namespace MadWizard.Desomnia.Network
 
             // Packet Filters //
 
+            // Stateless factory; child service scopes can replace the default registration.
+            // Context snapshots themselves must be recreated for every evaluation.
+            builder.RegisterType<DefaultFilterContextParser>()
+                .As<IFilterContextParser>()
+                .SingleInstance()
+                .PreserveExistingDefaults();
+
             builder.RegisterType<RouterFilter>()
                 .As<IPacketFilter>()
                 .InstancePerNetwork();
