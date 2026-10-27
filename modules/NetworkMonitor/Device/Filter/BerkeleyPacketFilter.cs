@@ -163,7 +163,7 @@ namespace MadWizard.Desomnia.Network.Device.Filter
             {
                 // A rejected filter is expected while walking the precision ladder down; only the
                 // final give-up in UpdateFilter is worth a louder log.
-                Logger.LogDebug(ex, "BPF rejected; trying to simplify:");
+                Logger.LogDebug(ex, "BPF rejected; trying to simplify.");
 
                 return false;
             }

@@ -27,14 +27,8 @@ namespace MadWizard.Desomnia.Network.Middleware
                     options = options with { InstructionLimit = _detectLimit() };
 
                     context.ChangeParameterByType(options);
-
-                    //context.ChangeParameters([TypedParameter.From(options),
-                    //.. context.Parameters.Where(p => p is not TypedParameter typed || typed.Type != typeof(BPFOptions))]);
                 }
             }
-
-            //    var parameter = context.Parameters.OfType<TypedParameter>().FirstOrDefault(p => p.Type == typeof(BPFOptions));
-            //var options = parameter?.Value is BPFOptions supplied ? supplied : default;
 
             next(context);
         }
@@ -58,8 +52,7 @@ namespace MadWizard.Desomnia.Network.Middleware
                 catch (EntryPointNotFoundException) { }
             }
 
-            // In particular, Npcap has no documented limit-query API. Do not guess.
-            return null;
+            return null; // if we have no documented limit available, do not guess.
         }
 
         [DllImport("libc", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
