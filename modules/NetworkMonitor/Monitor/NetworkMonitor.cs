@@ -126,7 +126,7 @@ namespace MadWizard.Desomnia.Network
             Janitor.StartSweeping();
         }
 
-        private void HandlePacket(object? sender, in EthernetPacket packet)
+        private void HandlePacket(object? sender, EthernetPacket packet)
         {
             using (Network.Mutex.Lock())
             {

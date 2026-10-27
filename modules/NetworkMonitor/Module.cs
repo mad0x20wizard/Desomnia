@@ -7,7 +7,6 @@ using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Interfaces;
 using MadWizard.Desomnia.Network.Configuration.Migration;
-using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Context;
 using MadWizard.Desomnia.Network.Context.Bridges;
 using MadWizard.Desomnia.Network.Datagram;
@@ -57,8 +56,6 @@ namespace MadWizard.Desomnia.Network
 
         protected override void LoadOnce(ContainerBuilder builder, IConfiguration configuration)
         {
-            builder.RegisterInstance(Bind<IPReassemblyOptions>(configuration.GetSection("IPReassembly"))).AsSelf();
-
             // The platform-neutral interface matcher, registered as a fallback: the platform hosts
             // load BEFORE this module (see the RegisterModule order in their Program), so a host
             // that brings its own matcher has already claimed the default, and
@@ -105,7 +102,6 @@ namespace MadWizard.Desomnia.Network
 
             // Capture pipeline //
 
-            builder.RegisterType<IPReassemblyOptions>().AsSelf().SingleInstance().PreserveExistingDefaults();
             builder.RegisterType<IPv4Reassembly>().As<IFragmentReassembly>().InstancePerNetwork();
             builder.RegisterType<IPv6Reassembly>().As<IFragmentReassembly>().InstancePerNetwork();
             builder.RegisterType<CapturePipeline>().AsSelf().InstancePerNetwork();

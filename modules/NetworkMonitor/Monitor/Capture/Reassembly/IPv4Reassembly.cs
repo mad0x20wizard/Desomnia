@@ -6,8 +6,8 @@ namespace MadWizard.Desomnia.Network.Capture;
 
 internal sealed class IPv4Reassembly : IPReassembly
 {
-    public IPv4Reassembly(IPReassemblyOptions options, TimeProvider? clock = null)
-        : base(IPReassemblyFamily.IPv4, options, clock) { }
+    public IPv4Reassembly(ReassemblyOptions options, TimeProvider? clock = null)
+        : base(ReassemblyProtocol.IPv4, options, clock) { }
 
     protected override bool TryReadFragment(EthernetPacket packet, out IPFragment? fragment)
     {

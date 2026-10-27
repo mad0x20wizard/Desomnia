@@ -4,7 +4,6 @@ using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Filter;
 using MadWizard.Desomnia.Network.Configuration.Knocking;
 using MadWizard.Desomnia.Network.Context;
-using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Network.Knocking;
 using MadWizard.Desomnia.Network.Knocking.Secrets;
@@ -19,6 +18,7 @@ using System.Net.NetworkInformation;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Xunit;
+using MadWizard.Desomnia.Network.Device.Filter;
 
 namespace MadWizard.Desomnia.Network.Tests
 {

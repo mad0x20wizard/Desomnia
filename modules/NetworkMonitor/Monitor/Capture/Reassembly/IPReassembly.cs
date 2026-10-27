@@ -17,10 +17,10 @@ internal abstract class IPReassembly : IFragmentReassembly, IDisposable
     private long _retainedBytes;
     private bool _disposed;
 
-    protected IPReassembly(IPReassemblyFamily family, IPReassemblyOptions options, TimeProvider? clock = null)
+    protected IPReassembly(ReassemblyProtocol family, ReassemblyOptions options, TimeProvider? clock = null)
     {
-        _enabled = (options.Family & family) != 0;
-        _passthrough = (options.Family & IPReassemblyFamily.Passthrough) != 0;
+        _enabled = (options.Protocol & family) != 0;
+        _passthrough = (options.Protocol & ReassemblyProtocol.Passthrough) != 0;
         _timeout = options.Timeout;
         _clock = clock ?? TimeProvider.System;
     }

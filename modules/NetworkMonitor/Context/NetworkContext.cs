@@ -8,10 +8,9 @@ using MadWizard.Desomnia.Network.Context.Parameters;
 using MadWizard.Desomnia.Network.Context.Watch;
 using MadWizard.Desomnia.Network.Datagram;
 using MadWizard.Desomnia.Network.Device;
-using MadWizard.Desomnia.Network.Filter;
+using MadWizard.Desomnia.Network.Device.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Network.Interface.Configuration;
-using MadWizard.Desomnia.Network.Knocking;
 using MadWizard.Desomnia.Network.Logging;
 using MadWizard.Desomnia.Network.Manager;
 using MadWizard.Desomnia.Network.Middleware;
@@ -158,9 +157,13 @@ namespace MadWizard.Desomnia.Network.Context
                     .SingleInstance()
                     .AsSelf();
 
-                if (config.UseBPF)
+                builder.Register(_ => config.MakeReassemblyOptions()).AsSelf().SingleInstance();
+
+                if (config.MakeBPFOptions() is BPFOptions bpf)
                 {
                     builder.RegisterType<BerkeleyPacketFilter>()
+                        .OnPreparing(e => e.Parameters = [.. e.Parameters, TypedParameter.From(bpf)])
+                        .ConfigurePipeline(p => p.Use(new DefaultBPFLimit()))
                         .WithPriority(1)
                         .AsImplementedInterfaces()
                         .InstancePerNetwork()

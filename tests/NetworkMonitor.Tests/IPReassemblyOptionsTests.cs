@@ -9,29 +9,19 @@ public class IPReassemblyOptionsTests
     [InlineData(8)]
     [InlineData(9)]
     [InlineData(-1)]
-    public void InvalidFamilyAssignmentThrowsAndPreservesPreviousValue(int flags)
+    public void InvalidFamilyThrows(int flags)
     {
-        var family = IPReassemblyFamily.IPv6 | IPReassemblyFamily.Passthrough;
-        var options = new IPReassemblyOptions { Family = family };
-
-        Assert.Throws<ArgumentOutOfRangeException>(nameof(IPReassemblyOptions.Family),
-            () => options.Family = (IPReassemblyFamily)flags);
-
-        Assert.Equal(family, options.Family);
+        Assert.Throws<ArgumentOutOfRangeException>(nameof(ReassemblyOptions.Protocol),
+            () => new ReassemblyOptions { Protocol = (ReassemblyProtocol)flags });
     }
 
     [Theory]
     [InlineData(0L)]
     [InlineData(-1L)]
     [InlineData(long.MinValue)]
-    public void NonPositiveTimeoutAssignmentThrowsAndPreservesPreviousValue(long ticks)
+    public void NonPositiveTimeoutThrows(long ticks)
     {
-        var timeout = TimeSpan.FromTicks(1);
-        var options = new IPReassemblyOptions { Timeout = timeout };
-
-        Assert.Throws<ArgumentOutOfRangeException>(nameof(IPReassemblyOptions.Timeout),
-            () => options.Timeout = TimeSpan.FromTicks(ticks));
-
-        Assert.Equal(timeout, options.Timeout);
+        Assert.Throws<ArgumentOutOfRangeException>(nameof(ReassemblyOptions.Timeout),
+            () => new ReassemblyOptions { Timeout = TimeSpan.FromTicks(ticks) });
     }
 }

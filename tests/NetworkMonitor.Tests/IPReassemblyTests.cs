@@ -13,8 +13,11 @@ namespace MadWizard.Desomnia.Network.Tests;
 
 public class IPReassemblyTests
 {
-    private static IPReassembly Create(bool ipv6, IPReassemblyOptions? options = null, TimeProvider? clock = null)
-        => ipv6 ? new IPv6Reassembly(options ?? new(), clock) : new IPv4Reassembly(options ?? new(), clock);
+    private static ReassemblyOptions Options => new()
+        { Protocol = ReassemblyProtocol.IPv4 | ReassemblyProtocol.IPv6, Timeout = TimeSpan.FromSeconds(30) };
+
+    private static IPReassembly Create(bool ipv6, ReassemblyOptions? options = null, TimeProvider? clock = null)
+        => ipv6 ? new IPv6Reassembly(options ?? Options, clock) : new IPv4Reassembly(options ?? Options, clock);
 
     internal static byte[] Datagram(bool tcp = false, string text = "abcdefghijklmnopqrstuvwxyz0123456789")
     {
@@ -199,7 +202,7 @@ public class IPReassemblyTests
     public void DeadlineDoesNotSlideAndTimerReleasesIdleCollections(bool ipv6)
     {
         var clock = new ManualClock();
-        using var reassembly = Create(ipv6, new() { Timeout = TimeSpan.FromSeconds(10) }, clock);
+        using var reassembly = Create(ipv6, Options with { Timeout = TimeSpan.FromSeconds(10) }, clock);
         var data = Datagram(); var first = Fragment(ipv6, data, 0, 16, true);
         Consume(reassembly, first);
         clock.Advance(TimeSpan.FromSeconds(9));
@@ -215,7 +218,7 @@ public class IPReassemblyTests
     [InlineData(true)]
     public void DisabledFamilyRejectsOnlyItsFragments(bool ipv6)
     {
-        using var disabled = Create(ipv6, new() { Family = IPReassemblyFamily.None });
+        using var disabled = Create(ipv6, Options with { Protocol = ReassemblyProtocol.None });
         Assert.Null(Consume(disabled, Fragment(ipv6, Datagram(), 0, 16, true)));
         Assert.False(disabled.TryReassemble(Fragment(!ipv6, Datagram(), 0, 16, true), out _));
         Assert.False(disabled.TryReassemble(FilterParserPackets.Udp("data").Single(), out _));
@@ -419,7 +422,7 @@ public class IPReassemblyTests
     [InlineData(7)]
     public void FamilyAndPassthroughFlagsSelectEachMode(int flags)
     {
-        var options = new IPReassemblyOptions { Family = (IPReassemblyFamily)flags };
+        var options = Options with { Protocol = (ReassemblyProtocol)flags };
         using var ipv4 = Create(false, options);
         using var ipv6 = Create(true, options);
         var pipeline = new CapturePipeline([ipv4, ipv6]);
@@ -455,7 +458,7 @@ public class IPReassemblyTests
     {
         var data = Datagram(tcp);
         int split = tcp ? 24 : 16;
-        using var reassembly = Create(ipv6, new() { Family = (IPReassemblyFamily)7 });
+        using var reassembly = Create(ipv6, Options with { Protocol = (ReassemblyProtocol)7 });
         var first = Fragment(ipv6, data, 0, split, true, protocol: tcp ? (byte)6 : (byte)17, extensions: ipv6, vlan: 17);
         var last = Fragment(ipv6, data, split, data.Length - split, false, protocol: tcp ? (byte)6 : (byte)17, extensions: ipv6, vlan: 17);
         var firstBytes = first.CapturedBytes.ToArray();
@@ -489,7 +492,7 @@ public class IPReassemblyTests
     public void PassthroughIncompleteIPv4TransportHeaderHasAddressOnlyMetadata()
     {
         var packet = Fragment(false, Datagram(tcp: true), 0, 8, true, protocol: 6);
-        using var reassembly = Create(false, new() { Family = IPReassemblyFamily.IPv4 | IPReassemblyFamily.Passthrough });
+        using var reassembly = Create(false, Options with { Protocol = ReassemblyProtocol.IPv4 | ReassemblyProtocol.Passthrough });
         var capture = Assert.IsType<EthernetCapture>(Consume(reassembly, packet));
         Assert.Equal(0, Assert.IsType<IPEndPoint>(capture.SourceEndPoint).Port);
         Assert.Equal(0, capture.PayloadLength);
@@ -508,7 +511,7 @@ public class IPReassemblyTests
         datagram.CopyTo(data, 8);
         var first = Fragment(true, data, 0, 24, true, protocol: 60);
         var last = Fragment(true, data, 24, 2, false, protocol: 60);
-        using var reassembly = Create(true, new() { Family = IPReassemblyFamily.IPv6 | IPReassemblyFamily.Passthrough });
+        using var reassembly = Create(true, Options with { Protocol = ReassemblyProtocol.IPv6 | ReassemblyProtocol.Passthrough });
         var a = Assert.IsType<EthernetCapture>(Consume(reassembly, first));
         var b = Assert.IsType<EthernetCapture>(Consume(reassembly, last));
         Assert.Equal(80, Assert.IsType<IPServiceEndPoint>(a.TargetEndPoint).Port);

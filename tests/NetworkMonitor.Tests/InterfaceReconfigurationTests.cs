@@ -32,7 +32,7 @@ public class InterfaceReconfigurationTests
         await service.BeforeSuspend();
         Assert.Equal(["read:first", "read:second", "pause", "write:first:2", "write:second:4", "recover"], events);
         Assert.True(fixture.Device.IsCapturing);
-        Assert.Equal("arp", fixture.Native.Filter);
+        Assert.Equal(2, fixture.Native.StartCalls);
         Assert.Equal(0, fixture.Service.Suspends);
         Assert.Equal(0, fixture.Service.Resumes);
         events.Clear();

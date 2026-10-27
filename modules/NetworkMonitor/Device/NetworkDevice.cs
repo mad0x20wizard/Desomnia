@@ -22,19 +22,13 @@ namespace MadWizard.Desomnia.Network.Device
 
         public  string              Name => Device.Description ?? Device.Name;
 
-        private ILiveDevice         Device      { get; }
-        public  INetworkInterface   Interface   { get; }
+        internal ILiveDevice        Device      { get; }
+        public INetworkInterface    Interface   { get; }
 
         public bool IsCapturing => Device.Started;
 
         public bool IsMaxResponsiveness;
         public bool IsNoCaptureLocal;
-
-        public string? Filter
-        {
-            // Keep the requested filter across a failed close/open attempt.
-            get; set => field = Device.Filter = value;
-        }
 
         public IEnumerable<IDevicePacketFilter> Filters { private get; init; } = [];
 
@@ -65,12 +59,19 @@ namespace MadWizard.Desomnia.Network.Device
             }
         }
 
-        public event ReadonlyEventHandler<EthernetPacket>?  PacketCaptured;
-        public event ReadonlyEventHandler<PacketCapture>?   PacketDropped;
+        /// <summary>Raised before native capture starts. A handler may abort startup by throwing.</summary>
+        public event EventHandler? CaptureStarting;
+
+        public event EventHandler<EthernetPacket>? PacketCaptured;
+        public event ReadonlyEventHandler<PacketCapture>? PacketDropped;
+
+        /// <summary>Raised after capture stops, including failed startup, before any automatic restart.</summary>
+        public event EventHandler? CaptureStopped;
 
         private PacketCaptureQueue? _context;
 
         private bool _shouldBeCapturing;
+        private bool _shouldNotifyCaptureStopped;
 
         public NetworkDevice(ILogger<NetworkDevice> logger, INetworkInterface @interface, ILiveDevice device)
         {
@@ -105,9 +106,11 @@ namespace MadWizard.Desomnia.Network.Device
 
             try
             {
+                _shouldNotifyCaptureStopped = true;
+                CaptureStarting?.Invoke(this, EventArgs.Empty);
                 Device.OnPacketArrival += Device_OnPacketArrival;
-                Device.StartCapture();
                 Device.OnCaptureStopped += Device_OnCaptureStopped;
+                Device.StartCapture();
             }
             catch
             {
@@ -127,11 +130,6 @@ namespace MadWizard.Desomnia.Network.Device
             Logger.LogInformation($"Capturing network device \"{Name}\"; MAC={PhysicalAddress?.ToHexString()}, IPv4={IPv4Address?.ToString() ?? "?"}" +
                 (countIPv6 > 0 ? $", IPv6={IPv6LinkLocalAddress?.ToString() ?? IPv6Addresses.FirstOrDefault()?.ToString() ?? "?"}" + (countIPv6 - 1 > 0 ? $"(+{countIPv6 - 1})" : "") : "") +
                 $" [{string.Join(", ", features)}]");
-
-            if (Filter != null)
-            {
-                Logger.LogDebug("BPF rule = '{expr}'", Filter);
-            }
         }
 
         /// <summary>
@@ -169,8 +167,7 @@ namespace MadWizard.Desomnia.Network.Device
         {
             string message = $"Stopped capturing network device \"{Name}\"";
 
-            Device.OnCaptureStopped -= Device_OnCaptureStopped;
-            Device.OnPacketArrival -= Device_OnPacketArrival;
+            NotifyCaptureStopped();
 
             switch (status)
             {
@@ -189,7 +186,21 @@ namespace MadWizard.Desomnia.Network.Device
                     break;
             }
 
-            StartCapture();
+            if (_shouldBeCapturing)
+                StartCapture();
+        }
+
+        private void NotifyCaptureStopped()
+        {
+            Device.OnCaptureStopped -= Device_OnCaptureStopped;
+            Device.OnPacketArrival  -= Device_OnPacketArrival;
+
+            if (_shouldNotifyCaptureStopped)
+            {
+                _shouldNotifyCaptureStopped = false;
+
+                CaptureStopped?.Invoke(this, EventArgs.Empty);
+            }
         }
 
         /// <summary>
@@ -209,7 +220,7 @@ namespace MadWizard.Desomnia.Network.Device
                         {
                             try
                             {
-                                PacketCaptured?.Invoke(this, in ethernet);
+                                PacketCaptured?.Invoke(this, ethernet);
                             }
                             catch (Exception ex)
                             {
@@ -292,8 +303,6 @@ namespace MadWizard.Desomnia.Network.Device
         {
             StopCapture();
 
-            var filter = Filter;
-
             lock (Device)
             {
                 Device.Close();
@@ -301,8 +310,6 @@ namespace MadWizard.Desomnia.Network.Device
 
             if (!TryOpen(Device, ref IsMaxResponsiveness, ref IsNoCaptureLocal))
                 throw new InvalidOperationException($"Failed to reopen network device '{Name}'.");
-
-            Filter = filter;
 
             StartCapture();
         }
@@ -315,6 +322,8 @@ namespace MadWizard.Desomnia.Network.Device
             {
                 Device.StopCapture();
             }
+
+            NotifyCaptureStopped();
 
             _context?.StopProcessing(ProcessingStopTimeout);
             _context?.Dispose();

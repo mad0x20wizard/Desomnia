@@ -1,8 +1,10 @@
 using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Configuration.Options;
-using MadWizard.Desomnia.Network.Filter;
+using MadWizard.Desomnia.Network.Device;
+using MadWizard.Desomnia.Network.Device.Filter;
 using Microsoft.Extensions.Logging.Abstractions;
 using PacketDotNet;
+using SharpPcap;
 using SharpPcap.LibPcap;
 using System.Buffers.Binary;
 using System.Reflection;
@@ -13,12 +15,20 @@ namespace MadWizard.Desomnia.Network.Tests;
 
 public class BerkeleyPacketFilterTests
 {
-    private const IPReassemblyFamily Both = IPReassemblyFamily.IPv4 | IPReassemblyFamily.IPv6;
+    private const ReassemblyProtocol Both = ReassemblyProtocol.IPv4 | ReassemblyProtocol.IPv6;
 
-    private static string[] Candidates(IPReassemblyFamily family = Both, params ITrafficType[][] requests)
+    private static string[] Candidates(ReassemblyProtocol family = Both, params ITrafficType[][] requests)
     {
-        var filter = new BerkeleyPacketFilter(null!, new() { Family = family })
-            { Logger = NullLogger<BerkeleyPacketFilter>.Instance, Monitor = null };
+        using var device = new NetworkDevice(NullLogger<NetworkDevice>.Instance, new FakeNetworkInterface("test"),
+            DispatchProxy.Create<ILiveDevice, ReconfigurationLifecycleTests.NativeDevice>());
+        using var filter = new BerkeleyPacketFilter
+        {
+            Device = device,
+            Options = default,
+            ReassemblyOptions = new() { Protocol = family },
+            Logger = NullLogger<BerkeleyPacketFilter>.Instance,
+            Monitor = null
+        };
         foreach (var types in requests) _ = new TrafficFilterRequest(types, filter);
         var shape = typeof(BerkeleyPacketFilter).GetMethod("Aggregate", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(filter, null);
         return ((IEnumerable<string>)typeof(BerkeleyPacketFilter).GetMethod("BuildFilterCandidates", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [shape])!).ToArray();
@@ -44,7 +54,7 @@ public class BerkeleyPacketFilterTests
     [InlineData(7)]
     public void NoRequestsProduceAnExplicitEmptyCapture(int flags)
     {
-        Assert.All(Candidates((IPReassemblyFamily)flags), filter => Assert.Equal("len = 0", filter));
+        Assert.All(Candidates((ReassemblyProtocol)flags), filter => Assert.Equal("len = 0", filter));
     }
 
     [PcapTheory]
@@ -58,7 +68,7 @@ public class BerkeleyPacketFilterTests
     [InlineData(7)]
     public void ReassemblyAndPassthroughFlagsGateFragmentsAtEveryRung(int flags)
     {
-        foreach (var expression in Candidates((IPReassemblyFamily)flags, [new TCPTrafficType(80, WithData: true)]))
+        foreach (var expression in Candidates((ReassemblyProtocol)flags, [new TCPTrafficType(80, WithData: true)]))
         {
             using var filter = Compile(expression);
             foreach (bool ipv6 in new[] { false, true })
@@ -101,7 +111,7 @@ public class BerkeleyPacketFilterTests
     [InlineData(7)]
     public void AddressResolutionAndWolDoNotIntroduceFragmentDemand(int flags)
     {
-        foreach (var expression in Candidates((IPReassemblyFamily)flags, [new ARPTrafficType(), new NDPTrafficType(), new WOLTrafficType()]))
+        foreach (var expression in Candidates((ReassemblyProtocol)flags, [new ARPTrafficType(), new NDPTrafficType(), new WOLTrafficType()]))
         {
             using var filter = Compile(expression);
             foreach (bool ipv6 in new[] { false, true })
@@ -112,7 +122,7 @@ public class BerkeleyPacketFilterTests
             }
             Assert.True(filter.Matches(Ordinary(true, 58, type: 135)));
         }
-        using var empty = Compile(Candidates((IPReassemblyFamily)flags)[0]);
+        using var empty = Compile(Candidates((ReassemblyProtocol)flags)[0]);
         Assert.False(empty.Matches(Fragment(false)));
         Assert.False(empty.Matches(Ordinary(true, 6)));
     }
@@ -272,7 +282,7 @@ public class BerkeleyPacketFilterTests
     {
         ITrafficType[] Types(int ports) => [new TCPTrafficType(null, WithData: true),
             .. Enumerable.Range(14000, ports).Select(port => (ITrafficType)new UDPTrafficType((ushort)port))];
-        int Overhead(int ports) => Candidates(Both, Types(ports))[0].Length - Candidates(IPReassemblyFamily.None, Types(ports))[0].Length;
+        int Overhead(int ports) => Candidates(Both, Types(ports))[0].Length - Candidates(ReassemblyProtocol.None, Types(ports))[0].Length;
         Assert.Equal(Overhead(1), Overhead(count));
         string expression = Candidates(Both, Types(count))[0];
         Assert.DoesNotContain("protochain", expression);
@@ -323,7 +333,8 @@ public class BerkeleyPacketFilterTests
     public void AcceptedFragmentsStillReassembleOutOfOrder(bool ipv6)
     {
         using var filter = Compile(Candidates(Both, [Family(ipv6), new TCPTrafficType(80)])[0]);
-        using IPReassembly reassembly = ipv6 ? new IPv6Reassembly(new()) : new IPv4Reassembly(new());
+        var options = new ReassemblyOptions { Protocol = Both, Timeout = TimeSpan.FromSeconds(30) };
+        using IPReassembly reassembly = ipv6 ? new IPv6Reassembly(options) : new IPv4Reassembly(options);
         int split = ipv6 ? 24 : 8;
         var first = Fragment(ipv6, length: split);
         var last = Fragment(ipv6, offset: split, length: IPReassemblyTests.Datagram(tcp: true).Length - split);

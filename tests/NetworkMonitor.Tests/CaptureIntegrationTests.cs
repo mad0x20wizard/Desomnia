@@ -31,61 +31,38 @@ public class CaptureIntegrationTests
         public void Application(ContainerBuilder builder) => base.Load(builder, new ModuleConfig<NetworkMonitorConfig>());
     }
 
-    [Theory]
-    [InlineData(null, null, 3, 60)]
-    [InlineData("none", "23s", 0, 23)]
-    [InlineData("IPv4|Passthrough", "2min", 5, 120)]
-    [InlineData("IPv6|Passthrough", "30s", 6, 30)]
-    [InlineData("IPv4|IPv6|Passthrough", "1s", 7, 1)]
-    public void RootConfigurationBindsUnifiedOptions(string? family, string? timeout, int expectedFamily, int seconds)
-    {
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-            { ["IPReassembly:family"] = family, ["IPReassembly:timeout"] = timeout }
-            .Where(pair => pair.Value is not null)).Build();
-        var builder = new ContainerBuilder();
-        new TestModule().Root(builder, configuration);
-        using var root = builder.Build();
-        var options = root.Resolve<IPReassemblyOptions>();
-        Assert.Equal((IPReassemblyFamily)expectedFamily, options.Family);
-        Assert.Equal(TimeSpan.FromSeconds(seconds), options.Timeout);
-    }
-
-    [Theory]
-    [InlineData("3", "0s", nameof(IPReassemblyOptions.Timeout))]
-    [InlineData("8", "60s", nameof(IPReassemblyOptions.Family))]
-    public void InvalidRootOptionsFailDuringBinding(string family, string timeout, string property)
-    {
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-            { ["IPReassembly:family"] = family, ["IPReassembly:timeout"] = timeout }).Build();
-        var exception = Assert.Throws<TargetInvocationException>(() => new TestModule().Root(new ContainerBuilder(), configuration));
-        var validation = Assert.IsType<ArgumentOutOfRangeException>(exception.InnerException);
-        Assert.Equal(property, validation.ParamName);
-    }
-
     [Fact]
-    public void RootOptionsReachEveryNetworkAndBothReassemblersStayRegisteredWhenDisabled()
+    public void ReassemblyOptionsAreLocalAndBothReassemblersStayRegisteredWhenDisabled()
     {
         var module = new TestModule();
         var rootBuilder = new ContainerBuilder();
         module.Root(rootBuilder, new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             { ["IPReassembly:family"] = "none", ["IPReassembly:timeout"] = "23s" }).Build());
         using var root = rootBuilder.Build();
+        Assert.False(root.IsRegistered<ReassemblyOptions>());
         var applicationBuilder = new ContainerBuilder();
-        // Exercise the actual root registration source, including fallback precedence.
+        // The root bridge must not reintroduce process-wide capture options.
         var bridgeType = typeof(ConfigurableModule).Assembly.GetType("MadWizard.Desomnia.RootContainerBridge", true)!;
         applicationBuilder.RegisterSource((IRegistrationSource)Activator.CreateInstance(bridgeType,
             BindingFlags.Instance | BindingFlags.NonPublic, null, [root], null)!);
         module.Application(applicationBuilder);
         using var application = applicationBuilder.Build();
-        using var first = application.BeginLifetimeScope(MatchingScopeLifetimeTags.NetworkLifetimeScopeTag);
-        using var second = application.BeginLifetimeScope(MatchingScopeLifetimeTags.NetworkLifetimeScopeTag);
-        Assert.Same(root.Resolve<IPReassemblyOptions>(), first.Resolve<IPReassemblyOptions>());
-        Assert.Equal(TimeSpan.FromSeconds(23), first.Resolve<IPReassemblyOptions>().Timeout);
+        Assert.False(application.IsRegistered<ReassemblyOptions>());
+        var disabled = new NetworkMonitorConfig { Reassemble = ReassemblyProtocol.None, ReassembleTimeout = TimeSpan.FromSeconds(23) };
+        var passthrough = new NetworkMonitorConfig { Reassemble = ReassemblyProtocol.IPv6 | ReassemblyProtocol.Passthrough };
+        using var first = application.BeginLifetimeScope(MatchingScopeLifetimeTags.NetworkLifetimeScopeTag,
+            builder => builder.Register(_ => disabled.MakeReassemblyOptions()).AsSelf().SingleInstance());
+        using var second = application.BeginLifetimeScope(MatchingScopeLifetimeTags.NetworkLifetimeScopeTag,
+            builder => builder.Register(_ => passthrough.MakeReassemblyOptions()).AsSelf().SingleInstance());
+        Assert.Equal(TimeSpan.FromSeconds(23), first.Resolve<ReassemblyOptions>().Timeout);
+        Assert.Equal(TimeSpan.FromSeconds(30), second.Resolve<ReassemblyOptions>().Timeout);
         Assert.Equal(2, first.Resolve<IEnumerable<IFragmentReassembly>>().Count());
         var a = first.Resolve<CapturePipeline>(); var b = second.Resolve<CapturePipeline>();
         Assert.Same(a, first.Resolve<CapturePipeline>()); Assert.NotSame(a, b);
         foreach (bool ipv6 in new[] { false, true })
             Assert.Null(a.TryCapturePacket(IPReassemblyTests.Fragment(ipv6, IPReassemblyTests.Datagram(), 0, 16, true)));
+        Assert.Null(b.TryCapturePacket(IPReassemblyTests.Fragment(false, IPReassemblyTests.Datagram(), 0, 16, true)));
+        Assert.IsType<EthernetCapture>(b.TryCapturePacket(IPReassemblyTests.Fragment(true, IPReassemblyTests.Datagram(), 0, 16, true)));
     }
 
     [Theory]

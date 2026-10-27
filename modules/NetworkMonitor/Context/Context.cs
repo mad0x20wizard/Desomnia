@@ -1,5 +1,5 @@
 ﻿using Autofac;
-using MadWizard.Desomnia.Network.Filter;
+using MadWizard.Desomnia.Network.Device.Filter;
 using Microsoft.Extensions.Logging;
 using System.Net;
 

@@ -34,8 +34,6 @@ namespace MadWizard.Desomnia.Network.Configuration
         public IPNetwork?       Network             { get; set; }
         public string?          SSID                { get; set; }
 
-        public bool             UseBPF              { get; set; } = true;
-
         public OffloadProtocol? AllowOffload        { get; set; }
         public WakeOnLANMode?   AllowWakeOnLAN      { get; set; }
 
@@ -46,6 +44,36 @@ namespace MadWizard.Desomnia.Network.Configuration
         public ActionInfo?          OnDisconnect    { get; set; }
 
         // Options
+        #region Network :: BPFOptions
+        internal string?            BPF                         { get; set; }
+        internal int?               BPFLimit                    { get; set; }
+
+        public BPFOptions? MakeBPFOptions()
+        {
+            if (BPF?.Trim() != "") // "" = disabled // null = auto // "..." = static literal
+            {
+                return new()
+                {
+                    Expression = BPF,
+                    InstructionLimit = BPFLimit,
+                };
+            }
+
+            return null;
+        }
+        #endregion
+
+        #region Network :: ReassemblyOptions
+        internal ReassemblyProtocol Reassemble                  { get; set; } = ReassemblyProtocol.IPv4;
+        internal TimeSpan           ReassembleTimeout           { get; set; } = TimeSpan.FromSeconds(30);
+
+        public ReassemblyOptions MakeReassemblyOptions() => new()
+        {
+            Protocol = Reassemble,
+            Timeout = ReassembleTimeout,
+        };
+        #endregion
+
         #region Network :: AutoDiscoveryOptions
         public AutoDiscoveryType    AutoDetect                  { get; set; } = AutoDiscoveryType.Nothing;
         internal TimeSpan           AutoTimeout                 { get; set; } = TimeSpan.FromSeconds(2);

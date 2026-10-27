@@ -36,14 +36,14 @@ public class ReconfigurationLifecycleTests
     }
 
     [Fact]
-    public void DevicePreservesFilterAcrossFailedReopen()
+    public void DeviceCanRetryFailedReopen()
     {
         using var fixture = new Fixture();
         fixture.Native.FailNextOpen = true;
         Assert.Throws<InvalidOperationException>(() => fixture.Device.Restart());
         fixture.Device.Restart();
         Assert.True(fixture.Device.IsCapturing);
-        Assert.Equal("arp", fixture.Native.Filter);
+        Assert.Equal(1, fixture.Native.StartCalls);
     }
 
     [Fact]
@@ -291,7 +291,6 @@ public class ReconfigurationLifecycleTests
             var live = DispatchProxy.Create<ILiveDevice, NativeDevice>();
             Native = (NativeDevice)live;
             Device = new(NullLogger<NetworkDevice>.Instance, Interface, live);
-            Device.Filter = "arp";
             var network = new NetworkSegment { Logger = NullLogger<NetworkSegment>.Instance,
                 Device = Device, LocalRange = null!, Ranges = null! };
             Janitor = new()

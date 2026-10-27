@@ -1,9 +1,9 @@
 ﻿using Autofac;
 using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Options;
+using MadWizard.Desomnia.Network.Device.Filter;
 using MadWizard.Desomnia.Network.Discovery;
 using MadWizard.Desomnia.Network.Discovery.BuiltIn;
-using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Watch;
 using Microsoft.Extensions.Logging;

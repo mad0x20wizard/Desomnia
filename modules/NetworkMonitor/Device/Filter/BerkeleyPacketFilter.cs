@@ -1,12 +1,13 @@
 using ConcurrentCollections;
-using MadWizard.Desomnia.Network.Device;
+using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Watch;
 using Microsoft.Extensions.Logging;
+using SharpPcap.LibPcap;
 using System.Net.Sockets;
-using MadWizard.Desomnia.Network.Configuration.Options;
+using System.Runtime.InteropServices;
 
-namespace MadWizard.Desomnia.Network.Filter
+namespace MadWizard.Desomnia.Network.Device.Filter
 {
     #region Traffic Types
     public interface ITrafficType;
@@ -24,9 +25,23 @@ namespace MadWizard.Desomnia.Network.Filter
     public readonly record struct ICMPEchoTrafficType : ITrafficType;
     #endregion
 
-    public class BerkeleyPacketFilter(NetworkDevice device, IPReassemblyOptions? reassembly = null) : INetworkService
+    public class BerkeleyPacketFilter : INetworkService, IDisposable
     {
         public required ILogger<BerkeleyPacketFilter> Logger { private get; init; }
+
+        public required NetworkDevice Device
+        {
+            get; init
+            {
+                value.CaptureStarting   += Device_CaptureStarting;
+                value.CaptureStopped    += Device_CaptureStopped;
+
+                field = value;
+            }
+        }
+
+        public required BPFOptions          Options             { private get; init; }
+        public required ReassemblyOptions   ReassemblyOptions   { private get; init; }
 
         /// <summary>Lazy to break the construction cycle; queried for per-host block-by-default state.</summary>
         public required Lazy<NetworkMonitor>? Monitor { private get; init; }
@@ -34,6 +49,27 @@ namespace MadWizard.Desomnia.Network.Filter
         readonly ConcurrentHashSet<TrafficFilterRequest> _requests = [];
 
         private bool _shouldUpdateFilter = false;
+        private string? _validatedFilter;
+
+        private void Device_CaptureStarting(object? sender, EventArgs args)
+        {
+            _validatedFilter = null;
+            UpdateFilter();
+            _shouldUpdateFilter = true;
+        }
+
+        private void Device_CaptureStopped(object? sender, EventArgs args)
+        {
+            _shouldUpdateFilter = false;
+            _validatedFilter = null;
+        }
+
+        public void Dispose()
+        {
+            Device.CaptureStarting -= Device_CaptureStarting;
+            Device.CaptureStopped -= Device_CaptureStopped;
+            _shouldUpdateFilter = false;
+        }
 
         internal void AddRequest(TrafficFilterRequest request)
         {
@@ -51,13 +87,6 @@ namespace MadWizard.Desomnia.Network.Filter
             }
         }
 
-        async Task INetworkService.Startup()
-        {
-            _shouldUpdateFilter = true;
-
-            UpdateFilter();
-        }
-
         /// <summary>
         /// Builds a positive whitelist of exactly the traffic the registered <see cref="TrafficFilterRequest"/>s
         /// asked for and pushes it down into the kernel via the BPF engine.
@@ -69,14 +98,21 @@ namespace MadWizard.Desomnia.Network.Filter
         /// </para>
         /// <para>
         /// A compiled BPF program has a finite instruction budget, so a very port-rich whitelist can be
-        /// rejected by libpcap. Rather than guess the limit, we generate the expression from most precise
-        /// to most general and let the compiler decide: the first candidate that <see cref="TrySetFilter"/>
+        /// rejected by the kernel even when libpcap accepts it. We compile each candidate before
+        /// installation and enforce the supplied budget. The first candidate that <see cref="TrySetFilter"/>
         /// accepts wins. Each rung drops one refinement (TCP ports, then UDP ports, then protocol
         /// sub-typing), retaining the requested address families and protocols.
         /// </para>
         /// </summary>
         private void UpdateFilter()
         {
+            if (Options.Expression is string expression)
+            {
+                // Explicit expressions are never simplified or replaced on failure.
+                SetFilter(expression);
+                return;
+            }
+
             string? lastTried = null;
 
             foreach (var filter in BuildFilterCandidates(Aggregate()))
@@ -95,7 +131,7 @@ namespace MadWizard.Desomnia.Network.Filter
 
             Logger.LogWarning("No BPF filter could be applied; capturing without a kernel filter.");
 
-            TrySetFilter("");
+            SetFilter("");
         }
 
         /// <summary>
@@ -110,37 +146,64 @@ namespace MadWizard.Desomnia.Network.Filter
 
         async Task INetworkService.Shutdown(NetworkShutdownReason reason)
         {
-            _shouldUpdateFilter = false;
+            if (_shouldUpdateFilter && Device.Device.Filter != "") TrySetFilter("");
 
-            TrySetFilter("");
+            _shouldUpdateFilter = false;
         }
 
         private bool TrySetFilter(string filter)
         {
             try
             {
-                if (device.Filter != filter)
-                {
-                    Logger.LogDebug("BPF rule -> '{Filter}'", filter);
-
-                    device.Filter = filter;
-                }
+                SetFilter(filter);
 
                 return true;
             }
             catch (Exception ex)
             {
                 // A rejected filter is expected while walking the precision ladder down; only the
-                // final give-up in ApplyFilters is worth a louder log.
-                Logger.LogDebug(ex, "BPF rule rejected; trying to simplify:");
+                // final give-up in UpdateFilter is worth a louder log.
+                Logger.LogDebug(ex, "BPF rejected; trying to simplify:");
 
                 return false;
             }
         }
 
+        private void SetFilter(string filter)
+        {
+            var device = Device.Device;
+
+            if (device.Filter == filter && _validatedFilter == filter)
+                return;
+
+            BpfProgram CompileFilter(string expression)
+            {
+                return device is PcapDevice pcap
+                    ? BpfProgram.Create(pcap.Handle, expression)
+                    : BpfProgram.Create(device.LinkType, expression);
+            }
+
+            // Compilation alone does not prove that the kernel will accept a program. In
+            // particular, Linux libpcap can silently fall back to filtering in user space.
+            // Match SharpPcap's Filter setter: compile on the opened handle with optimization enabled.
+            using (var program = CompileFilter(filter))
+            {
+                // The native bpf_program begins with the unsigned 32-bit bf_len field.
+                uint count = unchecked((uint)Marshal.ReadInt32(program.DangerousGetHandle()));
+                Logger.LogDebug("BPF [{Instructions}/{Limit}] -> '{Filter}'",
+                    count, Options.InstructionLimit?.ToString() ?? "?", filter);
+
+                if (Options.InstructionLimit is int limit && count > limit)
+                    throw new InvalidOperationException($"BPF requires {count} instructions, exceeding the limit of {limit}.");
+            }
+
+            device.Filter = filter;
+            _validatedFilter = filter;
+        }
+
         #region Traffic demand aggregation
         private sealed record TrafficShape(IPTrafficShape IPv4, IPTrafficShape IPv6, bool ARP, bool NDP, bool WoL,
-            IPReassemblyFamily Fragments);
+            ReassemblyProtocol Fragments);
 
         /// <summary>
         /// The capture requirements of one address family (IPv4 / IPv6). "Any" flags absorb port lists,
@@ -404,7 +467,7 @@ namespace MadWizard.Desomnia.Network.Filter
             ip4.Absorb();
             ip6.Absorb();
 
-            return new(ip4, ip6, arp, ndp, wol, reassembly?.Family ?? IPReassemblyFamily.None);
+            return new(ip4, ip6, arp, ndp, wol, ReassemblyOptions.Protocol);
         }
         #endregion
 
@@ -449,9 +512,9 @@ namespace MadWizard.Desomnia.Network.Filter
                 clauses.Add($"(ip6 and ip6[6] != 44 and ({demand.IPv6.ToBPFExpression(AddressFamily.InterNetworkV6, preciseICMP)}))");
 
             var fragments = new List<string>();
-            if (!demand.IPv4.IsEmpty && demand.Fragments.HasFlag(IPReassemblyFamily.IPv4))
+            if (!demand.IPv4.IsEmpty && demand.Fragments.HasFlag(ReassemblyProtocol.IPv4))
                 fragments.Add(demand.IPv4.ToFragmentBPFExpression(ipv6: false));
-            if (!demand.IPv6.IsEmpty && demand.Fragments.HasFlag(IPReassemblyFamily.IPv6))
+            if (!demand.IPv6.IsEmpty && demand.Fragments.HasFlag(ReassemblyProtocol.IPv6))
                 fragments.Add(demand.IPv6.ToFragmentBPFExpression(ipv6: true));
             if (fragments.Count > 0)
             {

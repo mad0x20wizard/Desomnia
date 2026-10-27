@@ -1,6 +1,6 @@
 ﻿using Autofac;
 using MadWizard.Desomnia.Network.Configuration.Options;
-using MadWizard.Desomnia.Network.Filter;
+using MadWizard.Desomnia.Network.Device.Filter;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Neighborhood.Events;
 using System.Net;

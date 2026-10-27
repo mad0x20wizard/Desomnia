@@ -1,6 +1,6 @@
 ﻿using Autofac;
 using Autofac.Builder;
-using MadWizard.Desomnia.Network.Filter;
+using MadWizard.Desomnia.Network.Device.Filter;
 using System.Net;
 
 namespace MadWizard.Desomnia.Network
