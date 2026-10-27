@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Filter;
@@ -8,6 +9,7 @@ using System.Net;
 using System.Reflection;
 using System.Text;
 using Xunit;
+using Microsoft.Extensions.Logging;
 
 namespace MadWizard.Desomnia.Network.Tests;
 
@@ -16,8 +18,163 @@ public class IPReassemblyTests
     private static ReassemblyOptions Options => new()
         { Protocol = ReassemblyProtocol.IPv4 | ReassemblyProtocol.IPv6, Timeout = TimeSpan.FromSeconds(30) };
 
-    private static IPReassembly Create(bool ipv6, ReassemblyOptions? options = null, TimeProvider? clock = null)
-        => ipv6 ? new IPv6Reassembly(options ?? Options, clock) : new IPv4Reassembly(options ?? Options, clock);
+    private static IPReassembly Create(bool ipv6, ReassemblyOptions? options = null, TimeProvider? clock = null,
+        ILogger<IPReassembly>? logger = null)
+        => ipv6 ? new IPv6Reassembly(options ?? Options, clock) { Logger = logger ?? NullLogger<IPReassembly>.Instance }
+            : new IPv4Reassembly(options ?? Options, clock) { Logger = logger ?? NullLogger<IPReassembly>.Instance };
+
+    private static long RetainedBytes(IPReassembly reassembly)
+        => (long)typeof(IPReassembly).GetField("_retainedBytes", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(reassembly)!;
+
+    [Theory]
+    [InlineData(false, false, 65535, true)]
+    [InlineData(false, true, 65535, true)]
+    [InlineData(true, false, 65527, true)]
+    [InlineData(true, true, 65527, true)]
+    [InlineData(true, false, 65535, false)]
+    [InlineData(true, true, 65535, false)]
+    public void Ipv6DatagramLimitUsesOnlyOffsetZeroHeaders(bool firstExtensions, bool laterExtensions, int length, bool accepted)
+    {
+        var data = Datagram(text: new string('x', length - 8));
+        foreach (bool firstArrivesLast in new[] { false, true })
+        {
+            using var reassembly = Create(true);
+            var first = Fragment(true, data, 0, 16, true, extensions: firstExtensions);
+            if (!firstArrivesLast) Assert.Null(Consume(reassembly, first));
+            INetworkCapture? capture = null;
+            for (int offset = 16; offset < length; offset += 1024)
+                capture = Consume(reassembly, Fragment(true, data, offset, Math.Min(1024, length - offset),
+                    offset + 1024 < length, extensions: laterExtensions));
+            if (firstArrivesLast) capture = Consume(reassembly, first);
+            if (accepted)
+            {
+                Assert.NotNull(capture);
+                Assert.Equal(length - 8, capture.PayloadLength);
+                Assert.Equal(data[8..], capture.PayloadData);
+                var ip = capture.FindPacket<IPv6Packet>()!;
+                Assert.Equal(length + (firstExtensions ? 8 : 0), ip.Bytes.Length - 40);
+            }
+            else Assert.Null(capture);
+            Assert.Equal(0, RetainedBytes(reassembly));
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void DefaultContextUsesFragmentMetadataAndDefersPayloadMaterialization(bool ipv6, bool tcp)
+    {
+        var data = Datagram(tcp);
+        using var reassembly = Create(ipv6);
+        int split = ipv6 && tcp ? 24 : 8;
+        Consume(reassembly, Fragment(ipv6, data, 0, split, true, protocol: tcp ? (byte)6 : (byte)17));
+        var capture = Consume(reassembly, Fragment(ipv6, data, split, data.Length - split, false, protocol: tcp ? (byte)6 : (byte)17))!;
+        var parser = new DefaultFilterContextParser();
+        foreach (var direction in new[] { FlowDirection.Inbound, FlowDirection.Outbound })
+        {
+            var context = Assert.IsAssignableFrom<IIPServicePayloadFilterContext>(parser.Parse([capture], direction));
+            Assert.Same(direction == FlowDirection.Inbound ? capture.SourceEndPoint : capture.TargetEndPoint, context.RemoteEndPoint);
+            Assert.Equal(tcp ? IPProtocol.TCP : IPProtocol.UDP, context.Protocol);
+            Assert.Equal(data.Length - (tcp ? 20 : 8), context.PayloadLength);
+            Assert.Null(typeof(EthernetCapture).GetField("_payloadData", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(capture));
+            if (!tcp)
+                Assert.Null(typeof(FragmentedIPCapture).GetField("_reassembled", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(capture));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void HttpHistoryCombinesIndividuallyFragmentedTcpSegments(bool ipv6)
+    {
+        const string text = "GET /several?q=1 HTTP/1.1\r\nHost: example.test\r\n\r\n";
+        using var reassembly = Create(ipv6);
+        var pipeline = new CapturePipeline([reassembly]) { Logger = NullLogger<CapturePipeline>.Instance };
+        INetworkCapture Reassemble(uint sequence, string payload, bool syn, uint id)
+        {
+            var data = Datagram(tcp: true, text: payload);
+            BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(4), sequence);
+            data[13] = syn ? (byte)2 : (byte)16;
+            int split = ipv6 ? 24 : 8;
+            Assert.Null(pipeline.TryCapturePacket(Fragment(ipv6, data, split, data.Length - split, false, id, protocol: 6)));
+            return Assert.IsType<FragmentedIPCapture>(pipeline.TryCapturePacket(Fragment(ipv6, data, 0, split, true, id, protocol: 6)));
+        }
+        // Payload on the SYN anchors the stream. The following segment arrives before the gap filler.
+        uint synSequence = uint.MaxValue - 5;
+        uint start = unchecked(synSequence + 1);
+        INetworkCapture[] history = [Reassemble(synSequence, text[..8], true, 1), Reassemble(unchecked(start + 20), text[20..], false, 2)];
+        var parser = new HTTPFilterContextParser();
+        var incomplete = parser.Parse(history, FlowDirection.Inbound);
+        Assert.False(incomplete is IHTTPFilterContext);
+        Assert.Equal(text[..8], Encoding.ASCII.GetString(((IIPServicePayloadFilterContext)incomplete).PayloadData));
+        var middle = Reassemble(unchecked(start + 8), text[8..20], false, 3);
+        var complete = Assert.IsAssignableFrom<IHTTPFilterContext>(parser.Parse([.. history, middle, middle], FlowDirection.Inbound));
+        Assert.Equal("/several", complete.Path);
+        Assert.Equal("1", complete.Query["q"].ToString());
+        Assert.Equal(text, Encoding.ASCII.GetString(complete.PayloadData));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RetainedByteBudgetRejectsOverflowAndRecoversAfterExpiry(bool ipv6)
+    {
+        const long limit = 16 * 1024 * 1024;
+        var logger = new TraceLogger();
+        var clock = new ManualClock();
+        using var reassembly = Create(ipv6, clock: clock, logger: logger);
+        var data = Datagram(text: new string('x', 59992));
+        int wireLength = Fragment(ipv6, data, 0, data.Length, true).CapturedBytes.Length;
+        uint count = (uint)(limit / wireLength);
+        for (uint id = 0; id < count; id++)
+            Assert.Null(Consume(reassembly, Fragment(ipv6, data, 0, data.Length, true, id)));
+        long retained = RetainedBytes(reassembly);
+        Assert.Equal(count * (long)wireLength, retained);
+        Assert.Null(Consume(reassembly, Fragment(ipv6, data, 0, data.Length, true, count)));
+        Assert.Equal(retained, RetainedBytes(reassembly));
+        Assert.Contains(logger.Messages, message => message.Contains("Retained frame byte limit exceeded"));
+        clock.Advance(TimeSpan.FromSeconds(31));
+        Assert.Equal(0, RetainedBytes(reassembly));
+        var small = Datagram();
+        Consume(reassembly, Fragment(ipv6, small, 0, 16, true, count));
+        Assert.NotNull(Consume(reassembly, Fragment(ipv6, small, 16, small.Length - 16, false, count)));
+        Assert.Equal(0, RetainedBytes(reassembly));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TraceReportsMalformedFramesOverlapAndExpiredCollections(bool ipv6)
+    {
+        var logger = new TraceLogger();
+        var clock = new ManualClock();
+        using var reassembly = Create(ipv6, clock: clock, logger: logger);
+        var data = Datagram();
+        var truncated = Fragment(ipv6, data, 0, 16, true).CapturedBytes[..^1];
+        Consume(reassembly, (EthernetPacket)Packet.ParsePacket(LinkLayers.Ethernet, truncated));
+        Consume(reassembly, Fragment(ipv6, data, 0, 16, true, 42));
+        Consume(reassembly, Fragment(ipv6, data, 8, 16, true, 42));
+        Consume(reassembly, Fragment(ipv6, data, 0, 16, true, 43));
+        clock.Advance(TimeSpan.FromSeconds(31));
+        Assert.Contains(logger.Messages, message => message.Contains("malformed"));
+        Assert.Contains(logger.Messages, message => message.Contains("ID=42") && message.Contains("Overlapping"));
+        Assert.Contains(logger.Messages, message => message.Contains("ID=43") && message.Contains("Expired") && message.Contains("1 fragments"));
+        Assert.Equal(0, RetainedBytes(reassembly));
+    }
+
+    private sealed class TraceLogger : ILogger<IPReassembly>
+    {
+        public List<string> Messages { get; } = [];
+        public bool IsEnabled(LogLevel level) => level == LogLevel.Trace;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public void Log<TState>(LogLevel level, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            Assert.Equal(LogLevel.Trace, level);
+            Messages.Add(formatter(state, exception));
+        }
+    }
 
     internal static byte[] Datagram(bool tcp = false, string text = "abcdefghijklmnopqrstuvwxyz0123456789")
     {
@@ -105,16 +262,14 @@ public class IPReassemblyTests
     }
 
     [Theory]
-    [InlineData(false, 0)]
-    [InlineData(true, 0)]
-    [InlineData(false, 17)]
-    [InlineData(true, 17)]
-    public void FirstFragmentSuppliesMetadataWithoutNormalizingOrDecodingTransport(bool ipv6, int vlan)
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FirstFragmentSuppliesMetadataWithoutNormalizingOrDecodingTransport(bool ipv6)
     {
         var data = Datagram(tcp: true);
         int split = ipv6 ? 24 : 8; // The IPv4 TCP header is deliberately incomplete.
-        var first = Fragment(ipv6, data, 0, split, true, protocol: 6, vlan: vlan);
-        var last = Fragment(ipv6, data, split, data.Length - split, false, protocol: 6, vlan: vlan);
+        var first = Fragment(ipv6, data, 0, split, true, protocol: 6);
+        var last = Fragment(ipv6, data, split, data.Length - split, false, protocol: 6);
         byte[] before = (byte[])first.HeaderSegment.Bytes.Clone();
         using var reassembly = Create(ipv6);
         Assert.Null(Consume(reassembly, last));
@@ -283,19 +438,34 @@ public class IPReassemblyTests
         Consume(reassembly, Fragment(ipv6, data, 0, split, true, protocol: 6));
         var result = Consume(reassembly, Fragment(ipv6, data, split, data.Length - split, false, protocol: 6));
         var capture = Assert.IsType<FragmentedIPCapture>(result);
-        var context = Assert.IsAssignableFrom<IHTTPFilterContext>(new HTTPFilterContextParser().Parse(capture, FlowDirection.Inbound));
+        var context = Assert.IsAssignableFrom<IHTTPFilterContext>(new HTTPFilterContextParser().Parse([capture], FlowDirection.Inbound));
         Assert.Equal("/fragmented", context.Path);
         Assert.Equal("q=1", context.QueryString);
         Assert.Equal(data.Length - 20, context.PayloadLength);
     }
 
-    [Fact]
-    public void VlanIdsSeparateOtherwiseIdenticalDatagrams()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void PipelineRejectsTaggedFramesBeforeReassembly(bool ipv6, bool passthrough)
     {
-        var data = Datagram(); using var reassembly = Create(false);
-        Consume(reassembly, Fragment(false, data, 0, 16, true, vlan: 1));
-        Assert.Null(Consume(reassembly, Fragment(false, data, 16, data.Length - 16, false, vlan: 2)));
-        Assert.IsType<FragmentedIPCapture>(Consume(reassembly, Fragment(false, data, 16, data.Length - 16, false, vlan: 1)));
+        using var reassembly = Create(ipv6, Options with { Protocol = Options.Protocol | (passthrough ? ReassemblyProtocol.Passthrough : 0) });
+        var unhandled = new Stub(false);
+        var pipeline = new CapturePipeline([unhandled, reassembly]) { Logger = NullLogger<CapturePipeline>.Instance };
+        var data = Datagram();
+        foreach (var type in new ushort[] { 0x8100, 0x88a8 })
+        foreach (bool fragmented in new[] { false, true })
+        {
+            var packet = Fragment(ipv6, data, 0, fragmented ? 16 : data.Length, fragmented, vlan: 17);
+            packet.Type = (EthernetType)type;
+            Assert.Null(pipeline.TryCapturePacket(packet));
+            Assert.False(reassembly.TryReassemble(packet, out var capture));
+            Assert.Null(capture);
+        }
+        Assert.Equal(0, unhandled.Calls);
+        Assert.Equal(0L, RetainedBytes(reassembly));
     }
 
     [Theory]
@@ -325,7 +495,7 @@ public class IPReassemblyTests
         var packet = FilterParserPackets.Udp("data").Single();
         INetworkCapture? expected = producesCapture ? new EthernetCapture(packet) : null;
         Stub skip = new(false), handled = new(true, expected), unreachable = new(true);
-        var result = new CapturePipeline([skip, handled, unreachable]).TryCapturePacket(packet);
+        var result = new CapturePipeline([skip, handled, unreachable]) { Logger = NullLogger<CapturePipeline>.Instance }.TryCapturePacket(packet);
         Assert.Same(expected, result);
         Assert.Equal(1, skip.Calls);
         Assert.Equal(1, handled.Calls);
@@ -337,10 +507,10 @@ public class IPReassemblyTests
     {
         var packet = FilterParserPackets.Udp("data").Single();
         Stub skip = new(false);
-        var result = Assert.IsType<EthernetCapture>(new CapturePipeline([skip]).TryCapturePacket(packet));
+        var result = Assert.IsType<EthernetCapture>(new CapturePipeline([skip]) { Logger = NullLogger<CapturePipeline>.Instance }.TryCapturePacket(packet));
         Assert.Same(packet, Assert.Single(result));
         Assert.Equal(1, skip.Calls);
-        Assert.IsType<EthernetCapture>(new CapturePipeline([]).TryCapturePacket(packet));
+        Assert.IsType<EthernetCapture>(new CapturePipeline([]) { Logger = NullLogger<CapturePipeline>.Instance }.TryCapturePacket(packet));
     }
 
     [Theory]
@@ -425,7 +595,7 @@ public class IPReassemblyTests
         var options = Options with { Protocol = (ReassemblyProtocol)flags };
         using var ipv4 = Create(false, options);
         using var ipv6 = Create(true, options);
-        var pipeline = new CapturePipeline([ipv4, ipv6]);
+        var pipeline = new CapturePipeline([ipv4, ipv6]) { Logger = NullLogger<CapturePipeline>.Instance };
         foreach (bool v6 in new[] { false, true })
         {
             var data = Datagram();
@@ -459,8 +629,8 @@ public class IPReassemblyTests
         var data = Datagram(tcp);
         int split = tcp ? 24 : 16;
         using var reassembly = Create(ipv6, Options with { Protocol = (ReassemblyProtocol)7 });
-        var first = Fragment(ipv6, data, 0, split, true, protocol: tcp ? (byte)6 : (byte)17, extensions: ipv6, vlan: 17);
-        var last = Fragment(ipv6, data, split, data.Length - split, false, protocol: tcp ? (byte)6 : (byte)17, extensions: ipv6, vlan: 17);
+        var first = Fragment(ipv6, data, 0, split, true, protocol: tcp ? (byte)6 : (byte)17, extensions: ipv6);
+        var last = Fragment(ipv6, data, split, data.Length - split, false, protocol: tcp ? (byte)6 : (byte)17, extensions: ipv6);
         var firstBytes = first.CapturedBytes.ToArray();
         var lastBytes = last.CapturedBytes.ToArray();
         var a = Assert.IsType<EthernetCapture>(Consume(reassembly, first));
@@ -482,8 +652,8 @@ public class IPReassemblyTests
         Assert.True(b.IsIPUnicast);
         Assert.Equal(first.DestinationHardwareAddress, a.TargetPhysicalAddress);
         Assert.Equal(last.DestinationHardwareAddress, b.TargetPhysicalAddress);
-        Assert.IsAssignableFrom<IIPServicePayloadFilterContext>(new DefaultFilterContextParser().Parse(a, FlowDirection.Inbound));
-        Assert.IsAssignableFrom<IIPFilterContext>(new DefaultFilterContextParser().Parse(b, FlowDirection.Inbound));
+        Assert.IsAssignableFrom<IIPServicePayloadFilterContext>(new DefaultFilterContextParser().Parse([a], FlowDirection.Inbound));
+        Assert.IsAssignableFrom<IIPFilterContext>(new DefaultFilterContextParser().Parse([b], FlowDirection.Inbound));
         Assert.Equal(firstBytes, first.CapturedBytes);
         Assert.Equal(lastBytes, last.CapturedBytes);
     }

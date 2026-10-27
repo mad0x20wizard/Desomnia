@@ -1,5 +1,7 @@
 using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Configuration.Options;
+using MadWizard.Desomnia.Network.Demand;
+using MadWizard.Desomnia.Network.Demand.Detector;
 using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
@@ -28,6 +30,17 @@ namespace MadWizard.Desomnia.Network.Tests
             public bool Online { get; init; } = true;
 
             public override bool IsOnline => Online;
+        }
+
+        private sealed class RoutingWatch : HostDemandWatch
+        {
+            public override bool IsOnline => false;
+            public int DemandEvaluations { get; private set; }
+            internal override DemandRequest? Evaluate(INetworkCapture capture)
+            {
+                DemandEvaluations++;
+                return null;
+            }
         }
 
         private static NetworkSegment CreateNetwork() => new()
@@ -139,7 +152,7 @@ namespace MadWizard.Desomnia.Network.Tests
                 Options = default,
                 Device = null!,
                 Network = network,
-                Pipeline = new CapturePipeline([]), Janitor = null!
+                Pipeline = new CapturePipeline([]) { Logger = NullLogger<CapturePipeline>.Instance }, Janitor = null!
             };
 
             monitor.StartTracking(hostWatch, adopt: false);
@@ -206,6 +219,52 @@ namespace MadWizard.Desomnia.Network.Tests
             {
                 Assert.Empty(tokens);
             }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void OutboundTrafficOnlyCountsForSourceAndDemandRoutesToDestination(bool destinationWatched)
+        {
+            var network = CreateNetwork();
+            RoutingWatch Watch(string name, IPAddress address, PhysicalAddress mac)
+            {
+                var host = new NetworkHost(name) { Network = network, PhysicalAddress = mac };
+                host.AddAddress(address);
+                network.AddHost(host);
+                return new RoutingWatch
+                {
+                    Host = host, Network = network, Device = null!, Scope = null!,
+                    Logger = NullLogger<NetworkHostWatch>.Instance,
+                    AdvertiseOptions = default, HandoffOptions = default, DemandOptions = default,
+                    DefaultFilterOptions = default,
+                    Filter = new Lazy<IPacketFilter>(() => new PacketRuleFilter([]))
+                };
+            }
+            var source = Watch("source", SourceIP, SourceMAC);
+            var target = Watch("target", TargetIP, TargetMAC);
+            var monitor = new NetworkMonitor
+            {
+                Logger = NullLogger<NetworkMonitor>.Instance, Name = "test",
+                Options = new WatchOptions { Mode = WatchMode.Promiscuous },
+                Device = null!, Network = network, Janitor = null!,
+                Pipeline = new CapturePipeline([]) { Logger = NullLogger<CapturePipeline>.Instance }
+            };
+            monitor.StartTracking(source, adopt: false);
+            if (destinationWatched) monitor.StartTracking(target, adopt: false);
+            INetworkService service = new DemandService
+            {
+                Logger = NullLogger<DemandService>.Instance, Device = null!, Monitor = monitor,
+                Network = network, AddressMapping = null!, Detectors = [new DemandByIP { Network = network }]
+            };
+
+            service.ProcessCapture(new EthernetCapture(CreateTCPPacket(synchronize: true, [1, 2, 3, 4])));
+
+            Assert.Equal(0, source.DemandEvaluations);
+            Assert.Equal(destinationWatched ? 1 : 0, target.DemandEvaluations);
+            var usage = Assert.IsType<NetworkHostUsage>(Assert.Single(source.Inspect(TimeSpan.FromSeconds(1))));
+            Assert.Equal(4, usage.Bytes);
+            Assert.Empty(target.Inspect(TimeSpan.FromSeconds(1)));
         }
 
         [Fact]

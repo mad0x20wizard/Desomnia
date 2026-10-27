@@ -35,6 +35,26 @@ public class BerkeleyPacketFilterTests
     }
 
     private static ITrafficType Family(bool ipv6) => ipv6 ? new IPv6TrafficType() : new IPv4TrafficType();
+
+    [PcapTheory]
+    [InlineData(0)]
+    [InlineData(3)]
+    [InlineData(7)]
+    public void TaggedTrafficHasNoGeneratedCaptureAllowance(int flags)
+    {
+        foreach (var expression in Candidates((ReassemblyProtocol)flags, [new TCPTrafficType(80, WithData: true)]))
+        {
+            Assert.DoesNotContain("vlan", expression);
+            using var program = Compile(expression);
+            foreach (bool ipv6 in new[] { false, true })
+            foreach (int tags in Enumerable.Range(1, 4))
+            {
+                Assert.False(program.Matches(Tag(Ordinary(ipv6, 6), tags)));
+                Assert.False(program.Matches(Tag(Fragment(ipv6), tags)));
+                Assert.False(program.Matches(Tag(Fragment(ipv6, offset: 24), tags)));
+            }
+        }
+    }
     private static BpfProgram Compile(string expression) => BpfProgram.Create(LinkLayers.Ethernet, expression, 1, uint.MaxValue);
 
     // These tests execute compiled BPF, without opening a capture device or requiring privileges.
@@ -74,11 +94,8 @@ public class BerkeleyPacketFilterTests
             foreach (bool ipv6 in new[] { false, true })
             {
                 bool enabled = (flags & (ipv6 ? 2 : 1)) != 0;
-                foreach (int tags in Enumerable.Range(0, 5))
-                {
-                    Assert.Equal(enabled, filter.Matches(Tag(Fragment(ipv6), tags)));
-                    Assert.Equal(enabled, filter.Matches(Tag(Fragment(ipv6, offset: 24), tags)));
-                }
+                Assert.Equal(enabled, filter.Matches(Fragment(ipv6)));
+                Assert.Equal(enabled, filter.Matches(Fragment(ipv6, offset: 24)));
                 Assert.True(filter.Matches(Ordinary(ipv6, 6)));
             }
         }
@@ -92,15 +109,12 @@ public class BerkeleyPacketFilterTests
         foreach (var expression in Candidates(Both, [Family(ipv6), new TCPTrafficType(80, WithData: true)]))
         {
             using var filter = Compile(expression);
-            foreach (int tags in Enumerable.Range(0, 5))
-            {
-                Assert.True(filter.Matches(Tag(Fragment(ipv6), tags)));
-                Assert.False(filter.Matches(Tag(Fragment(!ipv6), tags)));
-                Assert.False(filter.Matches(Tag(Fragment(!ipv6, offset: 24), tags)));
-                Assert.False(filter.Matches(Tag(Fragment(ipv6, protocol: 17), tags)));
-                Assert.False(filter.Matches(Tag(Fragment(ipv6, protocol: 132), tags)));
-                Assert.False(filter.Matches(Tag(Ordinary(ipv6, 17), tags)));
-            }
+            Assert.True(filter.Matches(Fragment(ipv6)));
+            Assert.False(filter.Matches(Fragment(!ipv6)));
+            Assert.False(filter.Matches(Fragment(!ipv6, offset: 24)));
+            Assert.False(filter.Matches(Fragment(ipv6, protocol: 17)));
+            Assert.False(filter.Matches(Fragment(ipv6, protocol: 132)));
+            Assert.False(filter.Matches(Ordinary(ipv6, 17)));
             Assert.False(filter.Matches(Ordinary(!ipv6, 6)));
         }
     }
@@ -135,34 +149,29 @@ public class BerkeleyPacketFilterTests
     public void FragmentAllowanceDefersPortsAndFlagsWhileOrdinaryTrafficRemainsPrecise(bool ipv6, bool payload)
     {
         using var filter = Compile(Candidates(Both, [Family(ipv6), new TCPTrafficType(80, WithData: payload)])[0]);
-        foreach (int tags in Enumerable.Range(0, 5))
-        {
-            Assert.True(filter.Matches(Tag(Fragment(ipv6), tags)));
-            Assert.True(filter.Matches(Tag(Fragment(ipv6, source: 80, target: 50000), tags)));
-            Assert.True(filter.Matches(Tag(Fragment(ipv6, target: 81), tags)));
-            Assert.True(filter.Matches(Tag(Fragment(ipv6, syn: false), tags)));
-            Assert.True(filter.Matches(Tag(Fragment(ipv6, target: 81, syn: false, offset: 24), tags)));
-            Assert.Equal(payload, filter.Matches(Ordinary(ipv6, 6, syn: false)));
-            Assert.False(filter.Matches(Ordinary(ipv6, 6, target: 81)));
-        }
+        Assert.True(filter.Matches(Fragment(ipv6)));
+        Assert.True(filter.Matches(Fragment(ipv6, source: 80, target: 50000)));
+        Assert.True(filter.Matches(Fragment(ipv6, target: 81)));
+        Assert.True(filter.Matches(Fragment(ipv6, syn: false)));
+        Assert.True(filter.Matches(Fragment(ipv6, target: 81, syn: false, offset: 24)));
+        Assert.Equal(payload, filter.Matches(Ordinary(ipv6, 6, syn: false)));
+        Assert.False(filter.Matches(Ordinary(ipv6, 6, target: 81)));
     }
 
     [PcapTheory]
     [InlineData(0)]
-    [InlineData(1)]
-    [InlineData(4)]
-    public void SplitIpv4TcpHeadersDoNotNeedTransportParsingInBpf(int tags)
+    public void SplitIpv4TcpHeadersDoNotNeedTransportParsingInBpf(int _)
     {
         using var filter = Compile(Candidates(Both, [new IPv4TrafficType(), new TCPTrafficType(80)])[0]);
         // Only eight transport bytes. Neither TCP flags nor Ethernet padding affect admission.
         // IPv4 options do not affect the IP protocol and fragment offset checks.
         var first = WithIpv4Options(Fragment(false, length: 8, syn: false));
         Array.Resize(ref first, 80);
-        Assert.True(filter.Matches(Tag(first, tags)));
-        Assert.True(filter.Matches(Tag(WithIpv4Options(Fragment(false, length: 8, target: 81)), tags)));
-        Assert.True(filter.Matches(Tag(WithIpv4Options(Fragment(false, syn: false)), tags)));
-        Assert.True(filter.Matches(Tag(Fragment(false, offset: 8, length: 16), tags)));
-        Assert.False(filter.Matches(Tag(Fragment(false, protocol: 17, offset: 8, length: 16), tags)));
+        Assert.True(filter.Matches(first));
+        Assert.True(filter.Matches(WithIpv4Options(Fragment(false, length: 8, target: 81))));
+        Assert.True(filter.Matches(WithIpv4Options(Fragment(false, syn: false))));
+        Assert.True(filter.Matches(Fragment(false, offset: 8, length: 16)));
+        Assert.False(filter.Matches(Fragment(false, protocol: 17, offset: 8, length: 16)));
     }
 
     [PcapTheory]
@@ -219,26 +228,23 @@ public class BerkeleyPacketFilterTests
 
     [PcapTheory]
     [InlineData(0)]
-    [InlineData(2)]
-    public void FamiliesKeepTheirOwnProtocolsAcrossEveryRung(int tags)
+    public void FamiliesKeepTheirOwnProtocolsAcrossEveryRung(int _)
     {
         foreach (string expression in Candidates(Both,
             [new IPv4TrafficType(), new TCPTrafficType(80)],
             [new IPv6TrafficType(), new UDPTrafficType(53)]))
         {
             using var filter = Compile(expression);
-            Assert.True(filter.Matches(Tag(Fragment(false), tags)));
-            Assert.True(filter.Matches(Tag(Fragment(true, protocol: 17, target: 53), tags)));
-            Assert.False(filter.Matches(Tag(Fragment(true), tags)));
-            Assert.False(filter.Matches(Tag(Fragment(false, protocol: 17, target: 53), tags)));
+            Assert.True(filter.Matches(Fragment(false)));
+            Assert.True(filter.Matches(Fragment(true, protocol: 17, target: 53)));
+            Assert.False(filter.Matches(Fragment(true)));
+            Assert.False(filter.Matches(Fragment(false, protocol: 17, target: 53)));
         }
     }
 
     [PcapTheory]
     [InlineData(0)]
-    [InlineData(1)]
-    [InlineData(4)]
-    public void Ipv6UndecidableFragmentsAreAcceptedOnlyForRequestedFamilies(int tags)
+    public void Ipv6UndecidableFragmentsAreAcceptedOnlyForRequestedFamilies(int _)
     {
         using var filter = Compile(Candidates(Both, [new IPv6TrafficType(), new TCPTrafficType(80)])[0]);
         using var otherFamily = Compile(Candidates(Both, [new IPv4TrafficType(), new TCPTrafficType(80)])[0]);
@@ -258,8 +264,8 @@ public class BerkeleyPacketFilterTests
         };
         foreach (var packet in packets)
         {
-            Assert.True(filter.Matches(Tag(packet, tags)));
-            Assert.False(otherFamily.Matches(Tag(packet, tags)));
+            Assert.True(filter.Matches(packet));
+            Assert.False(otherFamily.Matches(packet));
         }
         // Without protochain, extension chains must be conservatively admitted, even when
         // unfragmented. The exception is still limited to the requested family.
@@ -270,8 +276,8 @@ public class BerkeleyPacketFilterTests
         unfragmented[20] = 0; // Hop-by-hop, followed directly by TCP, without a Fragment header
         unfragmented[54] = 6;
         Put16(unfragmented, 18, unfragmented.Length - 54);
-        Assert.True(filter.Matches(Tag(unfragmented, tags)));
-        Assert.False(otherFamily.Matches(Tag(unfragmented, tags)));
+        Assert.True(filter.Matches(unfragmented));
+        Assert.False(otherFamily.Matches(unfragmented));
     }
 
     [PcapTheory]
@@ -334,7 +340,7 @@ public class BerkeleyPacketFilterTests
     {
         using var filter = Compile(Candidates(Both, [Family(ipv6), new TCPTrafficType(80)])[0]);
         var options = new ReassemblyOptions { Protocol = Both, Timeout = TimeSpan.FromSeconds(30) };
-        using IPReassembly reassembly = ipv6 ? new IPv6Reassembly(options) : new IPv4Reassembly(options);
+        using IPReassembly reassembly = ipv6 ? new IPv6Reassembly(options) { Logger = NullLogger<IPReassembly>.Instance } : new IPv4Reassembly(options) { Logger = NullLogger<IPReassembly>.Instance };
         int split = ipv6 ? 24 : 8;
         var first = Fragment(ipv6, length: split);
         var last = Fragment(ipv6, offset: split, length: IPReassemblyTests.Datagram(tcp: true).Length - split);

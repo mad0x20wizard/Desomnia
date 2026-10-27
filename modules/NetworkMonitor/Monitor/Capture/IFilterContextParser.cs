@@ -24,51 +24,35 @@ namespace MadWizard.Desomnia.Network.Capture
     public interface IFilterContextParser
     {
         /// <summary>
-        /// Creates a context for passive evaluation of the current capture. Payload properties
-        /// describe this packet only, even if it is part of a longer transport exchange.
-        /// </summary>
-        /// 
-        /// <param name="capture">
-        /// The shared lazy metadata cache for one logical packet, possibly assembled from
-        /// several Ethernet frames. Both directional evaluations reuse its cached values.
-        /// </param>
-        /// 
-        /// <param name="direction">Traffic direction relative to the watched host.</param>
-        /// 
-        /// <exception cref="MalformedServicePayloadException">
-        /// Available data establishes an invalid service payload, rather than incomplete input.
-        /// </exception>
-        /// <exception cref="NotSupportedException">
-        /// The capture has no IP address, or needs IP fragmentation reassembly before parsing.
-        /// </exception>
-        IFilterContext Parse(INetworkCapture capture, FlowDirection direction);
-
-        /// <summary>
-        /// Creates a context from the retained history of one DemandRequest. Payload properties
-        /// describe reconstructed data for its connection and the requested direction.
-        /// Use this overload even when the demand currently contains only one capture.
+        /// Creates a context from one or more captures flowing in the same direction.
+        /// A single capture describes the current packet; multiple captures provide the
+        /// available data for one connection attempt, reconstructed by TCP sequence position.
         /// </summary>
         /// 
         /// <param name="captures">
-        /// Nonempty, caller-owned history in observation order, including the newest capture.
-        /// The history starts with the inbound demand trigger, establishing the watched and
-        /// peer sides. Any transport captures must belong to the selected connection attempt.
-        /// It may contain provisional address-resolution captures and both traffic directions.
-        /// The parser selects the applicable data and reconstructs TCP by sequence position,
-        /// not arrival order. The default parser uses only the latest UDP datagram in the
-        /// requested direction; independent datagrams are never concatenated. A plugin may
-        /// override this with application-protocol-aware interpretation.
-        /// The caller must not change the history during parsing.
+        /// Nonempty, caller-owned captures in observation order. All captures must have the
+        /// same source and target IP addresses; transport captures must also share the same
+        /// source and target ports and protocol. Provisional address resolution may precede
+        /// transport traffic. Demand histories contain only inbound traffic; outbound traffic
+        /// is evaluated separately for accounting. The default parser uses only the latest
+        /// UDP datagram, including an empty one, and never concatenates independent datagrams.
+        /// A plugin may provide application-protocol-aware interpretation instead.
+        /// Pass a single capture as [capture], without allocating a temporary array.
+        /// The caller must not change the input during parsing.
         /// </param>
         /// 
-        /// <param name="direction">Traffic direction relative to the watched host.</param>
+        /// <param name="direction">
+        /// Direction of every supplied capture relative to the watched host. This identifies
+        /// the watched endpoint; it does not select a direction from a mixed history.
+        /// </param>
         /// 
         /// <exception cref="ArgumentException">
-        /// The history is empty or mixes transport endpoints from different connection attempts.
+        /// The input is empty or mixes directions, addresses or transport connection endpoints.
         /// </exception>
         /// <exception cref="MalformedServicePayloadException">
         /// Available data establishes an invalid service payload, rather than incomplete input.
         /// </exception>
+        /// <exception cref="NotSupportedException">The capture has no usable IP address.</exception>
         IFilterContext Parse(ReadOnlySpan<INetworkCapture> captures, FlowDirection direction);
     }
 }

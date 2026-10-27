@@ -6,8 +6,8 @@ namespace MadWizard.Desomnia.Network.Capture
 {
     /// <summary>
     /// Creates independent evaluation snapshots without tracking connections between calls.
-    /// UDP histories expose only the newest datagram in the requested direction.
-    /// Override the history overload for application-specific, multi-datagram protocols.
+    /// Input contains one direction only. UDP histories expose only the newest datagram.
+    /// Override Parse for application-specific, multi-datagram protocols.
     /// </summary>
     public class DefaultFilterContextParser : IFilterContextParser
     {
@@ -17,75 +17,59 @@ namespace MadWizard.Desomnia.Network.Capture
         /// <summary>Maximum payload-bearing segments inspected in one direction, including retransmissions.</summary>
         protected virtual int MaximumTcpSegments => 1024;
 
-        public virtual IFilterContext Parse(INetworkCapture capture, FlowDirection direction)
+        private IFilterContext InterpretPacket(INetworkCapture capture, FlowDirection direction)
         {
-            ValidateDirection(direction);
             var context = ParsePacket(capture, direction);
-            return Interpret(context, capture.FindPacket<TcpPacket>()?.Synchronize == true);
+            bool startsAtSyn = context is IIPServiceFilterContext { Protocol: IPProtocol.TCP }
+                && capture.FindPacket<TcpPacket>()?.Synchronize == true;
+            return Interpret(context, startsAtSyn);
         }
 
         public virtual IFilterContext Parse(ReadOnlySpan<INetworkCapture> captures, FlowDirection direction)
         {
             ValidateDirection(direction);
             if (captures.IsEmpty)
-                throw new ArgumentException("A demand history must contain at least one capture.", nameof(captures));
+                throw new ArgumentException("At least one capture is required.", nameof(captures));
+            if (captures.Length == 1)
+                return InterpretPacket(captures[0], direction);
 
-            // The inbound trigger may be ARP/NDP. Its addresses establish the sides even
-            // when the first transport packet is a reply.
-            var peerAddress = captures[0].SourceEndPoint?.Address;
-            var watchedAddress = captures[0].TargetEndPoint?.Address;
-            IPServiceEndPoint? peer = null, watched = null;
-            int latest = -1, latestNonTransport = -1;
+            // Address resolution can establish the endpoints before transport arrives.
+            // Every subsequent capture must retain this source-to-target orientation.
+            var sourceAddress = captures[0].SourceEndPoint?.Address;
+            var targetAddress = captures[0].TargetEndPoint?.Address;
+            IPServiceEndPoint? source = null, target = null;
+            int latest = -1;
             for (int i = 0; i < captures.Length; i++)
             {
                 var capture = captures[i];
-                if (capture.SourceEndPoint is not IPServiceEndPoint source
-                    || capture.TargetEndPoint is not IPServiceEndPoint target)
-                {
-                    bool sameDirection = direction == FlowDirection.Inbound
-                        ? Equals(capture.SourceEndPoint?.Address, peerAddress) && Equals(capture.TargetEndPoint?.Address, watchedAddress)
-                        : Equals(capture.SourceEndPoint?.Address, watchedAddress) && Equals(capture.TargetEndPoint?.Address, peerAddress);
-                    if (sameDirection)
-                        latestNonTransport = i;
+                if (!Equals(capture.SourceEndPoint?.Address, sourceAddress)
+                    || !Equals(capture.TargetEndPoint?.Address, targetAddress))
+                    throw new ArgumentException("Captures must share the same source and target addresses and direction.", nameof(captures));
+
+                if (capture.SourceEndPoint is not IPServiceEndPoint currentSource
+                    || capture.TargetEndPoint is not IPServiceEndPoint currentTarget)
                     continue;
-                }
 
-                if (peer is null)
-                {
-                    if (source.Address.Equals(peerAddress) && target.Address.Equals(watchedAddress))
-                        (peer, watched) = (source, target);
-                    else if (source.Address.Equals(watchedAddress) && target.Address.Equals(peerAddress))
-                        (peer, watched) = (target, source);
-                    else
-                        throw new ArgumentException("Transport endpoints do not belong to the demand trigger.", nameof(captures));
-                }
-
-                bool inbound = source.Equals(peer) && target.Equals(watched);
-                bool outbound = source.Equals(watched) && target.Equals(peer);
-                if (!inbound && !outbound)
-                    throw new ArgumentException("A demand history must describe exactly one transport connection.", nameof(captures));
-                if (direction == FlowDirection.Inbound ? inbound : outbound)
-                    latest = i;
+                if (source is null)
+                    (source, target) = (currentSource, currentTarget);
+                else if (!source.Equals(currentSource) || !target!.Equals(currentTarget))
+                    throw new ArgumentException("Captures must describe exactly one transport connection.", nameof(captures));
+                latest = i;
             }
 
-            if (peer is null || watched is null)
-                return latestNonTransport >= 0
-                    ? Parse(captures[latestNonTransport], direction)
-                    : new CaptureFilterContext(peerAddress
-                        ?? throw new NotSupportedException("A filter context requires a peer IP address.")) { Direction = direction };
+            if (source is null || target is null)
+                return InterpretPacket(captures[^1], direction);
 
+            var peer = direction == FlowDirection.Inbound ? source : target;
+            var watched = direction == FlowDirection.Inbound ? target : source;
             IPService service = watched;
             if (service.Protocol == IPProtocol.UDP)
             {
                 // Never join independent datagrams, including empty ones.
-                return latest < 0
-                    ? new ServiceCaptureFilterContext(peer, service) { Direction = direction }
-                    : Parse(captures[latest], direction);
+                return InterpretPacket(captures[latest], direction);
             }
 
-            var payload = TcpPayloadReassembly.Reconstruct(captures,
-                direction == FlowDirection.Inbound ? peer : watched,
-                direction == FlowDirection.Inbound ? watched : peer,
+            var payload = TCPPayloadReassembly.Reconstruct(captures, source, target,
                 service, MaximumTcpPayloadLength, MaximumTcpSegments);
             IFilterContext context = payload.Length == 0
                 ? new ServiceCaptureFilterContext(peer, service) { Direction = direction }
@@ -106,15 +90,18 @@ namespace MadWizard.Desomnia.Network.Capture
             if (remote is null)
                 throw new NotSupportedException("A filter context requires an IP address; Ethernet-only traffic has none.");
 
-            if (capture.FindPacket<IPPacket>() is not { } ip || capture.HasPacket<NdpPacket>())
+            if (!capture.HasPacket<IPPacket>())
                 return new CaptureFilterContext(remote.Address) { Direction = direction };
 
-            if (local is IPServiceEndPoint service && remote is IPServiceEndPoint
-                && capture.FindPacket<TransportPacket>() is { } transport)
+            if (local is IPServiceEndPoint service && remote is IPServiceEndPoint)
                 return capture.PayloadLength == 0
                     ? new ServiceCaptureFilterContext(remote, service) { Direction = direction }
                     : new PacketPayloadFilterContext(remote, service, capture, capture.PayloadLength) { Direction = direction };
 
+            if (capture.HasPacket<NdpPacket>())
+                return new CaptureFilterContext(remote.Address) { Direction = direction };
+
+            var ip = capture.FindPacket<IPPacket>()!;
             if (ip.Protocol == ProtocolType.Icmp && capture.FindPacket<IcmpV4Packet>() is { } icmp4)
                 return new ICMPCaptureFilterContext(remote.Address,
                     icmp4.TypeCode == (direction == FlowDirection.Inbound ? IcmpV4TypeCode.EchoRequest : IcmpV4TypeCode.EchoReply)

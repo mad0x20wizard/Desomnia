@@ -41,6 +41,7 @@ public class CaptureIntegrationTests
         using var root = rootBuilder.Build();
         Assert.False(root.IsRegistered<ReassemblyOptions>());
         var applicationBuilder = new ContainerBuilder();
+        applicationBuilder.RegisterGeneric(typeof(NullLogger<>)).As(typeof(ILogger<>)).SingleInstance();
         // The root bridge must not reintroduce process-wide capture options.
         var bridgeType = typeof(ConfigurableModule).Assembly.GetType("MadWizard.Desomnia.RootContainerBridge", true)!;
         applicationBuilder.RegisterSource((IRegistrationSource)Activator.CreateInstance(bridgeType,

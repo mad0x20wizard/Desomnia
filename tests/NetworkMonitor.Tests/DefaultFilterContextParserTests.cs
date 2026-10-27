@@ -12,7 +12,7 @@ namespace MadWizard.Desomnia.Network.Tests;
 
 public class DefaultFilterContextParserTests
 {
-    private readonly DefaultFilterContextParser _parser = new();
+    private readonly IFilterContextParser _parser = new DefaultFilterContextParser();
     private static IIPServicePayloadFilterContext Payload(IFilterContext context)
         => Assert.IsAssignableFrom<IIPServicePayloadFilterContext>(context);
     private static string Text(IFilterContext context) => Encoding.Latin1.GetString(Payload(context).PayloadData);
@@ -26,13 +26,13 @@ public class DefaultFilterContextParserTests
     {
         var capture = Tcp(100, "payload", outbound: outbound, ipv6: ipv6);
         var direction = outbound ? FlowDirection.Outbound : FlowDirection.Inbound;
-        var context = Payload(_parser.Parse(capture, direction));
+        var context = Payload(_parser.Parse([capture], direction));
         Assert.Equal(direction, context.Direction);
         Assert.Equal(new IPService(IPProtocol.TCP, 80), context.Service);
         Assert.Same(outbound ? capture.TargetEndPoint : capture.SourceEndPoint, context.RemoteEndPoint);
         Assert.Same(context.RemoteEndPoint.Address, context.RemoteAddress);
         Assert.Equal(7, context.PayloadLength);
-        Assert.NotSame(context, _parser.Parse(capture, direction));
+        Assert.NotSame(context, _parser.Parse([capture], direction));
         capture = Tcp(200, "another packet");
         Assert.Equal("payload", Text(context));
         Assert.Same(context.PayloadData, context.PayloadData);
@@ -42,7 +42,7 @@ public class DefaultFilterContextParserTests
     public void SynOffersServiceButNoPayloadCapability()
     {
         var capture = Tcp(100, syn: true);
-        var context = _parser.Parse(capture, FlowDirection.Inbound);
+        var context = _parser.Parse([capture], FlowDirection.Inbound);
         Assert.IsAssignableFrom<IIPServiceFilterContext>(context);
         Assert.False(context is IIPServicePayloadFilterContext);
     }
@@ -51,8 +51,8 @@ public class DefaultFilterContextParserTests
     public void AddressResolutionIsNotAnIpContext()
     {
         var arp = Arp();
-        var inbound = _parser.Parse(arp, FlowDirection.Inbound);
-        var outbound = _parser.Parse(arp, FlowDirection.Outbound);
+        var inbound = _parser.Parse([arp], FlowDirection.Inbound);
+        var outbound = _parser.Parse([arp], FlowDirection.Outbound);
         Assert.False(inbound is IIPFilterContext);
         Assert.Same(arp.SourceEndPoint!.Address, inbound.RemoteAddress);
         Assert.Same(arp.TargetEndPoint!.Address, outbound.RemoteAddress);
@@ -60,8 +60,8 @@ public class DefaultFilterContextParserTests
         var ip = new IPv6Packet(IPAddress.Parse("2001:db8::10"), IPAddress.Parse("ff02::1:ff00:20"))
             .WithNDPNeighborSolicitation(IPAddress.Parse("2001:db8::20"), PeerMac);
         var ndp = new EthernetCapture(new EthernetPacket(PeerMac, WatchedMac, EthernetType.IPv6) { PayloadPacket = ip }.MakeCopy());
-        Assert.False(_parser.Parse(ndp, FlowDirection.Inbound) is IIPFilterContext);
-        Assert.Equal(IPAddress.Parse("2001:db8::20"), _parser.Parse(ndp, FlowDirection.Outbound).RemoteAddress);
+        Assert.False(_parser.Parse([ndp], FlowDirection.Inbound) is IIPFilterContext);
+        Assert.Equal(IPAddress.Parse("2001:db8::20"), _parser.Parse([ndp], FlowDirection.Outbound).RemoteAddress);
     }
 
     [Theory]
@@ -84,7 +84,7 @@ public class DefaultFilterContextParserTests
         var capture = new EthernetCapture(new EthernetPacket(PeerMac, WatchedMac,
             ipv6 ? EthernetType.IPv6 : EthernetType.IPv4) { PayloadPacket = ip }.MakeCopy());
         Assert.Equal(expected, Assert.IsAssignableFrom<IICMPFilterContext>(
-            _parser.Parse(capture, direction)).Type);
+            _parser.Parse([capture], direction)).Type);
     }
 
     [Fact]
@@ -92,34 +92,36 @@ public class DefaultFilterContextParserTests
     {
         var ip = new IPv4Packet(Peer, Watched) { Protocol = ProtocolType.Gre };
         var capture = new EthernetCapture(new EthernetPacket(PeerMac, WatchedMac, EthernetType.IPv4) { PayloadPacket = ip });
-        var context = _parser.Parse(capture, FlowDirection.Inbound);
+        var context = _parser.Parse([capture], FlowDirection.Inbound);
         Assert.IsAssignableFrom<IIPFilterContext>(context);
         Assert.False(context is IIPServiceFilterContext);
     }
 
     [Fact]
-    public void ReassemblyOrdersSegmentsHandlesOverlapAndKeepsDirectionsSeparate()
+    public void ReassemblyOrdersSegmentsAndHandlesOverlapWithinEachDirection()
     {
         INetworkCapture[] history =
         [
-            Arp(), Tcp(100, syn: true), Tcp(900, syn: true, outbound: true),
-            Tcp(104, "def"), Tcp(101, "abcd"), Tcp(101, "abcd"), Tcp(901, "response", outbound: true),
+            Arp(), Tcp(100, syn: true),
+            Tcp(104, "def"), Tcp(101, "abcd"), Tcp(101, "abcd"),
         ];
         Assert.Equal("abcdef", Text(_parser.Parse(history, FlowDirection.Inbound)));
-        var response = Payload(_parser.Parse(history, FlowDirection.Outbound));
+        INetworkCapture[] replies = [Tcp(900, syn: true, outbound: true), Tcp(901, "response", outbound: true)];
+        var response = Payload(_parser.Parse(replies, FlowDirection.Outbound));
         Assert.Equal("response", Text(response));
         Assert.Equal(Peer, response.RemoteAddress);
         Assert.Equal(80, response.Service.Port);
         Assert.Equal(50000, response.RemoteEndPoint.Port);
-        Assert.Equal("abcd", Text(_parser.Parse(history[4], FlowDirection.Inbound)));
+        Assert.Equal("abcd", Text(_parser.Parse([history[4]], FlowDirection.Inbound)));
     }
 
-    [Fact]
-    public void FirstTransportMayBeReplyAfterAddressResolution()
+    [Theory]
+    [InlineData(FlowDirection.Inbound)]
+    [InlineData(FlowDirection.Outbound)]
+    public void AddressResolutionCannotBeFollowedByOppositeDirection(FlowDirection direction)
     {
         INetworkCapture[] history = [Arp(), Tcp(900, "reply", outbound: true), Tcp(100, "request")];
-        Assert.Equal("request", Text(_parser.Parse(history, FlowDirection.Inbound)));
-        Assert.Equal("reply", Text(_parser.Parse(history, FlowDirection.Outbound)));
+        Assert.Throws<ArgumentException>(() => _parser.Parse(history, direction));
     }
 
     [Fact]
@@ -132,9 +134,6 @@ public class DefaultFilterContextParserTests
         var context = Assert.IsAssignableFrom<IICMPFilterContext>(_parser.Parse(history, FlowDirection.Inbound));
         Assert.Equal(ICMPType.Echo, context.Type);
         Assert.Equal(Peer, context.RemoteAddress);
-        var absentReply = _parser.Parse(history, FlowDirection.Outbound);
-        Assert.Equal(Peer, absentReply.RemoteAddress);
-        Assert.False(absentReply is IICMPFilterContext);
     }
 
     [Fact]
@@ -194,21 +193,25 @@ public class DefaultFilterContextParserTests
     [Fact]
     public void UdpUsesOnlyLatestDatagramInEachDirectionIncludingEmptyDatagrams()
     {
-        INetworkCapture[] history = [Arp(), Udp("first"), Udp("second"), Udp("reply", outbound: true)];
+        INetworkCapture[] history = [Arp(), Udp("first"), Udp("second")];
         Assert.Equal("second", Text(_parser.Parse(history, FlowDirection.Inbound)));
-        Assert.Equal("reply", Text(_parser.Parse(history, FlowDirection.Outbound)));
+        INetworkCapture[] replies = [Udp("first reply", outbound: true), Udp("reply", outbound: true)];
+        Assert.Equal("reply", Text(_parser.Parse(replies, FlowDirection.Outbound)));
         history[2] = Udp("");
         Assert.False(_parser.Parse(history, FlowDirection.Inbound) is IIPServicePayloadFilterContext);
     }
 
-    [Fact]
-    public void MissingDirectionDoesNotBorrowOppositePayload()
+    [Theory]
+    [InlineData(false, FlowDirection.Inbound)]
+    [InlineData(false, FlowDirection.Outbound)]
+    [InlineData(true, FlowDirection.Inbound)]
+    [InlineData(true, FlowDirection.Outbound)]
+    public void MixedDirectionsAreRejectedRatherThanSelectingPayload(bool udp, FlowDirection direction)
     {
-        INetworkCapture[] history = [Tcp(100, "request")];
-        var context = _parser.Parse(history, FlowDirection.Outbound);
-        Assert.False(context is IIPServicePayloadFilterContext);
-        Assert.Equal(Peer, context.RemoteAddress);
-        Assert.Equal(80, Assert.IsAssignableFrom<IIPServiceFilterContext>(context).Service.Port);
+        INetworkCapture[] history = udp
+            ? [Udp("request"), Udp("reply", outbound: true)]
+            : [Tcp(100, "request"), Tcp(900, "reply", outbound: true)];
+        Assert.Throws<ArgumentException>(() => _parser.Parse(history, direction));
     }
 
     private sealed class SmallParser : DefaultFilterContextParser
@@ -234,15 +237,18 @@ public class DefaultFilterContextParserTests
         public override byte[] Bytes { get { Reads++; return base.Bytes; } }
     }
 
-    [Fact]
-    public void PayloadLengthDoesNotSerializeDecodedChildPacket()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SingleCapturePayloadLengthDoesNotSerializeDecodedChildPacket(bool tcp)
     {
         var payload = new ObservedPayload();
-        var transport = new UdpPacket(50000, 80) { PayloadPacket = payload };
+        TransportPacket transport = tcp ? new TcpPacket(50000, 80) : new UdpPacket(50000, 80);
+        transport.PayloadPacket = payload;
         var ip = new IPv4Packet(Peer, Watched) { PayloadPacket = transport };
         var capture = new EthernetCapture(new EthernetPacket(PeerMac, WatchedMac, EthernetType.IPv4) { PayloadPacket = ip });
         payload.Reads = 0; // PacketDotNet can serialize while assigning parent/child relationships.
-        var context = Payload(_parser.Parse(capture, FlowDirection.Inbound));
+        var context = Payload(_parser.Parse([capture], FlowDirection.Inbound));
         Assert.Equal(3, context.PayloadLength);
         Assert.Equal(0, payload.Reads);
         Assert.Equal(3, context.PayloadData.Length);
@@ -255,12 +261,12 @@ public class DefaultFilterContextParserTests
     {
         Assert.Throws<ArgumentException>(() => _parser.Parse(Array.Empty<EthernetCapture>(), FlowDirection.Inbound));
         var capture = Tcp(100);
-        Assert.Throws<ArgumentOutOfRangeException>(() => _parser.Parse(capture, (FlowDirection)99));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _parser.Parse([capture], (FlowDirection)99));
         var fragment = new IPv4Packet(Peer, Watched) { FragmentFlags = 1, PayloadPacket = new TcpPacket(50000, 80) };
         capture = new(new EthernetPacket(PeerMac, WatchedMac, EthernetType.IPv4) { PayloadPacket = fragment });
-        Assert.IsAssignableFrom<IIPServiceFilterContext>(_parser.Parse(capture, FlowDirection.Inbound));
+        Assert.IsAssignableFrom<IIPServiceFilterContext>(_parser.Parse([capture], FlowDirection.Inbound));
         capture = new(new EthernetPacket(PeerMac, WatchedMac, EthernetType.WakeOnLan) { PayloadPacket = new WakeOnLanPacket(WatchedMac) });
-        Assert.Throws<NotSupportedException>(() => _parser.Parse(capture, FlowDirection.Inbound));
+        Assert.Throws<NotSupportedException>(() => _parser.Parse([capture], FlowDirection.Inbound));
     }
 
     private sealed class RegistrationModule : Module

@@ -10,7 +10,8 @@ internal sealed record IPv6Fragment(EthernetPacket Packet, byte[] Bytes, int IPS
 {
     public override int ECN => (Bytes[IPStart + 1] >> 4) & 3;
     public override int HeaderLength => DataStart - IPStart - 8;
-    public override int MaximumPayloadLength => 65535 - (HeaderLength - 40);
+    // Only offset zero supplies retained headers; later fragments may carry different ones.
+    public override int MaximumPayloadLength => 65535 - (Offset == 0 ? HeaderLength - 40 : 0);
     public override bool IsAtomic => Offset == 0 && !More;
     public override bool IsValid => base.IsValid && (Offset != 0 || HasCompleteHeaderChain());
 

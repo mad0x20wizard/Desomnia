@@ -13,6 +13,9 @@ using PacketDotNet;
 using System.Net;
 using System.Net.NetworkInformation;
 using Xunit;
+using SharpPcap;
+using System.Reflection;
+using MadWizard.Desomnia.Network.Device.Filter;
 
 namespace MadWizard.Desomnia.Network.Tests
 {
@@ -29,6 +32,7 @@ namespace MadWizard.Desomnia.Network.Tests
             public override bool IsOnline => true;
 
             public void Report(DemandEvent @event) => ReportNetworkTraffic(@event);
+            public void Forward(IEnumerable<INetworkCapture> captures) => ForwardPackets(captures);
         }
 
         private sealed class PayloadFilterRule() : TCPServiceFilterRule(445)
@@ -37,11 +41,14 @@ namespace MadWizard.Desomnia.Network.Tests
         }
 
         private static TestWatch CreateWatch(params PacketFilterRule[] rules)
+            => CreateWatch(null!, rules);
+
+        private static TestWatch CreateWatch(NetworkDevice device, params PacketFilterRule[] rules)
         {
             var network = new NetworkSegment
             {
                 Logger = NullLogger<NetworkSegment>.Instance,
-                Device = null!,
+                Device = device,
                 LocalRange = null!,
                 Ranges = null!
             };
@@ -51,7 +58,7 @@ namespace MadWizard.Desomnia.Network.Tests
                 Host = new NetworkHost("jindujun") { Network = network },
                 Logger = NullLogger<NetworkHostWatch>.Instance,
                 Scope = null!,
-                Device = null!,
+                Device = device,
                 Network = network,
                 AdvertiseOptions = default,
                 HandoffOptions = default,
@@ -59,6 +66,56 @@ namespace MadWizard.Desomnia.Network.Tests
                 DefaultFilterOptions = default,
                 Filter = new Lazy<IPacketFilter>(() => new PacketRuleFilter(rules))
             };
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void ForwardingPreservesEveryOriginalFragmentExceptEthernetAddresses(bool ipv6)
+        {
+            var sent = new ForwardedFrames();
+            var proxyMac = PhysicalAddress.Parse("020304050607");
+            using var device = new NetworkDevice(NullLogger<NetworkDevice>.Instance,
+                new FakeNetworkInterface("test") { PhysicalAddress = proxyMac },
+                DispatchProxy.Create<ILiveDevice, ReconfigurationLifecycleTests.NativeDevice>()) { Filters = [sent] };
+            var watch = CreateWatch(device);
+            watch.Host.PhysicalAddress = WatchedMAC;
+            var data = IPReassemblyTests.Datagram();
+            var first = IPReassemblyTests.Fragment(ipv6, data, 0, 16, true);
+            var last = IPReassemblyTests.Fragment(ipv6, data, 16, data.Length - 16, false);
+            first.DestinationHardwareAddress = last.DestinationHardwareAddress = proxyMac;
+            byte[][] originals = [first.CapturedBytes.ToArray(), last.CapturedBytes.ToArray()];
+            var options = new ReassemblyOptions { Protocol = ReassemblyProtocol.IPv4 | ReassemblyProtocol.IPv6, Timeout = TimeSpan.FromSeconds(30) };
+            using IPReassembly reassembly = ipv6
+                ? new IPv6Reassembly(options) { Logger = NullLogger<IPReassembly>.Instance }
+                : new IPv4Reassembly(options) { Logger = NullLogger<IPReassembly>.Instance };
+            reassembly.TryReassemble(last, out _);
+            reassembly.TryReassemble(first, out var capture);
+            Assert.NotNull(capture);
+            Assert.NotNull(first.Extract<UdpPacket>()); // Exercise a decoded first fragment too.
+            Assert.NotNull(capture.FindPacket<UdpPacket>());
+            watch.Forward([capture]);
+            Assert.Equal(2, sent.Frames.Count);
+            for (int i = 0; i < originals.Length; i++)
+            {
+                Assert.Equal(originals[i].Length, sent.Frames[i].Length);
+                Assert.Equal(WatchedMAC.GetAddressBytes(), sent.Frames[i][..6]);
+                Assert.Equal(proxyMac.GetAddressBytes(), sent.Frames[i][6..12]);
+                Assert.Equal(originals[i][12..], sent.Frames[i][12..]);
+            }
+            Assert.Equal(originals[0], first.CapturedBytes);
+            Assert.Equal(originals[1], last.CapturedBytes);
+        }
+
+        private sealed class ForwardedFrames : IDevicePacketFilter
+        {
+            public List<byte[]> Frames { get; } = [];
+            public bool FilterIncoming(PacketCapture capture) => false;
+            public bool FilterOutgoing(Packet packet)
+            {
+                Frames.Add(packet.CapturedBytes.ToArray());
+                return true; // Inspect the actual outgoing path without sending onto a live interface.
+            }
         }
 
         private static ServiceFilterWatch AddService(TestWatch watch, IPProtocol protocol, params PacketFilterRule[] rules)

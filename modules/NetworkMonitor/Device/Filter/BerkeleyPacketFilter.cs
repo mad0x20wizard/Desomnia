@@ -518,15 +518,7 @@ namespace MadWizard.Desomnia.Network.Device.Filter
                 fragments.Add(demand.IPv6.ToFragmentBPFExpression(ipv6: true));
             if (fragments.Count > 0)
             {
-                string fragment = "(" + string.Join(" or ", fragments) + ")";
-                clauses.Add(fragment);
-                // vlan changes offsets for everything following it in the expression. Nested
-                // branches must therefore come last, ordered from zero to four tags, matching
-                // IPFragment.ReadEthernet. Apply the same predicates inside every encapsulation.
-                string tagged = fragment;
-                for (int depth = 1; depth < 4; depth++)
-                    tagged = $"({fragment} or (vlan and {tagged}))";
-                clauses.Add($"(vlan and {tagged})");
+                clauses.Add("(" + string.Join(" or ", fragments) + ")");
             }
 
             // No Ethernet frame has length zero. Unlike an empty expression, this does not

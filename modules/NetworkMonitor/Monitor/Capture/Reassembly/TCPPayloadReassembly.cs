@@ -5,7 +5,7 @@ using System.Net;
 namespace MadWizard.Desomnia.Network.Capture
 {
     /// <summary>A bounded view of one direction, rebuilt entirely from the current history.</summary>
-    internal static class TcpPayloadReassembly
+    internal static class TCPPayloadReassembly
     {
         internal readonly record struct Result(ReadOnlyMemory<byte>[] Parts, int Length, bool StartsAtSyn);
         private readonly record struct Segment(uint Sequence, byte[] Data);
