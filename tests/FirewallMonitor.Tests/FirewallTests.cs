@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Firewall.Manager;
@@ -90,7 +91,7 @@ namespace MadWizard.Desomnia.Firewall.Tests
                 {
                     PayloadPacket = new IPv4Packet(source, Target) { PayloadPacket = new TcpPacket(50000, 8443) }
                 };
-                Assert.Equal(!filter.ShouldFilter(packet, default), Decide(rules, source.ToString()) == FirewallAction.Permit);
+                Assert.Equal(!filter.ShouldFilter(new EthernetCapture(packet), default), Decide(rules, source.ToString()) == FirewallAction.Permit);
             }
         }
 
@@ -123,7 +124,7 @@ namespace MadWizard.Desomnia.Firewall.Tests
         public async Task StartupInstallsOnlyStaticPhysicalLocalServicesAndShutdownReleasesThem()
         {
             var network = new NetworkSegment { Device = null!, Logger = NullLogger<NetworkSegment>.Instance, LocalRange = null!, Ranges = null! };
-            using var monitor = new NetworkMonitor { Name = "test", Options = default, Device = null!, Network = network, Janitor = null!, Logger = NullLogger<NetworkMonitor>.Instance };
+            using var monitor = new NetworkMonitor { Name = "test", Options = default, Device = null!, Network = network, Janitor = null!, Pipeline = null!, Logger = NullLogger<NetworkMonitor>.Instance };
             var host = new TestLocalHost { Network = network };
             var watch = CreateWatch(host);
             monitor.StartTracking(watch, adopt: false);
@@ -324,7 +325,7 @@ namespace MadWizard.Desomnia.Firewall.Tests
                     ip.PayloadPacket = protocol == IPProtocol.TCP ? new TcpPacket(50000, 8443) : new UdpPacket(50000, 8443);
                     var packet = new EthernetPacket(PhysicalAddress.Parse("020000000001"),
                         PhysicalAddress.Parse("020000000002"), ipv6 ? EthernetType.IPv6 : EthernetType.IPv4) { PayloadPacket = ip };
-                    Assert.Equal(filter.ShouldFilter(packet, default), Decide(projected, source.ToString()) == FirewallAction.Block);
+                    Assert.Equal(filter.ShouldFilter(new EthernetCapture(packet), default), Decide(projected, source.ToString()) == FirewallAction.Block);
                 }
             }
         }

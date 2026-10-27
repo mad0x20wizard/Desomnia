@@ -2,7 +2,6 @@
 using MadWizard.Desomnia.Network.Knocking.Secrets;
 using Microsoft.Extensions.Logging;
 using System.Net;
-using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
@@ -13,13 +12,13 @@ namespace MadWizard.Desomnia.Network.FirewallKnockOperator
     {
         public required ILogger<Sender> Logger { private get; init; }
 
-        void IKnockMethod.Knock(IPAddress source, IPEndPoint target, IPService knock, SharedSecret secret)
+        void IKnockMethod.Knock(IPAddress source, IPServiceEndPoint target, IPService knock, SharedSecret secret)
         {
             using UdpClient udp = new(target.AddressFamily);
 
             Logger.LogTrace($"Knocking at {target} using {knock.Port}/udp");
 
-            var payload = BuildFKOPayload(secret, source, target.ToIPPort());
+            var payload = BuildFKOPayload(secret, source, target);
 
             var bytes = udp.Send(payload, new IPEndPoint(target.Address, knock.Port));
         }

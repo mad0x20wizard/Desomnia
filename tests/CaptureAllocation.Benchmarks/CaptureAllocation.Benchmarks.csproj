@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
+    <IsPackable>false</IsPackable>
+    <DisableGitVersion>true</DisableGitVersion>
+    <!-- Fully optimized code from the start; avoid tier transitions during paired samples. -->
+    <TieredCompilation>false</TieredCompilation>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="SharpPcap" Version="6.3.1" />
+    <PackageReference Include="PacketDotNet" Version="1.4.8" />
+    <Compile Include="../../modules/NetworkMonitor/Monitor/Capture/NetworkCapture.cs" Link="Production/NetworkCapture.cs" />
+    <Compile Include="../../modules/NetworkMonitor/Extensions/PacketExt.cs" Link="Production/PacketExt.cs" />
+    <Compile Include="../../modules/NetworkMonitor/Extensions/IP/IPServiceEndPoint.cs" Link="Production/IPServiceEndPoint.cs" />
+    <Compile Include="../../modules/NetworkMonitor/Extensions/IP/IPProtocol.cs" Link="Production/IPProtocol.cs" />
+    <Compile Include="../../modules/NetworkMonitor/Extensions/IP/IPService.cs" Link="Production/IPService.cs" />
+    <Compile Include="../../modules/NetworkMonitor/Monitor/Filter/Context/IFilterContext.cs" Link="Production/IFilterContext.cs" />
+  </ItemGroup>
+  <Target Name="GenerateClassControl" BeforeTargets="CoreCompile">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)/Generate-Class.ps1&quot; -Destination &quot;$(IntermediateOutputPath)NetworkCaptureClass.g.cs&quot;" />
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)NetworkCaptureClass.g.cs" />
+    </ItemGroup>
+  </Target>
+</Project>

@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Network.Capture;
 using Autofac;
 using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Filter;
@@ -245,7 +246,7 @@ namespace MadWizard.Desomnia.Network.Tests
                         PayloadPacket = new UdpPacket(50000, 62201)
                     }
                 };
-                ((INetworkService)Service).ProcessPacket(packet);
+                ((INetworkService)Service).ProcessCapture(new EthernetCapture(packet));
             }
 
             public void Dispose()

@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Network.Capture;
 using Autofac.Features.OwnedInstances;
 using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Interfaces;
@@ -297,7 +298,7 @@ public class ReconfigurationLifecycleTests
                 { Logger = NullLogger<NetworkJanitor>.Instance, Network = network };
             Janitor.StartSweeping();
             Monitor = new() { Logger = NullLogger<NetworkMonitor>.Instance, Name = "test",
-                Device = Device, Network = network, Janitor = Janitor, Options = default, Services = [Service] };
+                Device = Device, Network = network, Janitor = Janitor, Pipeline = new CapturePipeline([]), Options = default, Services = [Service] };
             var config = new NetworkMonitorConfig { Name = id, Interface = id };
             Context = (TestContext)RuntimeHelpers.GetUninitializedObject(typeof(TestContext));
             SetContext("Config", config);

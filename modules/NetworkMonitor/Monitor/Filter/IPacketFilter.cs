@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Configuration.Options;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Filter.Rules;
 using PacketDotNet;
 
@@ -33,14 +34,14 @@ namespace MadWizard.Desomnia.Network.Filter
         IEnumerable<PacketFilterRule> Rules => [];
 
         // Direction is relative to the watched host; demand verification is inbound.
-        bool ShouldFilter(EthernetPacket packet, PacketFilterOptions options = default, FlowDirection direction = FlowDirection.Inbound);
+        bool ShouldFilter(INetworkCapture packet, PacketFilterOptions options = default, FlowDirection direction = FlowDirection.Inbound);
     }
 
     internal class CompositePacketFilter(IEnumerable<IPacketFilter> filters) : IPacketFilter
     {
         IEnumerable<PacketFilterRule> IPacketFilter.Rules => filters.SelectMany(x => x.Rules);
 
-        bool IPacketFilter.ShouldFilter(EthernetPacket packet, PacketFilterOptions options, FlowDirection direction)
+        bool IPacketFilter.ShouldFilter(INetworkCapture packet, PacketFilterOptions options, FlowDirection direction)
         {
             foreach (IPacketFilter filter in filters)
             {

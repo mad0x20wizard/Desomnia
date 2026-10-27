@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Neighborhood;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Reachability;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
@@ -14,13 +15,13 @@ namespace MadWizard.Desomnia.Network.Filter
 
         public required ReachabilityService Reachability { private get; init; }
 
-        bool IPacketFilter.ShouldFilter(EthernetPacket packet, PacketFilterOptions options, FlowDirection direction)
+        bool IPacketFilter.ShouldFilter(INetworkCapture packet, PacketFilterOptions options, FlowDirection direction)
         {
             if (FindPeerRouter(packet, direction) is NetworkRouter router)
             {
                 if (direction == FlowDirection.Inbound)
                 {
-                    if (!packet.IsIPUnicast() && ShouldAllow(router, packet) && packet.FindTargetIPAddress() is IPAddress ip)
+                    if (!packet.IsIPUnicast && ShouldAllow(router, packet) && packet.TargetAddress is IPAddress ip)
                     {
                         throw new IPUnicastNeededException(ip); // respond to ARP/NDP request
                     }
@@ -35,7 +36,7 @@ namespace MadWizard.Desomnia.Network.Filter
             return false;
         }
 
-        private bool ShouldAllow(NetworkRouter router, EthernetPacket packet)
+        private bool ShouldAllow(NetworkRouter router, INetworkCapture packet)
         {
             /*
              * Has the user opted out of the router filtering?
@@ -70,9 +71,9 @@ namespace MadWizard.Desomnia.Network.Filter
             return false;
         }
 
-        private NetworkRouter? FindPeerRouter(EthernetPacket packet, FlowDirection direction)
+        private NetworkRouter? FindPeerRouter(INetworkCapture packet, FlowDirection direction)
         {
-            var peer = direction == FlowDirection.Inbound ? packet.FindSourceIPAddress() : packet.FindTargetIPAddress();
+            var peer = direction == FlowDirection.Inbound ? packet.SourceAddress : packet.TargetAddress;
 
             return Network.OfType<NetworkRouter>().FirstOrDefault(router => router.HasAddress(ip: peer));
         }

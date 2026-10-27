@@ -167,6 +167,50 @@ namespace PacketDotNet
             throw new Exception("Could not copy EthernetPacket");
         }
 
+        extension(Packet packet)
+        {
+            /// <summary>
+            /// The stored packet bytes, without recalculating lengths or checksums.
+            /// Captured packets expose their original buffer without decoding
+            /// the payload. Their decoded payload tree must not be replaced after capture.
+            /// Constructed frames with separate buffers are copied as-is; prepare their headers
+            /// explicitly before sending. Slices of larger buffers are copied to an exact-sized array.
+            /// The result may be the original buffer: do not modify it; clone it when a snapshot is needed.
+            /// </summary>
+            public byte[] CapturedBytes
+            {
+                get
+                {
+                    var header = packet.HeaderSegment;
+                    // Length describes the header; BytesLength bounds the backing buffer, which
+                    // normally also contains the captured payload (and Ethernet padding).
+                    if (header.BytesLength > header.Offset + header.Length || !packet.IsPayloadInitialized)
+                        return header.Offset == 0 && header.BytesLength == header.Bytes.Length
+                            ? header.Bytes
+                            : header.Bytes.AsSpan(header.Offset, header.BytesLength - header.Offset).ToArray();
+
+                    // Packet.Bytes/BytesSegment update the decoded tree, corrupting a fragment's
+                    // transport length. Copy separate buffers without invoking that serializer.
+                    var bytes = new byte[packet.TotalPacketLength];
+                    CopyStoredBytes(packet, bytes);
+                    return bytes;
+                }
+            }
+        }
+
+        private static void CopyStoredBytes(Packet packet, Span<byte> destination)
+        {
+            var header = packet.HeaderSegment;
+            header.Bytes.AsSpan(header.Offset, header.Length).CopyTo(destination);
+            destination = destination[header.Length..];
+            if (packet.PayloadPacket is { } payload)
+                CopyStoredBytes(payload, destination);
+            else if (packet.PayloadDataSegment is { } data)
+                data.Bytes.AsSpan(data.Offset, data.Length).CopyTo(destination);
+        }
+
+        internal static EthernetPacket MakeCapturedCopy(this EthernetPacket packet)  => (EthernetPacket)Packet.ParsePacket(LinkLayers.Ethernet, packet.CapturedBytes.ToArray());
+
         extension(IPPacket packet)
         {
             public IPEndPoint SourceEndPoint
@@ -176,9 +220,9 @@ namespace PacketDotNet
                     switch (packet.PayloadPacket)
                     {
                         case TcpPacket tcp:
-                            return new TCPEndPoint(packet.SourceAddress, tcp.SourcePort);
+                            return new IPServiceEndPoint(packet.SourceAddress, IPProtocol.TCP, tcp.SourcePort);
                         case UdpPacket udp:
-                            return new UDPEndPoint(packet.SourceAddress, udp.SourcePort);
+                            return new IPServiceEndPoint(packet.SourceAddress, IPProtocol.UDP, udp.SourcePort);
 
                         default:
                             return new IPEndPoint(packet.SourceAddress, 0);
@@ -193,9 +237,9 @@ namespace PacketDotNet
                     switch (packet.PayloadPacket)
                     {
                         case TcpPacket tcp:
-                            return new TCPEndPoint(packet.DestinationAddress, tcp.DestinationPort);
+                            return new IPServiceEndPoint(packet.DestinationAddress, IPProtocol.TCP, tcp.DestinationPort);
                         case UdpPacket udp:
-                            return new UDPEndPoint(packet.DestinationAddress, udp.DestinationPort);
+                            return new IPServiceEndPoint(packet.DestinationAddress, IPProtocol.UDP, udp.DestinationPort);
 
                         default:
                             return new IPEndPoint(packet.DestinationAddress, 0);

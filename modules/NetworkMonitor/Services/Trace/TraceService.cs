@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Device.Filter;
+﻿using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Device.Filter;
 using MadWizard.Desomnia.Network.Neighborhood;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
@@ -27,13 +28,16 @@ namespace MadWizard.Desomnia.Network.Trace
             }
         }
 
-        void INetworkService.ProcessPacket(EthernetPacket packet)
+        void INetworkService.ProcessCapture(INetworkCapture capture)
         {
-            if (FindHost(packet) is NetworkHost host)
+            foreach (var packet in capture)
             {
-                using var scope = Logger.BeginHostScope(host);
+                if (FindHost(packet) is NetworkHost host)
+                {
+                    using var scope = Logger.BeginHostScope(host);
 
-                Logger.LogTrace($"RECEIVED PACKET\n{packet.ToTraceString()}");
+                    Logger.LogTrace($"RECEIVED PACKET\n{packet.ToTraceString()}");
+                }
             }
         }
 

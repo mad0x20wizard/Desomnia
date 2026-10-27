@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Neighborhood;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Reachability;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
@@ -20,9 +21,9 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
 
         public required ReachabilityService Reachability { private get; init; }
 
-        void INetworkService.ProcessPacket(EthernetPacket packet)
+        void INetworkService.ProcessCapture(INetworkCapture packet)
         {
-            if (packet.Extract<DhcpV4Packet>() is DhcpV4Packet dhcp)
+            if (packet.HasPacket(out DhcpV4Packet? dhcp))
                 if (dhcp.Operation == DhcpV4Operation.BootRequest)
                     if (Network[dhcp.ClientHardwareAddress] is NetworkHost host)
                         foreach (var option in dhcp.GetOptions())
@@ -36,7 +37,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
 
                                     if (host.HasAddress(ip: ip)) // only if the IP already belongs to the host
                                     {
-                                        Reachability.Notify(host, packet.SourceHardwareAddress, ip);
+                                        Reachability.Notify(host, packet.SourcePhysicalAddress, new IPEndPoint(ip, 0));
                                     }
 
                                     break;

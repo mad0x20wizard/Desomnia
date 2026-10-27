@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Configuration.Options;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Reachability;
 using Microsoft.Extensions.Logging;
@@ -25,14 +26,14 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
             _hosts.GetOrAdd(host, []).Add(family); // only remember which hosts should receive IP address updates
         }
 
-        void INetworkService.ProcessPacket(EthernetPacket packet)
+        void INetworkService.ProcessCapture(INetworkCapture capture)
         {
             // ARP
-            if (packet.PayloadPacket is ArpPacket arp)
+            if (capture.FindPacket<ArpPacket>() is ArpPacket arp)
             {
                 if (Network[arp.SenderProtocolAddress] is NetworkHost hostByIP)
                 {
-                    AdvertiseAddress(hostByIP, packet.SourceHardwareAddress, arp.SenderProtocolAddress);
+                    AdvertiseAddress(hostByIP, capture.SourcePhysicalAddress, arp.SenderProtocolAddress);
                 }
 
                 /**
@@ -42,23 +43,23 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
                 {
                     if (!arp.SenderProtocolAddress.IsEmpty()) // TODO APIPA? && !arp.SenderProtocolAddress.IsAPIPA())
                     {
-                        AdvertiseAddress(hostByMAC, packet.SourceHardwareAddress, arp.SenderProtocolAddress);
+                        AdvertiseAddress(hostByMAC, capture.SourcePhysicalAddress, arp.SenderProtocolAddress);
                     }
                 }
             }
 
             // NDP
-            else if (packet.Extract<NdpPacket>() is NdpNeighborAdvertisementPacket ndpNeighbor)
+            else if (capture.FindPacket<NdpPacket>() is NdpNeighborAdvertisementPacket ndpNeighbor)
             {
                 if (Network[ndpNeighbor.TargetAddress] is NetworkHost hostByIP)
                 {
-                    AdvertiseAddress(hostByIP, packet.SourceHardwareAddress,ndpNeighbor.TargetAddress);
+                    AdvertiseAddress(hostByIP, capture.SourcePhysicalAddress, ndpNeighbor.TargetAddress);
                 }
                 else if (Network[ndpNeighbor.FindSourcePhysicalAddress()!] is NetworkHost hostByMAC)
                 {
                     if (!ndpNeighbor.TargetAddress.IsEmpty())
                     {
-                        AdvertiseAddress(hostByMAC, packet.SourceHardwareAddress, ndpNeighbor.TargetAddress);
+                        AdvertiseAddress(hostByMAC, capture.SourcePhysicalAddress, ndpNeighbor.TargetAddress);
                     }
                 }
             }
@@ -66,7 +67,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
 
         private void AdvertiseAddress(NetworkHost host, PhysicalAddress mac, IPAddress ip, TimeSpan? lifetime = null)
         {
-            Reachability.Notify(host, mac, ip);
+            Reachability.Notify(host, mac, new IPEndPoint(ip, 0));
 
             if (_hosts.TryGetValue(host, out var families) && families.Contains(ip.AddressFamily))
             {

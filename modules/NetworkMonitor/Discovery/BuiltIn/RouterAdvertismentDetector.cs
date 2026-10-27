@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Configuration.Hosts;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Configuration.Hosts;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Context;
 using MadWizard.Desomnia.Network.Device;
@@ -92,11 +93,11 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
 
         private bool IsKnownRouter(DiscoveredRouterInfo info) => Network[info.MAC] is NetworkRouter || info.Addresses.Any(ip => Network[ip] is NetworkRouter);
 
-        void INetworkService.ProcessPacket(EthernetPacket packet)
+        void INetworkService.ProcessCapture(INetworkCapture packet)
         {
-            if (packet.Extract<NdpPacket>() is NdpRouterAdvertisementPacket ndp)
+            if (packet.FindPacket<NdpPacket>() is NdpRouterAdvertisementPacket ndp)
             {
-                if (packet.FindSourcePhysicalAddress() is PhysicalAddress mac && packet.FindSourceIPAddress() is IPAddress ip)
+                if (packet.SourcePhysicalAddress is PhysicalAddress mac && packet.SourceAddress is IPAddress ip)
                 {
                     var lifetime = TimeSpan.FromSeconds(ndp.RouterLifetime);
 
@@ -137,7 +138,7 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
             Logger.LogDebug($"Sending NDP router solicitation");
 
             var ipSource = Device.IPv6LinkLocalAddress;
-            var ipTarget = IPAddressExt.LinkLocalRouterMulticast;
+            var ipTarget = IPAddress.LinkLocalRouterMulticast;
 
             var request = new EthernetPacket(Device.PhysicalAddress, ipTarget.DeriveLayer2MulticastAddress(), EthernetType.IPv6)
             {

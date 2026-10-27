@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Network.Capture;
 using Autofac;
 using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Filter;
@@ -94,16 +95,16 @@ namespace MadWizard.Desomnia.Network.Tests
             return builder.Build();
         }
 
-        private static EthernetPacket Packet(FlowDirection direction, IPProtocol protocol, ushort port)
+        private static EthernetCapture Packet(FlowDirection direction, IPProtocol protocol, ushort port)
         {
             bool inbound = direction == FlowDirection.Inbound;
             ushort source = inbound ? (ushort)50000 : port;
             ushort destination = inbound ? port : (ushort)50000;
             TransportPacket transport = protocol == IPProtocol.TCP ? new TcpPacket(source, destination) : new UdpPacket(source, destination);
-            return new EthernetPacket(PhysicalAddress.Parse("001122334455"), PhysicalAddress.Parse("AABBCCDDEEFF"), EthernetType.IPv4)
+            return new EthernetCapture(new EthernetPacket(PhysicalAddress.Parse("001122334455"), PhysicalAddress.Parse("AABBCCDDEEFF"), EthernetType.IPv4)
             {
                 PayloadPacket = new IPv4Packet(inbound ? Peer : Target, inbound ? Target : Peer) { PayloadPacket = transport }
-            };
+            });
         }
     }
 }

@@ -1,17 +1,19 @@
-﻿using PacketDotNet;
+using MadWizard.Desomnia.Network.Capture;
 using System.Net;
 
 namespace MadWizard.Desomnia.Network.Filter.Rules
 {
-    public abstract class ServiceFilterRule(IPService port) : IPFilterRule
+    public abstract class ServiceFilterRule(IPService service) : IPFilterRule
     {
-        public IPService Port => port;
+        public IPService Service => service;
 
-        override public bool Matches(EthernetPacket packet, FlowDirection direction = FlowDirection.Inbound)
+        override public bool Matches(INetworkCapture packet, FlowDirection direction = FlowDirection.Inbound)
         {
-            if (packet.PayloadPacket is IPPacket ip && ip.PayloadPacket is TransportPacket transport)
+            var endpoint = direction == FlowDirection.Inbound ? packet.TargetEndPoint : packet.SourceEndPoint;
+
+            if (endpoint is IPServiceEndPoint endpointService)
             {
-                if (Port.Accepts(transport, direction))
+                if (service == endpointService)
                 {
                     return base.Matches(packet, direction);
                 }

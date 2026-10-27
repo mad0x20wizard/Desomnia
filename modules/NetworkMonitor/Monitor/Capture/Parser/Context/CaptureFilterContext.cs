@@ -4,8 +4,8 @@ using System.Net;
 
 namespace MadWizard.Desomnia.Network.Capture
 {
-    // Snapshots retain immutable metadata/packet references, never an EthernetCapture copy
-    // or a borrowed span. Payload arrays are owned by the snapshot or the capture cache.
+    // Snapshots retain immutable metadata and shared captures, never a borrowed span.
+    // Payload arrays are owned by the snapshot or the capture cache.
     internal class CaptureFilterContext(IPAddress remote) : IFilterContext
     {
         public required FlowDirection Direction { get; init; }
@@ -43,18 +43,17 @@ namespace MadWizard.Desomnia.Network.Capture
 
     internal sealed class PacketPayloadFilterContext : ServiceCaptureFilterContext, IIPServicePayloadFilterContext
     {
-        private readonly TransportPacket _packet;
-        private byte[]? _data;
+        private readonly INetworkCapture _capture;
 
         public int PayloadLength { get; }
 
-        public byte[] PayloadData => _data ??= _packet.HasPayloadData ? _packet.PayloadData : _packet.PayloadPacket.Bytes;
+        public byte[] PayloadData => _capture.PayloadData;
 
         public PacketPayloadFilterContext(IPEndPoint remote,
-            IPService service, TransportPacket packet, int length)
+            IPService service, INetworkCapture capture, int length)
             : base(remote, service)
         {
-            _packet = packet;
+            _capture = capture;
             PayloadLength = length;
         }
     }

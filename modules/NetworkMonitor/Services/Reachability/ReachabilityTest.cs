@@ -4,7 +4,6 @@ using MadWizard.Desomnia.Network.Watch;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
-using System.Net.NetworkInformation;
 
 namespace MadWizard.Desomnia.Network.Reachability
 {
@@ -33,8 +32,9 @@ namespace MadWizard.Desomnia.Network.Reachability
 
         public TimeSpan? this[IPAddress ip] => _latencyByIP[ip];
 
-        public virtual void NotifyReachable(IPAddress address, IPService? port = null)
+        public virtual void NotifyReachable(IPEndPoint endpoint)
         {
+            var address = endpoint.Address;
             if (_latencyByIP.TryGetValue(address, out TimeSpan? latency) && latency == null)
             {
                 _latencyByIP[address] = _watch.Elapsed;
@@ -86,29 +86,15 @@ namespace MadWizard.Desomnia.Network.Reachability
         }
     }
 
-    public class ServiceReachabilityTest(IPEndPoint endpoint, TimeSpan timeout) : ReachabilityTest([endpoint.Address], timeout)
+    public class ServiceReachabilityTest(IPServiceEndPoint endpoint, TimeSpan timeout) : ReachabilityTest([endpoint.Address], timeout)
     {
-        public IPService? Port => endpoint.ToIPPort();
+        public IPServiceEndPoint EndPoint => endpoint;
 
-        public override void NotifyReachable(IPAddress ip, IPService? port = null)
+        public override void NotifyReachable(IPEndPoint source)
         {
-            if (port is IPService p && p.Port == endpoint.Port)
+            if (source is IPServiceEndPoint sourceEndPoint && sourceEndPoint.Service == endpoint.Service)
             {
-                switch (endpoint)
-                {
-                    case TCPEndPoint when p.Protocol == IPProtocol.TCP:
-                        base.NotifyReachable(ip, port);
-                        break;
-
-                    case UDPEndPoint when p.Protocol == IPProtocol.UDP:
-                        base.NotifyReachable(ip, port);
-                        break;
-
-                    case IPEndPoint:
-                        base.NotifyReachable(ip, port);
-                        break;
-                }
-
+                base.NotifyReachable(source);
             }
         }
     }

@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Neighborhood;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Neighborhood;
 using NetTools;
 using PacketDotNet;
 using System.Net;
@@ -27,7 +28,7 @@ namespace MadWizard.Desomnia.Network.Filter.Rules
             }
         }
 
-        public override bool Matches(EthernetPacket packet, FlowDirection direction = FlowDirection.Inbound)
+        public override bool Matches(INetworkCapture packet, FlowDirection direction = FlowDirection.Inbound)
         {
             if (base.Matches(packet, direction))
             {

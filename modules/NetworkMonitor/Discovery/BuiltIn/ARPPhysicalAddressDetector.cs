@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Address;
+using MadWizard.Desomnia.Network.Address;
+using MadWizard.Desomnia.Network.Capture;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
 using System.Net;
@@ -15,9 +16,9 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
 
         protected override void SendRequest(IPAddress ip) => Reachability.SendARPRequest(ip);
 
-        protected override AddressMapping? AnalyzePacket(EthernetPacket packet)
+        protected override AddressMapping? AnalyzeCapture(INetworkCapture packet)
         {
-            if (packet.PayloadPacket is ArpPacket arp)
+            if (packet.HasPacket(out ArpPacket? arp))
             {
                 if (arp.Operation == ArpOperation.Response)
                 {

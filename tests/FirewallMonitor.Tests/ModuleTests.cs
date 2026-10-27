@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Network.Capture;
 using Autofac;
 using MadWizard.Desomnia.Firewall.Manager;
 using MadWizard.Desomnia.Network;
@@ -27,7 +28,7 @@ namespace MadWizard.Desomnia.Firewall.Tests
         {
             using var monitor = new NetworkMonitor
             {
-                Name = "test", Options = default, Device = null!, Network = null!, Janitor = null!,
+                Name = "test", Options = default, Device = null!, Network = null!, Janitor = null!, Pipeline = null!,
                 Logger = NullLogger<NetworkMonitor>.Instance
             };
             var builder = new ContainerBuilder();

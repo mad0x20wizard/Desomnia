@@ -26,13 +26,13 @@ public class DefaultFilterContextParserTests
     {
         var capture = Tcp(100, "payload", outbound: outbound, ipv6: ipv6);
         var direction = outbound ? FlowDirection.Outbound : FlowDirection.Inbound;
-        var context = Payload(_parser.Parse(ref capture, direction));
+        var context = Payload(_parser.Parse(capture, direction));
         Assert.Equal(direction, context.Direction);
         Assert.Equal(new IPService(IPProtocol.TCP, 80), context.Service);
         Assert.Same(outbound ? capture.TargetEndPoint : capture.SourceEndPoint, context.RemoteEndPoint);
         Assert.Same(context.RemoteEndPoint.Address, context.RemoteAddress);
         Assert.Equal(7, context.PayloadLength);
-        Assert.NotSame(context, _parser.Parse(ref capture, direction));
+        Assert.NotSame(context, _parser.Parse(capture, direction));
         capture = Tcp(200, "another packet");
         Assert.Equal("payload", Text(context));
         Assert.Same(context.PayloadData, context.PayloadData);
@@ -42,7 +42,7 @@ public class DefaultFilterContextParserTests
     public void SynOffersServiceButNoPayloadCapability()
     {
         var capture = Tcp(100, syn: true);
-        var context = _parser.Parse(ref capture, FlowDirection.Inbound);
+        var context = _parser.Parse(capture, FlowDirection.Inbound);
         Assert.IsAssignableFrom<IIPServiceFilterContext>(context);
         Assert.False(context is IIPServicePayloadFilterContext);
     }
@@ -51,8 +51,8 @@ public class DefaultFilterContextParserTests
     public void AddressResolutionIsNotAnIpContext()
     {
         var arp = Arp();
-        var inbound = _parser.Parse(ref arp, FlowDirection.Inbound);
-        var outbound = _parser.Parse(ref arp, FlowDirection.Outbound);
+        var inbound = _parser.Parse(arp, FlowDirection.Inbound);
+        var outbound = _parser.Parse(arp, FlowDirection.Outbound);
         Assert.False(inbound is IIPFilterContext);
         Assert.Same(arp.SourceEndPoint!.Address, inbound.RemoteAddress);
         Assert.Same(arp.TargetEndPoint!.Address, outbound.RemoteAddress);
@@ -60,8 +60,8 @@ public class DefaultFilterContextParserTests
         var ip = new IPv6Packet(IPAddress.Parse("2001:db8::10"), IPAddress.Parse("ff02::1:ff00:20"))
             .WithNDPNeighborSolicitation(IPAddress.Parse("2001:db8::20"), PeerMac);
         var ndp = new EthernetCapture(new EthernetPacket(PeerMac, WatchedMac, EthernetType.IPv6) { PayloadPacket = ip }.MakeCopy());
-        Assert.False(_parser.Parse(ref ndp, FlowDirection.Inbound) is IIPFilterContext);
-        Assert.Equal(IPAddress.Parse("2001:db8::20"), _parser.Parse(ref ndp, FlowDirection.Outbound).RemoteAddress);
+        Assert.False(_parser.Parse(ndp, FlowDirection.Inbound) is IIPFilterContext);
+        Assert.Equal(IPAddress.Parse("2001:db8::20"), _parser.Parse(ndp, FlowDirection.Outbound).RemoteAddress);
     }
 
     [Theory]
@@ -84,7 +84,7 @@ public class DefaultFilterContextParserTests
         var capture = new EthernetCapture(new EthernetPacket(PeerMac, WatchedMac,
             ipv6 ? EthernetType.IPv6 : EthernetType.IPv4) { PayloadPacket = ip }.MakeCopy());
         Assert.Equal(expected, Assert.IsAssignableFrom<IICMPFilterContext>(
-            _parser.Parse(ref capture, direction)).Type);
+            _parser.Parse(capture, direction)).Type);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public class DefaultFilterContextParserTests
     {
         var ip = new IPv4Packet(Peer, Watched) { Protocol = ProtocolType.Gre };
         var capture = new EthernetCapture(new EthernetPacket(PeerMac, WatchedMac, EthernetType.IPv4) { PayloadPacket = ip });
-        var context = _parser.Parse(ref capture, FlowDirection.Inbound);
+        var context = _parser.Parse(capture, FlowDirection.Inbound);
         Assert.IsAssignableFrom<IIPFilterContext>(context);
         Assert.False(context is IIPServiceFilterContext);
     }
@@ -100,7 +100,7 @@ public class DefaultFilterContextParserTests
     [Fact]
     public void ReassemblyOrdersSegmentsHandlesOverlapAndKeepsDirectionsSeparate()
     {
-        EthernetCapture[] history =
+        INetworkCapture[] history =
         [
             Arp(), Tcp(100, syn: true), Tcp(900, syn: true, outbound: true),
             Tcp(104, "def"), Tcp(101, "abcd"), Tcp(101, "abcd"), Tcp(901, "response", outbound: true),
@@ -111,13 +111,13 @@ public class DefaultFilterContextParserTests
         Assert.Equal(Peer, response.RemoteAddress);
         Assert.Equal(80, response.Service.Port);
         Assert.Equal(50000, response.RemoteEndPoint.Port);
-        Assert.Equal("abcd", Text(_parser.Parse(ref history[4], FlowDirection.Inbound)));
+        Assert.Equal("abcd", Text(_parser.Parse(history[4], FlowDirection.Inbound)));
     }
 
     [Fact]
     public void FirstTransportMayBeReplyAfterAddressResolution()
     {
-        EthernetCapture[] history = [Arp(), Tcp(900, "reply", outbound: true), Tcp(100, "request")];
+        INetworkCapture[] history = [Arp(), Tcp(900, "reply", outbound: true), Tcp(100, "request")];
         Assert.Equal("request", Text(_parser.Parse(history, FlowDirection.Inbound)));
         Assert.Equal("reply", Text(_parser.Parse(history, FlowDirection.Outbound)));
     }
@@ -128,7 +128,7 @@ public class DefaultFilterContextParserTests
         var ip = new IPv4Packet(Peer, Watched) { Protocol = ProtocolType.Icmp, PayloadData = [8, 0, 0, 0, 0, 0, 0, 0] };
         ip.PayloadLength = 8;
         var ping = new EthernetCapture(new EthernetPacket(PeerMac, WatchedMac, EthernetType.IPv4) { PayloadPacket = ip }.MakeCopy());
-        EthernetCapture[] history = [Arp(), ping];
+        INetworkCapture[] history = [Arp(), ping];
         var context = Assert.IsAssignableFrom<IICMPFilterContext>(_parser.Parse(history, FlowDirection.Inbound));
         Assert.Equal(ICMPType.Echo, context.Type);
         Assert.Equal(Peer, context.RemoteAddress);
@@ -140,7 +140,7 @@ public class DefaultFilterContextParserTests
     [Fact]
     public void GapHoldsBackBytesUntilFilledAndOldSnapshotStaysUnchanged()
     {
-        EthernetCapture[] history = [Tcp(100, syn: true), Tcp(101, "abc"), Tcp(107, "ghi"), Tcp(104, "def")];
+        INetworkCapture[] history = [Tcp(100, syn: true), Tcp(101, "abc"), Tcp(107, "ghi"), Tcp(104, "def")];
         var earlier = _parser.Parse(history.AsSpan(0, 3), FlowDirection.Inbound);
         Assert.Equal("abc", Text(earlier));
         Assert.Equal("abcdefghi", Text(_parser.Parse(history, FlowDirection.Inbound)));
@@ -152,21 +152,21 @@ public class DefaultFilterContextParserTests
     [Fact]
     public void ReconstructionHandlesWraparoundAndDataOnSyn()
     {
-        EthernetCapture[] history = [Tcp(uint.MaxValue - 1, "ab", syn: true), Tcp(1, "cd")];
+        INetworkCapture[] history = [Tcp(uint.MaxValue - 1, "ab", syn: true), Tcp(1, "cd")];
         Assert.Equal("abcd", Text(_parser.Parse(history, FlowDirection.Inbound)));
     }
 
     [Fact]
     public void WithoutSynEarliestObservedSequenceIsUsedAcrossWraparound()
     {
-        EthernetCapture[] history = [Tcp(1, "cd"), Tcp(uint.MaxValue, "ab")];
+        INetworkCapture[] history = [Tcp(1, "cd"), Tcp(uint.MaxValue, "ab")];
         Assert.Equal("abcd", Text(_parser.Parse(history, FlowDirection.Inbound)));
     }
 
     [Fact]
     public void ConflictingOverlapsAreTerminalEvenBeyondAGap()
     {
-        EthernetCapture[] history = [Tcp(100, syn: true), Tcp(110, "abc"), Tcp(111, "Xd")];
+        INetworkCapture[] history = [Tcp(100, syn: true), Tcp(110, "abc"), Tcp(111, "Xd")];
         var exception = Assert.Throws<MalformedServicePayloadException>(() => _parser.Parse(history, FlowDirection.Inbound));
         Assert.Equal(new IPService(IPProtocol.TCP, 80), exception.Service);
     }
@@ -174,7 +174,7 @@ public class DefaultFilterContextParserTests
     [Fact]
     public void NestedAndPartiallyOverlappingRetransmissionsUseConsistentCoverage()
     {
-        EthernetCapture[] history = [Tcp(100, "abcdef"), Tcp(101, "bc"), Tcp(102, "cdefgh"), Tcp(103, "de")];
+        INetworkCapture[] history = [Tcp(100, "abcdef"), Tcp(101, "bc"), Tcp(102, "cdefgh"), Tcp(103, "de")];
         Assert.Equal("abcdefgh", Text(_parser.Parse(history, FlowDirection.Inbound)));
         history[3] = Tcp(103, "dX");
         Assert.Throws<MalformedServicePayloadException>(() => _parser.Parse(history, FlowDirection.Inbound));
@@ -183,7 +183,7 @@ public class DefaultFilterContextParserTests
     [Fact]
     public void ConflictingSynAndDifferentConnectionsAreRejected()
     {
-        EthernetCapture[] history = [Tcp(100, syn: true), Tcp(200, syn: true)];
+        INetworkCapture[] history = [Tcp(100, syn: true), Tcp(200, syn: true)];
         Assert.Throws<MalformedServicePayloadException>(() => _parser.Parse(history, FlowDirection.Inbound));
         history[1] = Tcp(101, "abc", servicePort: 81);
         Assert.Throws<ArgumentException>(() => _parser.Parse(history, FlowDirection.Inbound));
@@ -194,7 +194,7 @@ public class DefaultFilterContextParserTests
     [Fact]
     public void UdpUsesOnlyLatestDatagramInEachDirectionIncludingEmptyDatagrams()
     {
-        EthernetCapture[] history = [Arp(), Udp("first"), Udp("second"), Udp("reply", outbound: true)];
+        INetworkCapture[] history = [Arp(), Udp("first"), Udp("second"), Udp("reply", outbound: true)];
         Assert.Equal("second", Text(_parser.Parse(history, FlowDirection.Inbound)));
         Assert.Equal("reply", Text(_parser.Parse(history, FlowDirection.Outbound)));
         history[2] = Udp("");
@@ -204,7 +204,7 @@ public class DefaultFilterContextParserTests
     [Fact]
     public void MissingDirectionDoesNotBorrowOppositePayload()
     {
-        EthernetCapture[] history = [Tcp(100, "request")];
+        INetworkCapture[] history = [Tcp(100, "request")];
         var context = _parser.Parse(history, FlowDirection.Outbound);
         Assert.False(context is IIPServicePayloadFilterContext);
         Assert.Equal(Peer, context.RemoteAddress);
@@ -221,9 +221,9 @@ public class DefaultFilterContextParserTests
     public void ReassemblyLimitsIncludeGapsAndRetransmissions()
     {
         var parser = new SmallParser();
-        EthernetCapture[] sparse = [Tcp(100, syn: true), Tcp(109, "x")];
+        INetworkCapture[] sparse = [Tcp(100, syn: true), Tcp(109, "x")];
         Assert.Throws<MalformedServicePayloadException>(() => parser.Parse(sparse, FlowDirection.Inbound));
-        EthernetCapture[] repeated = [Tcp(100, "x"), Tcp(100, "x"), Tcp(100, "x")];
+        INetworkCapture[] repeated = [Tcp(100, "x"), Tcp(100, "x"), Tcp(100, "x")];
         Assert.Throws<MalformedServicePayloadException>(() => parser.Parse(repeated, FlowDirection.Inbound));
     }
 
@@ -242,7 +242,7 @@ public class DefaultFilterContextParserTests
         var ip = new IPv4Packet(Peer, Watched) { PayloadPacket = transport };
         var capture = new EthernetCapture(new EthernetPacket(PeerMac, WatchedMac, EthernetType.IPv4) { PayloadPacket = ip });
         payload.Reads = 0; // PacketDotNet can serialize while assigning parent/child relationships.
-        var context = Payload(_parser.Parse(ref capture, FlowDirection.Inbound));
+        var context = Payload(_parser.Parse(capture, FlowDirection.Inbound));
         Assert.Equal(3, context.PayloadLength);
         Assert.Equal(0, payload.Reads);
         Assert.Equal(3, context.PayloadData.Length);
@@ -255,12 +255,12 @@ public class DefaultFilterContextParserTests
     {
         Assert.Throws<ArgumentException>(() => _parser.Parse(Array.Empty<EthernetCapture>(), FlowDirection.Inbound));
         var capture = Tcp(100);
-        Assert.Throws<ArgumentOutOfRangeException>(() => _parser.Parse(ref capture, (FlowDirection)99));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _parser.Parse(capture, (FlowDirection)99));
         var fragment = new IPv4Packet(Peer, Watched) { FragmentFlags = 1, PayloadPacket = new TcpPacket(50000, 80) };
         capture = new(new EthernetPacket(PeerMac, WatchedMac, EthernetType.IPv4) { PayloadPacket = fragment });
-        Assert.Throws<NotSupportedException>(() => _parser.Parse(ref capture, FlowDirection.Inbound));
+        Assert.IsAssignableFrom<IIPServiceFilterContext>(_parser.Parse(capture, FlowDirection.Inbound));
         capture = new(new EthernetPacket(PeerMac, WatchedMac, EthernetType.WakeOnLan) { PayloadPacket = new WakeOnLanPacket(WatchedMac) });
-        Assert.Throws<NotSupportedException>(() => _parser.Parse(ref capture, FlowDirection.Inbound));
+        Assert.Throws<NotSupportedException>(() => _parser.Parse(capture, FlowDirection.Inbound));
     }
 
     private sealed class RegistrationModule : Module

@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Demand;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Neighborhood.Options;
 using MadWizard.Desomnia.Network.Watch;
@@ -39,7 +40,7 @@ namespace Microsoft.Extensions.Logging
             return scope;
         }
 
-        public static IDisposable? BeginRequestPacketScope(this ILogger logger, EthernetPacket packet)
+        public static IDisposable? BeginRequestPacketScope(this ILogger logger, INetworkCapture packet)
         {
             var scope = logger.BeginScope(new Dictionary<string, object> { ["Packet"] = packet });
 
@@ -118,7 +119,7 @@ namespace Microsoft.Extensions.Logging
             logger.LogWarning($"{log}");
         }
 
-        public static async Task LogEvent(this ILogger logger, LogLevel? level, string method, NetworkHost host, EthernetPacket? trigger = null, NetworkService? service = null, Exception? ex = null, TimeSpan? latency = null)
+        public static async Task LogEvent(this ILogger logger, LogLevel? level, string method, NetworkHost host, INetworkCapture? trigger = null, NetworkService? service = null, Exception? ex = null, TimeSpan? latency = null)
         {
             string description = host.ToTarget();
 
@@ -214,7 +215,7 @@ namespace Microsoft.Extensions.Logging
     {
         public static string ToMethod(this DemandEvent @event)
         {
-            if (@event.TriggerPacket?.Extract<WakeOnLanPacket>() is not null)
+            if (@event.TriggerPacket?.FindPacket<WakeOnLanPacket>() is not null)
                 return "Rerouted";
 
             return "Send";
@@ -230,10 +231,10 @@ namespace Microsoft.Extensions.Logging
             return await ToTrigger(@event.Host.Network, @event.TriggerPacket);
         }
 
-        public static async Task<string> ToTrigger(this NetworkSegment network, EthernetPacket packet)
+        public static async Task<string> ToTrigger(this NetworkSegment network, INetworkCapture packet)
         {
-            PhysicalAddress?    sourceMac   = packet.FindSourcePhysicalAddress();
-            IPAddress?          sourceIP    = packet.FindSourceIPAddress();
+            PhysicalAddress?    sourceMac   = packet.SourcePhysicalAddress;
+            IPAddress?          sourceIP    = packet.SourceAddress;
 
             string trigger = sourceIP != null ? sourceIP.ToString() : sourceMac != null ? sourceMac.ToHexString() : "unknown";
 

@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Device;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Neighborhood;
 using PacketDotNet;
 
@@ -8,9 +9,9 @@ namespace MadWizard.Desomnia.Network.Demand.Detector
     {
         public required NetworkSegment Network { private get; init; }
 
-        NetworkHost? IDemandDetector.Examine(in CaptureSummary capture)
+        NetworkHost? IDemandDetector.Examine(INetworkCapture capture)
         {
-            if (capture.Ethernet.Type == EthernetType.Arp && capture.Extract<ArpPacket>() is ArpPacket arp)
+            if (capture.Type == EthernetType.Arp && capture.FindPacket<ArpPacket>() is ArpPacket arp)
             {
                 if (arp.Operation != ArpOperation.Request)
                     return null;

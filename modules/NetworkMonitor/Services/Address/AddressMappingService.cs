@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Device;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Manager;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Neighborhood.Events;
@@ -21,11 +22,11 @@ namespace MadWizard.Desomnia.Network.Address
         public required NetworkSegment  Network { private get; init; }
         public required NetworkMonitor  Monitor { private get; init; }
 
-        public void Advertise(AddressMapping mapping, EthernetPacket? respondTo = null, PhysicalAddress? source = null)
+        public void Advertise(AddressMapping mapping, INetworkCapture? respondTo = null, PhysicalAddress? source = null)
         {
             switch (mapping.IPAddress.AddressFamily)
             {
-                case AddressFamily.InterNetwork when respondTo?.PayloadPacket is ArpPacket arp
+                case AddressFamily.InterNetwork when respondTo?.FindPacket<ArpPacket>() is ArpPacket arp
                     && arp.Operation == ArpOperation.Request && !arp.IsProbe()
                     && arp.TargetProtocolAddress.Equals(mapping.IPAddress):
                     //Logger.LogDebug($"Received ARP request for Options {mapping.Options}");
@@ -36,10 +37,10 @@ namespace MadWizard.Desomnia.Network.Address
                     SendARPAnnouncement(mapping.IPAddress, mapping.PhysicalAddress);
                     break;
 
-                case AddressFamily.InterNetworkV6 when respondTo?.Extract<IPv6Packet>() is IPv6Packet ipv6
+                case AddressFamily.InterNetworkV6 when respondTo?.FindPacket<IPv6Packet>() is IPv6Packet ipv6
                     && ipv6.Extract<NdpNeighborSolicitationPacket>() is NdpNeighborSolicitationPacket ndp
                     && !ipv6.SourceAddress.Equals(IPAddress.IPv6Any) && ndp.TargetAddress.Equals(mapping.IPAddress):
-                    SendNDPAdvertisement(mapping.IPAddress, mapping.PhysicalAddress, ipv6.SourceAddress, respondTo.FindSourcePhysicalAddress(), macSource: source);
+                    SendNDPAdvertisement(mapping.IPAddress, mapping.PhysicalAddress, ipv6.SourceAddress, respondTo.SourcePhysicalAddress, macSource: source);
                     break;
 
                 case AddressFamily.InterNetworkV6:

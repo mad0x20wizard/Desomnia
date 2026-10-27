@@ -1,8 +1,9 @@
-﻿using MadWizard.Desomnia.Configuration;
+using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Events;
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Network.Filter;
-using PacketDotNet;
+using System.Net;
 
 namespace MadWizard.Desomnia.Network.Watch
 {
@@ -54,11 +55,11 @@ namespace MadWizard.Desomnia.Network.Watch
             }
         }
 
-        protected internal virtual void ReportNetworkTraffic(EthernetPacket packet, FlowDirection direction)
+        protected internal virtual void ReportNetworkTraffic(INetworkCapture capture, FlowDirection direction)
         {
-            if (packet.Extract<TransportPacket>() is TransportPacket transport)
+            if (capture.SourceEndPoint is IPServiceEndPoint)
             {
-                ReportNetworkTraffic(transport.PayloadLength, direction); // TODO: sometimes PayloadData is null – PayloadPacket is probably set with some data (e.g. DHCP, port 67/68); need further investigation
+                ReportNetworkTraffic(capture.PayloadLength, direction);
             }
         }
 

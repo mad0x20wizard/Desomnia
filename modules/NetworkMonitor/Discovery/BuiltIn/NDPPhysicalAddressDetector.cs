@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Address;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Address;
 using MadWizard.Desomnia.Network.Neighborhood;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
@@ -16,9 +17,9 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
 
         protected override void SendRequest(IPAddress ip) => Reachability.SendNDPNeighborSolicitation(ip);
 
-        protected override AddressMapping? AnalyzePacket(EthernetPacket packet)
+        protected override AddressMapping? AnalyzeCapture(INetworkCapture packet)
         {
-            if (packet.Extract<NdpPacket>() is NdpNeighborAdvertisementPacket ndp)
+            if (packet.FindPacket<NdpPacket>() is NdpNeighborAdvertisementPacket ndp)
             {
                 if (!ndp.TargetAddress.IsEmpty() && ndp.FindSourcePhysicalAddress() is PhysicalAddress mac)
                 {

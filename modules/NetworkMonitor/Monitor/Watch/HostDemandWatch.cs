@@ -1,4 +1,5 @@
-﻿using Autofac;
+using Autofac;
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Network.Device;
@@ -73,7 +74,7 @@ namespace MadWizard.Desomnia.Network.Watch
             }
         }
 
-        internal virtual DemandRequest? Evaluate(in CaptureSummary capture)
+        internal virtual DemandRequest? Evaluate(INetworkCapture capture)
         {
             /**
              * Magic Packets should never start a demand request,
@@ -82,9 +83,9 @@ namespace MadWizard.Desomnia.Network.Watch
              * or responding with an address advertisement in order
              * to signal the presence of the target host.
              */
-            if (capture.Ethernet.IsMagicPacket())
+            if (capture.IsMagicPacket())
             {
-                HandleMagicPacket(capture.Ethernet);
+                HandleMagicPacket(capture);
             }
 
             /**
@@ -96,20 +97,20 @@ namespace MadWizard.Desomnia.Network.Watch
                 // do we already have an ongoing request for that source?
                 if (_ongoingRequests.TryGetValue(DetermineSource(source), out DemandRequest? ongoing))
                 {
-                    ongoing.EnqueuePacket(capture.Ethernet);
+                    ongoing.EnqueuePacket(capture);
                 }
 
                 // An established TCP stream can no longer start a demand request. Account for it
                 // through the same filters, without starting a request.
-                else if (capture.Extract<TcpPacket>() is { Synchronize: false })
+                else if (capture.FindPacket<TcpPacket>() is { Synchronize: false })
                 {
-                    ReportNetworkTraffic(capture.Ethernet, FlowDirection.Inbound);
+                    ReportNetworkTraffic(capture, FlowDirection.Inbound);
                 }
 
                 // can we start a new request for that source Options?
                 else if (MaybeStartRequest(capture) is DemandRequest request)
                 {
-                    request.EnqueuePacket(capture.Ethernet);
+                    request.EnqueuePacket(capture);
 
                     return request;
                 }
@@ -118,7 +119,7 @@ namespace MadWizard.Desomnia.Network.Watch
             return null;
         }
 
-        protected virtual void HandleMagicPacket(EthernetPacket packet)
+        protected virtual void HandleMagicPacket(INetworkCapture packet)
         {
             _ = Event(nameof(MagicPacket)).TriggerEventAsync(new DemandEvent(Host, packets: [packet])
             {
@@ -126,18 +127,13 @@ namespace MadWizard.Desomnia.Network.Watch
             });
         }
 
-        private bool CanTriggerDemand(in CaptureSummary capture)
+        private bool CanTriggerDemand(INetworkCapture capture)
         {
-            if (capture.HasPacket(out TcpPacket? tcp2))
-            {
-                tcp2.Reset = true;
-            }
-
-            if (capture.Extract<TcpPacket>() is TcpPacket tcp)
+            if (capture.FindPacket<TcpPacket>() is TcpPacket tcp)
             {
                 if (tcp.Synchronize) // ongoing TCP connections never trigger demand requests
                 {
-                    bool hasServiceDemand = this.Any(service => service.CanTriggerDemand(tcp));
+                    bool hasServiceDemand = this.Any(service => service.CanTriggerDemand(capture));
 
                     return !IsOnline || hasServiceDemand;
                 }
@@ -150,16 +146,16 @@ namespace MadWizard.Desomnia.Network.Watch
             return false;
         }
 
-        private protected virtual bool ShouldStartRequest(in CaptureSummary capture)
+        private protected virtual bool ShouldStartRequest(INetworkCapture capture)
         {
             try
             {
-                if (Verify(capture.Ethernet))
+                if (Verify(capture))
                 {
                     if (CanTriggerDemand(capture))
                         return true;
 
-                    ReportNetworkTraffic(capture.Ethernet, FlowDirection.Inbound);
+                    ReportNetworkTraffic(capture, FlowDirection.Inbound);
 
                     return false;
                 }
@@ -172,7 +168,7 @@ namespace MadWizard.Desomnia.Network.Watch
             }
         }
 
-        private DemandRequest? MaybeStartRequest(in CaptureSummary trigger)
+        private DemandRequest? MaybeStartRequest(INetworkCapture trigger)
         {
             if (ShouldStartRequest(trigger))
             {
@@ -181,7 +177,7 @@ namespace MadWizard.Desomnia.Network.Watch
 
                 ILifetimeScope scope = Scope.BeginLifetimeScope(MatchingScopeLifetimeTags.RequestLifetimeScopeTag);
 
-                var request = scope.Resolve<DemandRequest>(TypedParameter.From(trigger.Ethernet));
+                var request = scope.Resolve<DemandRequest>(TypedParameter.From(trigger));
                 request.Number = _requestNr++;
 
                 scope.CurrentScopeEnding += (sender, args) => EndRequest(request);
@@ -194,7 +190,7 @@ namespace MadWizard.Desomnia.Network.Watch
             return null;
         }
 
-        public bool Verify(EthernetPacket packet, FlowDirection direction = FlowDirection.Inbound)
+        public bool Verify(INetworkCapture packet, FlowDirection direction = FlowDirection.Inbound)
         {
             /*
              * Packets accepted by a service watch are judged by that service's own filter, starting
@@ -209,7 +205,7 @@ namespace MadWizard.Desomnia.Network.Watch
             return !Filter.Value.ShouldFilter(packet, FilterOptions, direction);
         }
 
-        protected internal override void ReportNetworkTraffic(EthernetPacket packet, FlowDirection direction)
+        protected internal override void ReportNetworkTraffic(INetworkCapture packet, FlowDirection direction)
         {
             try
             {
@@ -221,6 +217,10 @@ namespace MadWizard.Desomnia.Network.Watch
             catch (AdditionalDataNeededException)
             {
                 // Accounting never starts a request to gather missing information.
+            }
+            catch (MalformedServicePayloadException)
+            {
+                // Malformed payloads cannot contribute accepted traffic either.
             }
         }
 
@@ -250,18 +250,18 @@ namespace MadWizard.Desomnia.Network.Watch
             }
         }
 
-        protected void ForwardPackets(IEnumerable<EthernetPacket> packets, bool onlyIPUnicast = true)
+        protected void ForwardPackets(IEnumerable<INetworkCapture> packets, bool onlyIPUnicast = true)
         {
             if (onlyIPUnicast)
             {
-                packets = packets.Where(packet => packet.IsIPUnicast());
+                packets = packets.Where(packet => packet.IsIPUnicast);
             }
 
             Logger.LogTrace($"FORWARD {packets.Count()} packet(s) to '{Host.Name}':");
 
-            foreach (EthernetPacket packet in packets)
+            foreach (EthernetPacket packet in packets.SelectMany(capture => capture))
             {
-                var copy = packet.MakeCopy();
+                var copy = packet.MakeCapturedCopy();
 
                 /**
                  * Some VPN network interfaces (like OpenVPN) don't reveal their own MAC address.

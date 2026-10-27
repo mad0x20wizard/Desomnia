@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Address;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Address;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Naming;
@@ -31,7 +32,7 @@ namespace MadWizard.Desomnia.Network.Watch
         public required Func<LocalHostWatch, SleepProxyRegistration> CreateSleepProxyRegistration { private get; init; }
         public required Func<SleepProxyRegistration, ushort, SleepProxyRegistrationMessageBurst> CreateMessageBurst { private get; init; }
 
-        private protected override bool ShouldStartRequest(in CaptureSummary packet)
+        private protected override bool ShouldStartRequest(INetworkCapture packet)
         {
             if (base.ShouldStartRequest(packet))
             {

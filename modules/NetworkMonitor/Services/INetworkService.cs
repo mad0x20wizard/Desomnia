@@ -1,4 +1,4 @@
-﻿using PacketDotNet;
+using MadWizard.Desomnia.Network.Capture;
 
 namespace MadWizard.Desomnia.Network
 {
@@ -10,7 +10,7 @@ namespace MadWizard.Desomnia.Network
 
         Task Resume() => Task.CompletedTask;
 
-        void ProcessPacket(EthernetPacket packet) { }
+        void ProcessCapture(INetworkCapture capture) { }
 
         async Task BeforeSuspend() { }
 

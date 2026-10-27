@@ -1,15 +1,16 @@
-﻿using PacketDotNet;
+using MadWizard.Desomnia.Network.Capture;
+using PacketDotNet;
 using System.Net;
 
 namespace MadWizard.Desomnia.Network.Filter.Rules
 {
     public class TCPServiceFilterRule(ushort port) : ServiceFilterRule(new IPService(IPProtocol.TCP, port))
     {
-        public override bool Matches(EthernetPacket packet, FlowDirection direction = FlowDirection.Inbound)
+        public override bool Matches(INetworkCapture packet, FlowDirection direction = FlowDirection.Inbound)
         {
-            if (base.Matches(packet, direction) && packet.Extract<TcpPacket>() is TcpPacket tcp)
+            if (base.Matches(packet, direction) && packet.HasPacket<TcpPacket>())
             {
-                return MatchesPayload(packet.PayloadPacket.PayloadData); // LATER: Implement TCP stream reassembly
+                return MatchesPayload(packet.PayloadData);
             }
 
             return false;

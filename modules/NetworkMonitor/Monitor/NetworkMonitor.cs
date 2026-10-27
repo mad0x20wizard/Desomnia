@@ -1,6 +1,7 @@
-﻿using Autofac.Features.Indexed;
+using Autofac.Features.Indexed;
 using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network;
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Manager;
@@ -34,6 +35,8 @@ namespace MadWizard.Desomnia.Network
         /// </summary>
         [EventContext]
         public INetworkInterface Interface => Device.Interface;
+
+        public required CapturePipeline Pipeline { private get; init; }
 
         public IEnumerable<INetworkService> Services { private get; init; } = [];
 
@@ -127,9 +130,12 @@ namespace MadWizard.Desomnia.Network
         {
             using (Network.Mutex.Lock())
             {
-                foreach (var service in Services)
+                if (Pipeline.TryCapturePacket(packet) is INetworkCapture capture)
                 {
-                    service.ProcessPacket(packet);
+                    foreach (var service in Services)
+                    {
+                        service.ProcessCapture(capture);
+                    }
                 }
             }
         }

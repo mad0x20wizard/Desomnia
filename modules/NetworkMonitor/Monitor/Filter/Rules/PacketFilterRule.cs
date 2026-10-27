@@ -1,12 +1,13 @@
-﻿using PacketDotNet;
+using MadWizard.Desomnia.Network.Capture;
+using PacketDotNet;
 
 namespace MadWizard.Desomnia.Network.Filter.Rules
 {
     public abstract class PacketFilterRule : FilterRule
     {
-        public abstract bool Matches(EthernetPacket packet, FlowDirection direction = FlowDirection.Inbound);
+        public abstract bool Matches(INetworkCapture packet, FlowDirection direction = FlowDirection.Inbound);
 
-        protected static bool MatchesRules(IEnumerable<PacketFilterRule> rules, EthernetPacket packet, FlowDirection direction)
+        protected static bool MatchesRules(IEnumerable<PacketFilterRule> rules, INetworkCapture packet, FlowDirection direction)
         {
             bool needMatch = rules.Any(rule => rule.Type == FilterRuleType.Must);
 

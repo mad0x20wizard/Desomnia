@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Filter.Rules;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Filter.Rules;
 using PacketDotNet;
 
 namespace MadWizard.Desomnia.Network.Filter
@@ -10,7 +11,7 @@ namespace MadWizard.Desomnia.Network.Filter
         readonly bool _blocksByDefault  = rules.Any(rule => rule.Type == FilterRuleType.Must);
         readonly bool _needsIPTraffic   = rules.Any(rule => rule is IPFilterRule);
 
-        public virtual bool ShouldFilter(EthernetPacket packet, PacketFilterOptions options, FlowDirection direction = FlowDirection.Inbound)
+        public virtual bool ShouldFilter(INetworkCapture packet, PacketFilterOptions options, FlowDirection direction = FlowDirection.Inbound)
         {
             options.BlockByDefault |= _blocksByDefault;
             options.NeedsIPTraffic |= _needsIPTraffic;
@@ -33,9 +34,9 @@ namespace MadWizard.Desomnia.Network.Filter
 
             if (direction == FlowDirection.Inbound)
             {
-                if (options.NeedsIPTraffic && !packet.IsIPUnicast())
+                if (options.NeedsIPTraffic && !packet.IsIPUnicast)
                 {
-                    throw new IPUnicastNeededException(packet.FindTargetIPAddress()!);
+                    throw new IPUnicastNeededException(packet.TargetAddress!);
                 }
             }
 

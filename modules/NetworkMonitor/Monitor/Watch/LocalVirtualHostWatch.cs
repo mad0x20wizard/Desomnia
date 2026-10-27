@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Events;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Network.Manager;
@@ -124,7 +125,7 @@ namespace MadWizard.Desomnia.Network.Watch
             }
         }
 
-        protected override void HandleMagicPacket(EthernetPacket packet)
+        protected override void HandleMagicPacket(INetworkCapture packet)
         {
             if (!IsOnline) // ignore if VM is online
             {

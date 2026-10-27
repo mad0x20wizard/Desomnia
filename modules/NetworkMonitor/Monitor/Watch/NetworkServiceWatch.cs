@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Events;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Neighborhood;
@@ -15,12 +16,12 @@ namespace MadWizard.Desomnia.Network.Watch
         public AdvertiseOptions     AdvertiseOptions    { get; init; }
         public KnockOptions?        KnockOptions        { get; init; }
 
-        public bool CanTriggerDemand(Packet trigger)
+        public bool CanTriggerDemand(INetworkCapture trigger)
         {
             return IsIdle && ((IEventSystem)this)[nameof(Demand)].HasHandlers && Service.Accepts(trigger);
         }
 
-        protected internal override void ReportNetworkTraffic(EthernetPacket packet, FlowDirection direction)
+        protected internal override void ReportNetworkTraffic(INetworkCapture packet, FlowDirection direction)
         {
             if (Service.Accepts(packet, direction))
             {

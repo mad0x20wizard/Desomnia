@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Address;
+using MadWizard.Desomnia.Network.Address;
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Filter;
@@ -23,7 +24,7 @@ namespace MadWizard.Desomnia.Network.Demand
 
         public required IEnumerable<IDemandDetector> Detectors { private get; init; }
 
-        private bool IsWatchedBy<T>(in CaptureSummary packet) where T : NetworkHostWatch
+        private bool IsWatchedBy<T>(INetworkCapture packet) where T : NetworkHostWatch
         {
             if ((Network[packet.TargetAddress] ?? Network[packet.TargetPhysicalAddress]) is NetworkHost host)
             {
@@ -33,7 +34,7 @@ namespace MadWizard.Desomnia.Network.Demand
             return false;
         }
 
-        private bool ShouldProcess(in CaptureSummary packet)
+        private bool ShouldProcess(INetworkCapture packet)
         {
             switch (Monitor.Options.Mode)
             {
@@ -46,21 +47,19 @@ namespace MadWizard.Desomnia.Network.Demand
             }
         }
 
-        void INetworkService.ProcessPacket(EthernetPacket packet)
+        void INetworkService.ProcessCapture(INetworkCapture capture)
         {
-            var summary = new CaptureSummary(packet);
-
-            if (ShouldProcess(summary))
+            if (ShouldProcess(capture))
             {
-                ReportSourceTraffic(summary);
+                ReportSourceTraffic(capture);
 
                 foreach (var detector in Detectors)
                 {
-                    if (detector.Examine(summary) is NetworkHost host)
+                    if (detector.Examine(capture) is NetworkHost host)
                     {
                         if (Monitor[host] is HostDemandWatch watch)
                         {
-                            EvaluateDemand(watch, summary); break;
+                            EvaluateDemand(watch, capture); break;
                         }
                     }
                 }
@@ -74,18 +73,18 @@ namespace MadWizard.Desomnia.Network.Demand
          * destination-keyed, so wake/verify/forward logic never sees a packet from
          * the watched host's own side.
          */
-        private void ReportSourceTraffic(in CaptureSummary packet)
+        private void ReportSourceTraffic(INetworkCapture packet)
         {
-            if (packet.Extract<IPPacket>() is not null)
+            if (packet.HasPacket<IPPacket>())
             {
                 if (Network[packet.SourceAddress] is NetworkHost host && Monitor[host] is NetworkHostWatch watch)
                 {
-                    watch.ReportNetworkTraffic(packet.Ethernet, FlowDirection.Outbound);
+                    watch.ReportNetworkTraffic(packet, FlowDirection.Outbound);
                 }
             }
         }
 
-        private void EvaluateDemand(HostDemandWatch watch, in CaptureSummary capture)
+        private void EvaluateDemand(HostDemandWatch watch, INetworkCapture capture)
         {
             if (watch.Evaluate(capture) is DemandRequest request)
             {

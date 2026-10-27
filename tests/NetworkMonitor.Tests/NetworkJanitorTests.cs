@@ -268,7 +268,7 @@ namespace MadWizard.Desomnia.Network.Tests
 
         private sealed class TestService() : NetworkService("test")
         {
-            public override bool Accepts(Packet packet, FlowDirection direction) => false;
+            public override bool Accepts(MadWizard.Desomnia.Network.Capture.INetworkCapture packet, FlowDirection direction) => false;
         }
 
         private sealed class TestContext : NetworkHostContext

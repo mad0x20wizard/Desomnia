@@ -4,6 +4,7 @@ using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Watch;
 using Microsoft.Extensions.Logging;
 using System.Net.Sockets;
+using MadWizard.Desomnia.Network.Configuration.Options;
 
 namespace MadWizard.Desomnia.Network.Filter
 {
@@ -23,7 +24,7 @@ namespace MadWizard.Desomnia.Network.Filter
     public readonly record struct ICMPEchoTrafficType : ITrafficType;
     #endregion
 
-    public class BerkeleyPacketFilter(NetworkDevice device) : INetworkService
+    public class BerkeleyPacketFilter(NetworkDevice device, IPReassemblyOptions? reassembly = null) : INetworkService
     {
         public required ILogger<BerkeleyPacketFilter> Logger { private get; init; }
 
@@ -71,7 +72,7 @@ namespace MadWizard.Desomnia.Network.Filter
         /// rejected by libpcap. Rather than guess the limit, we generate the expression from most precise
         /// to most general and let the compiler decide: the first candidate that <see cref="TrySetFilter"/>
         /// accepts wins. Each rung drops one refinement (TCP ports, then UDP ports, then protocol
-        /// sub-typing), and the last rung falls back to the historic coarse exclusion filter.
+        /// sub-typing), retaining the requested address families and protocols.
         /// </para>
         /// </summary>
         private void UpdateFilter()
@@ -80,10 +81,8 @@ namespace MadWizard.Desomnia.Network.Filter
 
             foreach (var filter in BuildFilterCandidates(Aggregate()))
             {
-                // Empty means nothing is registered for this rung; a bare "" would capture everything,
-                // so skip it and let the crude fallback provide a sane minimum. Also skip rungs that
-                // collapsed to the same expression we already rejected.
-                if (string.IsNullOrEmpty(filter) || filter == lastTried)
+                // Skip rungs that collapsed to the same expression we already rejected.
+                if (filter == lastTried)
                     continue;
 
                 if (TrySetFilter(filter))
@@ -140,7 +139,8 @@ namespace MadWizard.Desomnia.Network.Filter
         }
 
         #region Traffic demand aggregation
-        private sealed record TrafficShape(IPTrafficShape IPv4, IPTrafficShape IPv6, bool ARP, bool NDP, bool WoL);
+        private sealed record TrafficShape(IPTrafficShape IPv4, IPTrafficShape IPv6, bool ARP, bool NDP, bool WoL,
+            IPReassemblyFamily Fragments);
 
         /// <summary>
         /// The capture requirements of one address family (IPv4 / IPv6). "Any" flags absorb port lists,
@@ -233,21 +233,6 @@ namespace MadWizard.Desomnia.Network.Filter
                 Absorb();
             }
 
-            public void UnionWith(IPTrafficShape other)
-            {
-                TCPAnySyn |= other.TCPAnySyn;
-                TCPAnyPayload |= other.TCPAnyPayload;
-                TCPSynPorts.UnionWith(other.TCPSynPorts);
-                TCPPayloadPorts.UnionWith(other.TCPPayloadPorts);
-
-                UDPAny |= other.UDPAny;
-                UDPPorts.UnionWith(other.UDPPorts);
-
-                ICMPEcho |= other.ICMPEcho;
-
-                Absorb();
-            }
-
             /// <param name="family">which address family the cell describes; null for a family-agnostic clause</param>
             /// <param name="preciseICMP">whether to match ICMP echo by exact type or by bare protocol</param>
             internal string ToBPFExpression(AddressFamily? family, bool preciseICMP)
@@ -295,6 +280,36 @@ namespace MadWizard.Desomnia.Network.Filter
                 }
 
                 return string.Join(" or ", parts);
+            }
+
+            /// <summary>
+            /// A bounded protocol allowance, independent of the number of service ports.
+            /// Port, flag and ICMP type checks belong to the application after reassembly.
+            /// </summary>
+            internal string ToFragmentBPFExpression(bool ipv6)
+            {
+                string protocol = ipv6 ? "ip6[40]" : "ip[9]";
+                var parts = new List<string>();
+                if (TCPAnySyn || TCPAnyPayload || TCPSynPorts.Count > 0 || TCPPayloadPorts.Count > 0)
+                    parts.Add($"{protocol} = 6");
+                if (UDPAny || UDPPorts.Count > 0)
+                    parts.Add($"{protocol} = 17");
+                if (ICMPEcho) parts.Add($"{protocol} = {(ipv6 ? 58 : 1)}");
+
+                string known = string.Join(" or ", parts);
+                if (!ipv6)
+                    return $"(ip and (ip[6:2] & 0x3fff != 0) and ({known}))";
+
+                // RFC 8200 permits later fragments to have a different Next Header value. Only
+                // the first fragment determines the reassembled protocol, so later ones remain
+                // undecidable even when their own Fragment header names a different protocol.
+                // Extension chains are deliberately admitted without walking them. protochain
+                // disables BPF optimization and fails with variable link-layer offsets (e.g.
+                // Linux VLAN offload). This also admits unfragmented extension chains, scoped
+                // to families with IP demand; the application performs the remaining checks.
+                string Extension(string field) => $"({field} = 0 or {field} = 43 or {field} = 60 or {field} = 51)";
+                return $"(ip6 and ({Extension("ip6[6]")} or (ip6[6] = 44 and "
+                    + $"(ip6[42:2] & 0xfff8 != 0 or {Extension(protocol)} or ({known})))))";
             }
         }
 
@@ -389,62 +404,71 @@ namespace MadWizard.Desomnia.Network.Filter
             ip4.Absorb();
             ip6.Absorb();
 
-            return new(ip4, ip6, arp, ndp, wol);
+            return new(ip4, ip6, arp, ndp, wol, reassembly?.Family ?? IPReassemblyFamily.None);
         }
         #endregion
 
         #region Filter construction
         private static IEnumerable<string> BuildFilterCandidates(TrafficShape shape)
         {
-            yield return BuildFilter(shape, mergeFamilies: false, preciseICMP: true);
+            yield return BuildFilter(shape, preciseICMP: true);
 
             // remove TCP port requirements
             shape.IPv4.MakeTCPPortsUnconditional();
             shape.IPv6.MakeTCPPortsUnconditional();
-            yield return BuildFilter(shape, mergeFamilies: false, preciseICMP: true);
+            yield return BuildFilter(shape, preciseICMP: true);
 
             // remove UDP port requirements
             shape.IPv4.MakeUDPPortsUnconditional();
             shape.IPv6.MakeUDPPortsUnconditional();
-            yield return BuildFilter(shape, mergeFamilies: false, preciseICMP: true);
+            yield return BuildFilter(shape, preciseICMP: true);
 
             // remove TCP SYN requirement
             shape.IPv4.MakeTCPUnconditional();
             shape.IPv6.MakeTCPUnconditional();
-            yield return BuildFilter(shape, mergeFamilies: true, preciseICMP: true);
+            yield return BuildFilter(shape, preciseICMP: true);
 
             // ignore ICMP type
-            yield return BuildFilter(shape, mergeFamilies: true, preciseICMP: false);
+            yield return BuildFilter(shape, preciseICMP: false);
         }
 
-        private static string BuildFilter(TrafficShape demand, bool mergeFamilies, bool preciseICMP)
+        private static string BuildFilter(TrafficShape demand, bool preciseICMP)
         {
             var clauses = new List<string>();
 
             if (demand.ARP) clauses.Add("arp");
-            if (demand.NDP) clauses.Add(preciseICMP ? "(icmp6 and ip6[40] >= 133 and ip6[40] <= 137)" : "icmp6"); // NDP = ICMPv6 133..137
+            // NDP cannot be fragmented. A bare icmp6 predicate can also match a Fragment header.
+            if (demand.NDP) clauses.Add(preciseICMP ? "(ip6 and ip6[6] = 58 and ip6[40] >= 133 and ip6[40] <= 137)" : "(ip6 and ip6[6] = 58)");
             if (demand.WoL) clauses.Add("ether proto 0x0842"); // EthernetType.WakeOnLan (layer-2 magic packet)
 
-            if (mergeFamilies)
+            // Keep ordinary traffic on the inexpensive path. Fragments must go through the
+            // family-gated predicates below, even when a bare tcp/udp predicate would match them.
+            if (!demand.IPv4.IsEmpty)
+                clauses.Add($"(ip and (ip[6:2] & 0x3fff = 0) and ({demand.IPv4.ToBPFExpression(AddressFamily.InterNetwork, preciseICMP)}))");
+            if (!demand.IPv6.IsEmpty)
+                clauses.Add($"(ip6 and ip6[6] != 44 and ({demand.IPv6.ToBPFExpression(AddressFamily.InterNetworkV6, preciseICMP)}))");
+
+            var fragments = new List<string>();
+            if (!demand.IPv4.IsEmpty && demand.Fragments.HasFlag(IPReassemblyFamily.IPv4))
+                fragments.Add(demand.IPv4.ToFragmentBPFExpression(ipv6: false));
+            if (!demand.IPv6.IsEmpty && demand.Fragments.HasFlag(IPReassemblyFamily.IPv6))
+                fragments.Add(demand.IPv6.ToFragmentBPFExpression(ipv6: true));
+            if (fragments.Count > 0)
             {
-                var shape = new IPTrafficShape();
-
-                shape.UnionWith(demand.IPv4);
-                shape.UnionWith(demand.IPv6);
-
-                if (!shape.IsEmpty)
-                    clauses.Add($"({shape.ToBPFExpression(family: null, preciseICMP)})");
-            }
-            else
-            {
-                if (!demand.IPv4.IsEmpty)
-                    clauses.Add($"(ip and ({demand.IPv4.ToBPFExpression(family: AddressFamily.InterNetwork, preciseICMP)}))");
-
-                if (!demand.IPv6.IsEmpty)
-                    clauses.Add($"(ip6 and ({demand.IPv6.ToBPFExpression(family: AddressFamily.InterNetworkV6, preciseICMP)}))");
+                string fragment = "(" + string.Join(" or ", fragments) + ")";
+                clauses.Add(fragment);
+                // vlan changes offsets for everything following it in the expression. Nested
+                // branches must therefore come last, ordered from zero to four tags, matching
+                // IPFragment.ReadEthernet. Apply the same predicates inside every encapsulation.
+                string tagged = fragment;
+                for (int depth = 1; depth < 4; depth++)
+                    tagged = $"({fragment} or (vlan and {tagged}))";
+                clauses.Add($"(vlan and {tagged})");
             }
 
-            return string.Join(" or ", clauses);
+            // No Ethernet frame has length zero. Unlike an empty expression, this does not
+            // accidentally enable unrestricted capture when there are no registrations.
+            return clauses.Count == 0 ? "len = 0" : string.Join(" or ", clauses);
         }
 
         private static string PortMatch(string protocol, IEnumerable<ushort> ports) => "(" + string.Join(" or ", ports.Select(port => $"{protocol} port {port}")) + ")";

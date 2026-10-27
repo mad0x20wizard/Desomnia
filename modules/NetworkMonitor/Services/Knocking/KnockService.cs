@@ -1,4 +1,5 @@
-﻿using Autofac.Features.Indexed;
+using Autofac.Features.Indexed;
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Knocking.Secrets;
 using MadWizard.Desomnia.Network.Services.Knocking;
 using Microsoft.Extensions.Logging;
@@ -26,7 +27,7 @@ namespace MadWizard.Desomnia.Network.Knocking
                 using var scope = Logger.BeginRealmScope("knocking");
 
                 if (_stanzas.Add(stanza))
-                    Logger.LogDebug($"Listening on {stanza.Port} for SPA stanza '{stanza.Label}'" +
+                    Logger.LogDebug($"Listening on {stanza.Service} for SPA stanza '{stanza.Label}'" +
                         $" using <{stanza.Detector.Name}>");
             }
         }
@@ -40,27 +41,29 @@ namespace MadWizard.Desomnia.Network.Knocking
         }
         #endregion
 
-        void INetworkService.ProcessPacket(EthernetPacket packet)
+        void INetworkService.ProcessCapture(INetworkCapture capture)
         {
-            if (packet.PayloadPacket is IPPacket ip && ip.PayloadPacket is TransportPacket transport) // TODO: filter for target TriggerIPPacket?
+            if (capture.TargetEndPoint is IPServiceEndPoint target && capture.SourceEndPoint is IPEndPoint source)
             {
-                lock (_stanzas) foreach (var stanza in _stanzas.Where(stanza => stanza.Port.Accepts(transport)).ToArray())
+                lock (_stanzas) foreach (var stanza in _stanzas.Where(stanza => stanza.Service == target).ToArray())
                 {
                     using var scope = Logger.BeginRealmScope("knocking");
 
                     try
                     {
-                        if (stanza.PacketFilter.Value.ShouldFilter(packet)) continue; // maybe filter packet
+                        if (stanza.PacketFilter.Value.ShouldFilter(capture)) continue; // maybe filter packet
+
+                        var ip = capture.FindPacket<IPPacket>() ?? throw new IOException("IPPacket not found");
 
                         foreach (var knock in stanza.Detector.Examine(ip, stanza.Secret))
                         {
-                            if (stanza.KnockFilter.ShouldFilter(ip.SourceEndPoint, knock)) continue; // maybe filter knock
+                            if (stanza.KnockFilter.ShouldFilter(source, knock)) continue; // maybe filter knock
 
-                            Logger.LogDebug($"Received valid knock from {ip.SourceAddress}" +
+                            Logger.LogDebug($"Received valid knock from {source.Address}" +
                                 (knock.TargetPort != null ? $" to access {knock.TargetPort}" : "") +
                                 $" via stanza '{stanza.Label}'");
 
-                            stanza.TriggerKnockEvent(ip.SourceEndPoint, knock);
+                            stanza.TriggerKnockEvent(source, knock);
                         }
                     }
                     catch (Exception ex)
@@ -71,7 +74,7 @@ namespace MadWizard.Desomnia.Network.Knocking
             }
         }
 
-        public async Task DoSinglePacketAuthorization(string methodName, IPAddress source, IPEndPoint target, IPService knock, SharedSecret secret)
+        public async Task DoSinglePacketAuthorization(string methodName, IPAddress source, IPServiceEndPoint target, IPService knock, SharedSecret secret)
         {
             if (!Methods.TryGetValue(methodName, out var method))
                 throw new InvalidOperationException($"Unknown knock method '{methodName}'");

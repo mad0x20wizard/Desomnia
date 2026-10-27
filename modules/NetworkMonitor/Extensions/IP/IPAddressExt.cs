@@ -5,8 +5,14 @@ namespace System.Net.NetworkInformation
 {
     internal static class IPAddressExt
     {
-        public static IPAddress LinkLocalMulticast = IPAddress.Parse("ff02::1");
-        public static IPAddress LinkLocalRouterMulticast = IPAddress.Parse("ff02::2");
+        private static IPAddress LinkLocalMulticast = IPAddress.Parse("ff02::1");
+        private static IPAddress LinkLocalRouterMulticast = IPAddress.Parse("ff02::2");
+
+        extension(IPAddress)
+        {
+            public static IPAddress LinkLocalMulticast => LinkLocalMulticast;
+            public static IPAddress LinkLocalRouterMulticast => LinkLocalRouterMulticast;
+        }
 
         internal static bool ShouldDiscover(this AddressFamily family, AutoDiscoveryType auto)
         {

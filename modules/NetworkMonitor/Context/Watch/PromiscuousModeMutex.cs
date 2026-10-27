@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Device;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Device;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
@@ -33,13 +34,13 @@ namespace MadWizard.Desomnia.Network.Context.Watch
             }
         }
 
-        void INetworkService.ProcessPacket(EthernetPacket packet)
+        void INetworkService.ProcessCapture(INetworkCapture capture)
         {
-            if (packet.IsMagicPacket(out var mac) && mac.Equals(PhysicalAddressExt.Broadcast))
+            if (capture.IsMagicPacket(out var mac) && mac.Equals(PhysicalAddressExt.Broadcast))
             {
                 if (_establishdAuthority == true)
                 {
-                    Logger.LogWarning("Another instance of Desomnia probed authority for promiscuous mode at: {mac}", packet.SourceHardwareAddress.ToHexString());
+                    Logger.LogWarning("Another instance of Desomnia probed authority for promiscuous mode at: {mac}", capture.SourcePhysicalAddress.ToHexString());
 
                     SendBeacon();
                 }
@@ -49,7 +50,7 @@ namespace MadWizard.Desomnia.Network.Context.Watch
                     {
                         _establishdAuthority = false;
 
-                        Logger.LogCritical("Only one instance of Desomnia may be monitoring in promiscuous mode per broadcast domain; detected another instance at: {mac}", packet.SourceHardwareAddress.ToHexString());
+                        Logger.LogCritical("Only one instance of Desomnia may be monitoring in promiscuous mode per broadcast domain; detected another instance at: {mac}", capture.SourcePhysicalAddress.ToHexString());
 
                         Lifetime.StopApplication();
                     }

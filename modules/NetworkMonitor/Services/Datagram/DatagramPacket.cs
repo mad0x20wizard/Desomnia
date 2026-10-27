@@ -1,4 +1,4 @@
-using PacketDotNet;
+using MadWizard.Desomnia.Network.Capture;
 using System.Net;
 using System.Net.NetworkInformation;
 
@@ -20,14 +20,14 @@ namespace MadWizard.Desomnia.Network.Datagram
 
         private readonly Action<byte[]>? _respond;
 
-        internal DatagramPacket(EthernetPacket ethernet, UdpPacket udp)
+        internal DatagramPacket(INetworkCapture capture)
         {
-            SourcePhysicalAddress = ethernet.FindSourcePhysicalAddress();
+            SourcePhysicalAddress = capture.SourcePhysicalAddress;
 
-            Source = new UDPEndPoint(ethernet.FindSourceIPAddress() ?? throw new ArgumentException("Source IP missing"), udp.SourcePort);
-            Target = new UDPEndPoint(ethernet.FindTargetIPAddress() ?? throw new ArgumentException("Target IP missing"), udp.DestinationPort);
+            Source = capture.SourceEndPoint ?? throw new ArgumentException("Source endpoint missing");
+            Target = capture.TargetEndPoint ?? throw new ArgumentException("Target endpoint missing");
 
-            Payload = udp.PayloadData;
+            Payload = capture.PayloadData;
         }
 
         internal DatagramPacket(Action<byte[]> respond, IPEndPoint source, IPEndPoint target, byte[] payload)

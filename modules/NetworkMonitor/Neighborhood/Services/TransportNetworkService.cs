@@ -1,6 +1,6 @@
-﻿using MadWizard.Desomnia.Network.Filter;
+﻿using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Filter;
 using Makaretu.Dns;
-using PacketDotNet;
 using System.Net;
 
 namespace MadWizard.Desomnia.Network.Neighborhood.Services
@@ -54,11 +54,13 @@ namespace MadWizard.Desomnia.Network.Neighborhood.Services
         /// <summary>Enumerates every port accepted by this service, including derived service ports.</summary>
         public IEnumerable<IPService> GetPorts() => Ports;
 
-        public override bool Accepts(Packet packet, FlowDirection direction)
+        public override bool Accepts(INetworkCapture capture, FlowDirection direction)
         {
-            if (packet.Extract<TransportPacket>() is TransportPacket transport)
+            var endpoint = direction == FlowDirection.Inbound ? capture.TargetEndPoint : capture.SourceEndPoint;
+
+            if (endpoint is IPServiceEndPoint transport)
             {
-                return Ports.Any(service => service.Accepts(transport, direction));
+                return Ports.Any(service => service.Protocol.HasFlag(transport.Protocol) && service.Port == transport.Port);
             }
 
             return false;

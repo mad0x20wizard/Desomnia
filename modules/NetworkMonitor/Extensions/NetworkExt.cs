@@ -35,11 +35,6 @@ namespace MadWizard.Desomnia.Network
             return router.LastSeenVPN != null && (DateTime.Now - router.LastSeenVPN) < (duration ?? router.Options.VPNTimeout);
         }
 
-        public static bool HasSentPacket(this NetworkDevice device, EthernetPacket packet)
-        {
-            return device.PhysicalAddress.Equals(packet.SourceHardwareAddress);
-        }
-
         public static NetworkHost? FindHostByIP(this NetworkSegment network, IEnumerable<IPAddress> addresses)
         {
             foreach (IPAddress ip in addresses)

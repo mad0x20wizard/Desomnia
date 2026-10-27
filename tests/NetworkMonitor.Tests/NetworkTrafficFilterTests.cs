@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Network.Device;
@@ -32,7 +33,7 @@ namespace MadWizard.Desomnia.Network.Tests
 
         private sealed class PayloadFilterRule() : TCPServiceFilterRule(445)
         {
-            protected override bool MatchesPayload(byte[] payload) => throw new MalformedServicePayloadException(Port);
+            protected override bool MatchesPayload(byte[] payload) => throw new MalformedServicePayloadException(Service);
         }
 
         private static TestWatch CreateWatch(params PacketFilterRule[] rules)
@@ -70,7 +71,7 @@ namespace MadWizard.Desomnia.Network.Tests
             return service;
         }
 
-        private static EthernetPacket Packet(FlowDirection direction, IPProtocol protocol = IPProtocol.TCP,
+        private static EthernetCapture Packet(FlowDirection direction, IPProtocol protocol = IPProtocol.TCP,
             ushort watchedPort = 445, IPAddress? peer = null, bool ipv6 = false)
         {
             var inbound = direction == FlowDirection.Inbound;
@@ -87,8 +88,8 @@ namespace MadWizard.Desomnia.Network.Tests
                 ? new IPv6Packet(inbound ? peer : watched, inbound ? watched : peer)
                 : new IPv4Packet(inbound ? peer : watched, inbound ? watched : peer);
             ip.PayloadPacket = transport;
-            return new EthernetPacket(inbound ? PeerMAC : WatchedMAC, inbound ? WatchedMAC : PeerMAC,
-                ipv6 ? EthernetType.IPv6 : EthernetType.IPv4) { PayloadPacket = ip };
+            return new EthernetCapture(new EthernetPacket(inbound ? PeerMAC : WatchedMAC, inbound ? WatchedMAC : PeerMAC,
+                ipv6 ? EthernetType.IPv6 : EthernetType.IPv4) { PayloadPacket = ip });
         }
 
         [Theory]
@@ -112,9 +113,9 @@ namespace MadWizard.Desomnia.Network.Tests
             Assert.Empty(service.Inspect(Interval));
 
             var packet = Packet(direction, protocol);
-            byte[] original = (byte[])packet.Bytes.Clone();
+            byte[] original = (byte[])packet.Single().Bytes.Clone();
             watch.ReportNetworkTraffic(packet, direction);
-            Assert.Equal(original, packet.Bytes);
+            Assert.Equal(original, packet.Single().Bytes);
             var usage = Assert.IsType<NetworkHostUsage>(Assert.Single(watch.Inspect(Interval)));
             Assert.Equal(4, usage.Bytes);
             Assert.Equal(4, Assert.IsType<NetworkServiceUsage>(Assert.Single(usage.Tokens)).Bytes);
@@ -133,7 +134,8 @@ namespace MadWizard.Desomnia.Network.Tests
             // jindujun:50000 <-> DRAGON:445 never involves jindujun's service port.
             var packet = Packet(direction, watchedPort: 50000, ipv6: ipv6);
             watch.ReportNetworkTraffic(packet, direction);
-            packet.Extract<TcpPacket>()!.PayloadData = []; // pure ACK must not count as activity either
+            packet = new EthernetCapture(packet.Single().MakeCopy());
+            packet.FindPacket<TcpPacket>()!.PayloadData = []; // pure ACK must not count as activity either
             watch.ReportNetworkTraffic(packet, direction);
 
             Assert.Empty(watch.Inspect(Interval));
@@ -158,7 +160,7 @@ namespace MadWizard.Desomnia.Network.Tests
             Assert.Empty(service.Inspect(Interval));
 
             var packet = Packet(direction, watchedPort: 50000);
-            packet.Extract<TcpPacket>()!.PayloadData = [];
+            packet.FindPacket<TcpPacket>()!.PayloadData = [];
             watch.ReportNetworkTraffic(packet, direction);
             var usage = Assert.IsType<NetworkHostUsage>(Assert.Single(watch.Inspect(Interval)));
             Assert.Equal(0, usage.Bytes); // accepted ACK is activity even without payload
@@ -177,7 +179,7 @@ namespace MadWizard.Desomnia.Network.Tests
 
             Assert.Throws<MalformedServicePayloadException>(() => watch.Verify(packet, direction));
             if (direction == FlowDirection.Inbound)
-                Assert.Null(watch.Evaluate(new CaptureSummary(packet)));
+                Assert.Null(watch.Evaluate(packet));
             else
                 watch.ReportNetworkTraffic(packet, direction);
 

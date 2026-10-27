@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Events;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Neighborhood;
@@ -33,7 +34,7 @@ namespace MadWizard.Desomnia.Network.Watch
             await base.StartWatch();
         }
 
-        protected internal override void ReportNetworkTraffic(EthernetPacket packet, FlowDirection direction)
+        protected internal override void ReportNetworkTraffic(INetworkCapture packet, FlowDirection direction)
         {
             foreach (var watch in this)
             {

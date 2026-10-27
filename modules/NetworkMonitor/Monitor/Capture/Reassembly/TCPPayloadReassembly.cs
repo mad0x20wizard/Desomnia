@@ -14,15 +14,15 @@ namespace MadWizard.Desomnia.Network.Capture
             public long End => Offset + Data.Length;
         }
 
-        public static Result Reconstruct(Span<EthernetCapture> captures, TransportEndPoint source,
-            TransportEndPoint target, IPService service, int maximumLength, int maximumSegments)
+        public static Result Reconstruct(ReadOnlySpan<INetworkCapture> captures, IPServiceEndPoint source,
+            IPServiceEndPoint target, IPService service, int maximumLength, int maximumSegments)
         {
             if (maximumLength <= 0 || maximumSegments <= 0)
                 throw new InvalidOperationException("TCP reconstruction limits must be positive.");
 
             List<Segment> segments = [];
             uint? start = null;
-            foreach (ref var capture in captures)
+            foreach (var capture in captures)
             {
                 if (!source.Equals(capture.SourceEndPoint) || !target.Equals(capture.TargetEndPoint))
                     continue;

@@ -1,5 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Filter;
-using PacketDotNet;
+﻿using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Filter;
 
 namespace MadWizard.Desomnia.Network.Neighborhood
 {
@@ -7,6 +7,6 @@ namespace MadWizard.Desomnia.Network.Neighborhood
     {
         public string Name { get; init; } = name;
 
-        public abstract bool Accepts(Packet packet, FlowDirection direction = FlowDirection.Inbound);
+        public abstract bool Accepts(INetworkCapture capture, FlowDirection direction = FlowDirection.Inbound);
     }
 }

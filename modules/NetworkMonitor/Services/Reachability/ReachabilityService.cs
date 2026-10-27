@@ -1,4 +1,5 @@
-﻿using ConcurrentCollections;
+using ConcurrentCollections;
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Watch;
@@ -22,18 +23,11 @@ namespace MadWizard.Desomnia.Network.Reachability
 
         readonly ConcurrentHashSet<ReachabilityTest> _pendingTests = [];
 
-        void INetworkService.ProcessPacket(EthernetPacket packet)
+        void INetworkService.ProcessCapture(INetworkCapture capture)
         {
-            if (packet.PayloadPacket is IPPacket ip && Network[ip.SourceAddress] is NetworkHost host)
+            if (capture.HasPacket<IPPacket>() && capture.SourceEndPoint is { } source && Network[source.Address] is NetworkHost host)
             {
-                if (ip.PayloadPacket is TransportPacket transport)
-                {
-                    Notify(host, packet.SourceHardwareAddress, ip.SourceAddress, IPService.SourceOf(transport));
-                }
-                else
-                {
-                    Notify(host, packet.SourceHardwareAddress, ip.SourceAddress);
-                }
+                Notify(host, capture.SourcePhysicalAddress, source);
             }
         }
 
@@ -174,19 +168,19 @@ namespace MadWizard.Desomnia.Network.Reachability
 
             if (_pendingTests.TryRemove(test))
             {
-                IPService? port = test is ServiceReachabilityTest srv ? srv.Port : null;
-
                 foreach (var ip in test) // collect remaining results
                 {
+                    var endpoint = test is ServiceReachabilityTest service ? service.EndPoint : new IPEndPoint(ip, 0);
+
                     switch (test[ip])
                     {
                         case TimeSpan latency:
                             if (latency > elapsed) // already written to cache?
-                                Cache.Write(ip, port, true);
+                                Cache.Write(endpoint, true);
                             break;
 
                         default:
-                            Cache.Write(ip, port, false);
+                            Cache.Write(endpoint, false);
                             break;
                     }
                 }
@@ -195,24 +189,32 @@ namespace MadWizard.Desomnia.Network.Reachability
             }
         }
 
-        public void Notify(NetworkHost host, PhysicalAddress mac, IPAddress ip, IPService? port = null)
+        /// <summary>
+        /// Records activity from a source endpoint. Port zero denotes address-only activity;
+        /// a nonzero port requires an IPServiceEndPoint identifying the transport protocol.
+        /// </summary>
+        public void Notify(NetworkHost host, PhysicalAddress mac, IPEndPoint endpoint)
         {
+            ArgumentNullException.ThrowIfNull(endpoint);
+            if (endpoint.Port != 0 && endpoint is not IPServiceEndPoint)
+                throw new ArgumentException("A nonzero source port requires an IPServiceEndPoint identifying its protocol.", nameof(endpoint));
+
             /**
              * We try to filter out all IP activity, were we should see the 
              * actual MAC address of the host as sender, but didn't.
              */
-            if (host.PhysicalAddress is not PhysicalAddress hmac || hmac.Equals(mac) || !Network.LocalRange.Contains(ip))
+            if (host.PhysicalAddress is not PhysicalAddress hmac || hmac.Equals(mac) || !Network.LocalRange.Contains(endpoint.Address))
             {
                 if (Monitor[host] is RemoteHostWatch watch)
                 {
                     watch.LastSeen = DateTime.Now;
                 }
 
-                Cache.Write(ip, port, true);
+                Cache.Write(endpoint, true);
 
                 foreach (var test in _pendingTests)
                 {
-                    test.NotifyReachable(ip, port);
+                    test.NotifyReachable(endpoint);
                 }
             }
         }

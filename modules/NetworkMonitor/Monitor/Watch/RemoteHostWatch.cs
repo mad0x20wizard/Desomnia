@@ -1,9 +1,9 @@
-﻿using Autofac;
+using Autofac;
 using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network.Address;
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Demand;
-using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Knocking;
 using MadWizard.Desomnia.Network.Reachability;
 using Microsoft.Extensions.Hosting;
@@ -58,7 +58,7 @@ namespace MadWizard.Desomnia.Network.Watch
 
         public override bool IsOnline => this.HasBeenSeen(PingOptions.Timeout);
 
-        private protected override bool ShouldStartRequest(in CaptureSummary capture)
+        private protected override bool ShouldStartRequest(INetworkCapture capture)
         {
             if (!this.HasBeenWokenSince(WakeOptions.Timeout))
             {
@@ -125,12 +125,12 @@ namespace MadWizard.Desomnia.Network.Watch
             }
         }
 
-        protected override void HandleMagicPacket(EthernetPacket packet)
+        protected override void HandleMagicPacket(INetworkCapture packet)
         {
             if (packet.IsUnMagicPacket())
             {
                 Logger.LogDebug($"Received UnMagic Packet from \"{Host.Name}\", " +
-                    $"triggered by {packet.SourceHardwareAddress.ToHexString()}");
+                    $"triggered by {packet.SourcePhysicalAddress.ToHexString()}");
 
                 _ = UnMagicPacket.TriggerEventAsync();
             }
@@ -317,8 +317,8 @@ namespace MadWizard.Desomnia.Network.Watch
 
             if (@event.SourceAddress is not IPAddress source)
                 { Logger.LogWarning($"Cannot knock at '{Host.Name}', because no source IP is available."); return; }
-            if (@event.TargetEndPoint is not IPEndPoint target)
-                { Logger.LogWarning($"Cannot knock at '{Host.Name}', because no target IP endpoint is available."); return; }
+            if (@event.TargetEndPoint is not IPServiceEndPoint target)
+                { Logger.LogWarning($"Cannot knock at '{Host.Name}', because no target IP service endpoint is available."); return; }
 
             var stopwatch = Stopwatch.StartNew();
 
@@ -341,7 +341,7 @@ namespace MadWizard.Desomnia.Network.Watch
             }
         }
 
-        protected internal virtual async Task<bool> KnockUp(IPAddress source, IPEndPoint target, KnockOptions options)
+        protected internal virtual async Task<bool> KnockUp(IPAddress source, IPServiceEndPoint target, KnockOptions options)
         {
             if (ReachabilityCache.Read(target, options.Delay) == true)
             {

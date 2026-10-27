@@ -17,14 +17,14 @@ namespace MadWizard.Desomnia.Network.Capture
         /// <summary>Maximum payload-bearing segments inspected in one direction, including retransmissions.</summary>
         protected virtual int MaximumTcpSegments => 1024;
 
-        public virtual IFilterContext Parse(ref EthernetCapture capture, FlowDirection direction)
+        public virtual IFilterContext Parse(INetworkCapture capture, FlowDirection direction)
         {
             ValidateDirection(direction);
-            var context = ParsePacket(ref capture, direction);
+            var context = ParsePacket(capture, direction);
             return Interpret(context, capture.FindPacket<TcpPacket>()?.Synchronize == true);
         }
 
-        public virtual IFilterContext Parse(Span<EthernetCapture> captures, FlowDirection direction)
+        public virtual IFilterContext Parse(ReadOnlySpan<INetworkCapture> captures, FlowDirection direction)
         {
             ValidateDirection(direction);
             if (captures.IsEmpty)
@@ -34,14 +34,13 @@ namespace MadWizard.Desomnia.Network.Capture
             // when the first transport packet is a reply.
             var peerAddress = captures[0].SourceEndPoint?.Address;
             var watchedAddress = captures[0].TargetEndPoint?.Address;
-            TransportEndPoint? peer = null, watched = null;
+            IPServiceEndPoint? peer = null, watched = null;
             int latest = -1, latestNonTransport = -1;
             for (int i = 0; i < captures.Length; i++)
             {
-                ref var capture = ref captures[i];
-                RejectIPFragment(ref capture);
-                if (capture.SourceEndPoint is not TransportEndPoint source
-                    || capture.TargetEndPoint is not TransportEndPoint target)
+                var capture = captures[i];
+                if (capture.SourceEndPoint is not IPServiceEndPoint source
+                    || capture.TargetEndPoint is not IPServiceEndPoint target)
                 {
                     bool sameDirection = direction == FlowDirection.Inbound
                         ? Equals(capture.SourceEndPoint?.Address, peerAddress) && Equals(capture.TargetEndPoint?.Address, watchedAddress)
@@ -71,7 +70,7 @@ namespace MadWizard.Desomnia.Network.Capture
 
             if (peer is null || watched is null)
                 return latestNonTransport >= 0
-                    ? Parse(ref captures[latestNonTransport], direction)
+                    ? Parse(captures[latestNonTransport], direction)
                     : new CaptureFilterContext(peerAddress
                         ?? throw new NotSupportedException("A filter context requires a peer IP address.")) { Direction = direction };
 
@@ -81,7 +80,7 @@ namespace MadWizard.Desomnia.Network.Capture
                 // Never join independent datagrams, including empty ones.
                 return latest < 0
                     ? new ServiceCaptureFilterContext(peer, service) { Direction = direction }
-                    : Parse(ref captures[latest], direction);
+                    : Parse(captures[latest], direction);
             }
 
             var payload = TcpPayloadReassembly.Reconstruct(captures,
@@ -100,9 +99,8 @@ namespace MadWizard.Desomnia.Network.Capture
         /// </summary>
         protected virtual IFilterContext Interpret(IFilterContext context, bool startsAtSyn) => context;
 
-        private static IFilterContext ParsePacket(ref EthernetCapture capture, FlowDirection direction)
+        private static IFilterContext ParsePacket(INetworkCapture capture, FlowDirection direction)
         {
-            RejectIPFragment(ref capture);
             var remote = direction == FlowDirection.Inbound ? capture.SourceEndPoint : capture.TargetEndPoint;
             var local = direction == FlowDirection.Inbound ? capture.TargetEndPoint : capture.SourceEndPoint;
             if (remote is null)
@@ -111,11 +109,11 @@ namespace MadWizard.Desomnia.Network.Capture
             if (capture.FindPacket<IPPacket>() is not { } ip || capture.HasPacket<NdpPacket>())
                 return new CaptureFilterContext(remote.Address) { Direction = direction };
 
-            if (local is TransportEndPoint service && remote is TransportEndPoint
+            if (local is IPServiceEndPoint service && remote is IPServiceEndPoint
                 && capture.FindPacket<TransportPacket>() is { } transport)
                 return capture.PayloadLength == 0
                     ? new ServiceCaptureFilterContext(remote, service) { Direction = direction }
-                    : new PacketPayloadFilterContext(remote, service, transport, capture.PayloadLength) { Direction = direction };
+                    : new PacketPayloadFilterContext(remote, service, capture, capture.PayloadLength) { Direction = direction };
 
             if (ip.Protocol == ProtocolType.Icmp && capture.FindPacket<IcmpV4Packet>() is { } icmp4)
                 return new ICMPCaptureFilterContext(remote.Address,
@@ -126,12 +124,6 @@ namespace MadWizard.Desomnia.Network.Capture
                     icmp6.Type == (direction == FlowDirection.Inbound ? IcmpV6Type.EchoRequest : IcmpV6Type.EchoReply)
                         ? ICMPType.Echo : ICMPType.Unknown) { Direction = direction };
             return new IPCaptureFilterContext(remote.Address) { Direction = direction };
-        }
-
-        private static void RejectIPFragment(ref EthernetCapture capture)
-        {
-            if (capture.FindPacket<IPPacket>().IsIPFragment())
-                throw new NotSupportedException("IP fragments require IP reassembly before filter-context parsing.");
         }
 
         private static void ValidateDirection(FlowDirection direction)

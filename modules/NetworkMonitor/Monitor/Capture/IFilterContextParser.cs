@@ -15,8 +15,7 @@ namespace MadWizard.Desomnia.Network.Capture
     /// Input storage is borrowed only for the duration of the call. Implementations may
     /// initialize capture metadata caches, but must not mutate packets, retain borrowed
     /// storage, or retain connection/parser state between calls. Returned contexts may reuse
-    /// immutable data and cached references; they must not rely on an independently lazy
-    /// copy of a capture to share cache writes with its caller.
+    /// immutable data and shared capture references. Captures outlive the borrowed history span.
     ///
     /// The caller retains watched-host and selected-service routing information for acquisition
     /// handling. This contract does not put routing, buffering, or wake actions into predicates.
@@ -30,8 +29,8 @@ namespace MadWizard.Desomnia.Network.Capture
         /// </summary>
         /// 
         /// <param name="capture">
-        /// The canonical mutable metadata cache. Passing it by reference avoids a wrapper/list
-        /// allocation and allows both directional evaluations to reuse cached values.
+        /// The shared lazy metadata cache for one logical packet, possibly assembled from
+        /// several Ethernet frames. Both directional evaluations reuse its cached values.
         /// </param>
         /// 
         /// <param name="direction">Traffic direction relative to the watched host.</param>
@@ -42,7 +41,7 @@ namespace MadWizard.Desomnia.Network.Capture
         /// <exception cref="NotSupportedException">
         /// The capture has no IP address, or needs IP fragmentation reassembly before parsing.
         /// </exception>
-        IFilterContext Parse(ref EthernetCapture capture, FlowDirection direction);
+        IFilterContext Parse(INetworkCapture capture, FlowDirection direction);
 
         /// <summary>
         /// Creates a context from the retained history of one DemandRequest. Payload properties
@@ -70,6 +69,6 @@ namespace MadWizard.Desomnia.Network.Capture
         /// <exception cref="MalformedServicePayloadException">
         /// Available data establishes an invalid service payload, rather than incomplete input.
         /// </exception>
-        IFilterContext Parse(Span<EthernetCapture> captures, FlowDirection direction);
+        IFilterContext Parse(ReadOnlySpan<INetworkCapture> captures, FlowDirection direction);
     }
 }

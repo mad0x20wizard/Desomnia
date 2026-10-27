@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Network.Capture;
 using Autofac;
 using MadWizard.Desomnia.Configuration.Binding;
 using MadWizard.Desomnia.Configuration.Model;
@@ -164,18 +165,18 @@ public sealed class InstanceFilterTests
         return builder.Build();
     }
 
-    private static EthernetPacket Packet(string source, ushort port, bool udp)
+    private static EthernetCapture Packet(string source, ushort port, bool udp)
     {
         TransportPacket transport = udp ? new UdpPacket(50000, port) : new TcpPacket(50000, port);
         transport.PayloadData = [1, 2, 3];
-        return new EthernetPacket(PhysicalAddress.Parse("001122334455"),
+        return new EthernetCapture(new EthernetPacket(PhysicalAddress.Parse("001122334455"),
             PhysicalAddress.Parse("AABBCCDDEEFF"), EthernetType.IPv4)
         {
             PayloadPacket = new IPv4Packet(IPAddress.Parse(source), IPAddress.Parse("192.0.2.20"))
             {
                 PayloadPacket = transport
             }
-        };
+        });
     }
 
     private sealed class TestContext(ILifetimeScope parent, DuoInstance instance) : SunshineServiceContext(parent, instance)

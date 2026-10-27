@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Events;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network.Neighborhood;
 using PacketDotNet;
 using System.Data;
@@ -6,17 +7,17 @@ using System.Net;
 
 namespace MadWizard.Desomnia.Network.Demand
 {
-    public class DemandEvent(NetworkHost host, IPAddress? ip = null, IEnumerable<EthernetPacket>? packets = null) : Event("Demand"), IIEnumerable<EthernetPacket>
+    public class DemandEvent(NetworkHost host, IPAddress? ip = null, IEnumerable<INetworkCapture>? packets = null) : Event("Demand"), IIEnumerable<INetworkCapture>
     {
-        public EthernetPacket TriggerPacket => this.First();
+        public INetworkCapture TriggerPacket => this.First();
 
-        private IPPacket? TriggerIPPacket => this.Select(p => p.Extract<IPPacket>()).Where(i => i is not null && i.IsIPUnicast()).FirstOrDefault() is IPPacket ip ? ip : null;
+        private INetworkCapture? TriggerIPCapture => this.FirstOrDefault(capture => capture.IsIPUnicast);
 
         public NetworkHost Host { get; private init; } = host;
         public NetworkService? Service { get; set; }
 
-        public IPAddress?   SourceAddress   => TriggerIPPacket?.SourceAddress;
-        public IPEndPoint?  TargetEndPoint  => TriggerIPPacket?.DestinationEndPoint ?? (ip is not null ? new IPEndPoint(ip, 0) : null);
+        public IPAddress?   SourceAddress   => TriggerIPCapture?.SourceAddress;
+        public IPEndPoint?  TargetEndPoint  => TriggerIPCapture?.TargetEndPoint ?? (ip is not null ? new IPEndPoint(ip, 0) : null);
 
         public bool CanBeForwarded { get; set; } = false;
 
@@ -25,9 +26,9 @@ namespace MadWizard.Desomnia.Network.Demand
 
         }
 
-        public IEnumerator<EthernetPacket> GetEnumerator()
+        public IEnumerator<INetworkCapture> GetEnumerator()
         {
-            return packets?.GetEnumerator() ?? Enumerable.Empty<EthernetPacket>().GetEnumerator();
+            return packets?.GetEnumerator() ?? Enumerable.Empty<INetworkCapture>().GetEnumerator();
         }
     }
 }

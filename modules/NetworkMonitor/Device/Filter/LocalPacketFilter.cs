@@ -35,7 +35,7 @@ namespace MadWizard.Desomnia.Network.Device.Filter
 
             lock (_sentPackets)
             {
-                _sentPackets.Add(packet.Bytes);
+                _sentPackets.Add(packet.CapturedBytes.ToArray());
             }
 
             return false;

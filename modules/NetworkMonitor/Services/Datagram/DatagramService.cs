@@ -1,7 +1,8 @@
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Neighborhood;
 using Microsoft.Extensions.Logging;
-using PacketDotNet;
+using System.Net;
 
 namespace MadWizard.Desomnia.Network.Datagram
 {
@@ -9,8 +10,8 @@ namespace MadWizard.Desomnia.Network.Datagram
     /// An <see cref="INetworkService"/> processing the UDP datagrams of one port. They are sniffed
     /// off the wire via packet capturing; a service registered with <see cref="SocketMetadata"/>
     /// additionally receives them through an OS socket managed by <see cref="UDPSocketService"/> --
-    /// kernel-reassembled, so IP-fragmented datagrams (which the capture path must drop) arrive
-    /// whole. Both inlets converge on <see cref="ProcessDatagram"/>.
+    /// kernel-reassembled. Captured fragments are reassembled before reaching this service.
+    /// Both inlets converge on <see cref="ProcessDatagram"/>.
     /// </summary>
     public abstract class DatagramService(ushort port, string? realm = null) : INetworkService
     {
@@ -26,16 +27,19 @@ namespace MadWizard.Desomnia.Network.Datagram
 
         public virtual Task Resume() => Task.CompletedTask; // here to be overridden by subclasses
 
-        void INetworkService.ProcessPacket(EthernetPacket packet)
+        void INetworkService.ProcessCapture(INetworkCapture capture)
         {
             using var scope = WireLogger.BeginRealmScope(realm);
 
-            if (Device.HasSentPacket(packet) || packet.IsIPFragment())
-                return; // cannot be interpreted here; but a linked OS socket can receive them reassembled
+            if (Device.HasSentPacket(capture.SourcePhysicalAddress))
+                return;
 
-            if (packet.Extract<UdpPacket>() is UdpPacket udp && udp.DestinationPort == port && udp.PayloadData.Length > 0)
+            if (capture.TargetEndPoint is IPServiceEndPoint { Protocol: IPProtocol.UDP, Port: var targetPort })
             {
-                ProcessDatagram(new DatagramPacket(packet, udp));
+                if (targetPort == port && capture.PayloadLength > 0)
+                {
+                    ProcessDatagram(new DatagramPacket(capture));
+                }
             }
         }
 

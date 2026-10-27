@@ -1,6 +1,7 @@
-﻿using MadWizard.Desomnia.Network.Device;
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Neighborhood;
 using PacketDotNet;
+using System.Net;
 
 namespace MadWizard.Desomnia.Network.Demand.Detector
 {
@@ -8,25 +9,39 @@ namespace MadWizard.Desomnia.Network.Demand.Detector
     {
         public required NetworkSegment Network { private get; init; }
 
-        NetworkHost? IDemandDetector.Examine(in CaptureSummary capture)
+        NetworkHost? IDemandDetector.Examine(INetworkCapture capture)
         {
-            if ((capture.Ethernet.Type == EthernetType.IPv4 || capture.Ethernet.Type == EthernetType.IPv6) && capture.Extract<IPPacket>() is IPPacket ip)
-                if (false
-                    || ip.Protocol == ProtocolType.Tcp && ip.PayloadPacket is TcpPacket tcp && !tcp.Reset
-                    || ip.Protocol == ProtocolType.Udp && ip.PayloadPacket is UdpPacket // all UDP packets
+            var ethernet = capture.First(); // only look at the first packet, so we don't trigger reassembly
 
-                    // PINGv4
-                    || ip.Protocol == ProtocolType.Icmp && ip.PayloadPacket is IcmpV4Packet icmpv4
-                        && icmpv4.TypeCode  == IcmpV4TypeCode.EchoRequest
-                    // PINGv6
-                    || ip.Protocol == ProtocolType.IcmpV6 && ip.PayloadPacket is IcmpV6Packet icmpv6
-                        && icmpv6.Type      == IcmpV6Type.EchoRequest) 
+            if (ethernet.Type == EthernetType.IPv4 || capture.Type == EthernetType.IPv6)
+            {
+                if (ethernet.PayloadPacket is IPPacket ip)
                 {
-                    if (Network[capture.TargetAddress] is NetworkHost host)
+                    switch (ip.PayloadPacket)
                     {
-                        return host;
+                        case TcpPacket tcp when !tcp.Reset:
+                            return FindHostByIP(capture.TargetAddress);
+                        case UdpPacket: // all UDP packets
+                            return FindHostByIP(capture.TargetAddress);
+
+                        case IcmpV4Packet icmpv4 when icmpv4.TypeCode == IcmpV4TypeCode.EchoRequest:
+                            return FindHostByIP(capture.TargetAddress);
+
+                        case IcmpV6Packet icmpv6 when icmpv6.Type == IcmpV6Type.EchoRequest:
+                            return FindHostByIP(capture.TargetAddress);
                     }
                 }
+            }
+
+            return null;
+        }
+
+        NetworkHost? FindHostByIP(IPAddress? ip)
+        {
+            if (Network[ip] is NetworkHost host)
+            {
+                return host;
+            }
 
             return null;
         }

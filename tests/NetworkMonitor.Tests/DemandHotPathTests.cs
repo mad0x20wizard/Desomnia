@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Filter;
@@ -55,22 +56,22 @@ namespace MadWizard.Desomnia.Network.Tests
         }
 
         [Fact]
-        public void PacketSummary_ExtractsTransportMetadataAndPayloadLengthOnce()
+        public void Capture_ExtractsTransportMetadataAndPayloadLengthOnce()
         {
             byte[] payload = [1, 2, 3, 4, 5];
 
-            var summary = new CaptureSummary(CreateTCPPacket(synchronize: false, payload));
+            var summary = new EthernetCapture(CreateTCPPacket(synchronize: false, payload));
 
             Assert.Equal(SourceIP, summary.SourceAddress);
             Assert.Equal(TargetIP, summary.TargetAddress);
-            Assert.Equal(new IPService(IPProtocol.TCP, 50000), summary.SourcePort);
-            Assert.Equal(new IPService(IPProtocol.TCP, 445), summary.TargetPort);
-            Assert.Equal(payload.Length, summary.Extract<TransportPacket>()?.PayloadLength);
-            Assert.False(summary.Extract<TcpPacket>()!.Synchronize);
+            Assert.Equal(new IPService(IPProtocol.TCP, 50000), Assert.IsType<IPServiceEndPoint>(summary.SourceEndPoint).Service);
+            Assert.Equal(new IPService(IPProtocol.TCP, 445), Assert.IsType<IPServiceEndPoint>(summary.TargetEndPoint).Service);
+            Assert.Equal(payload.Length, summary.PayloadLength);
+            Assert.False(summary.FindPacket<TcpPacket>()!.Synchronize);
         }
 
         [Fact]
-        public void PacketSummary_CountsDecodedTransportPayloadWithoutPayloadDataCopy()
+        public void Capture_CountsDecodedTransportPayloadWithoutPayloadDataCopy()
         {
             var wakeOnLan = new WakeOnLanPacket(TargetMAC);
             var udp = new UdpPacket(50000, 9) { PayloadPacket = wakeOnLan };
@@ -84,10 +85,10 @@ namespace MadWizard.Desomnia.Network.Tests
                 PayloadPacket = ip
             };
 
-            var summary = new CaptureSummary(packet);
+            INetworkCapture summary = new EthernetCapture(packet);
 
-            Assert.Equal(wakeOnLan.TotalPacketLength, summary.Extract<TransportPacket>()?.PayloadLength);
-            Assert.True(summary.Ethernet.IsMagicPacket());
+            Assert.Equal(wakeOnLan.TotalPacketLength, summary.PayloadLength);
+            Assert.True(summary.IsMagicPacket());
         }
 
         [Fact]
@@ -138,7 +139,7 @@ namespace MadWizard.Desomnia.Network.Tests
                 Options = default,
                 Device = null!,
                 Network = network,
-                Janitor = null!
+                Pipeline = new CapturePipeline([]), Janitor = null!
             };
 
             monitor.StartTracking(hostWatch, adopt: false);
@@ -190,7 +191,7 @@ namespace MadWizard.Desomnia.Network.Tests
                 DefaultFilterOptions = default
             };
 
-            var summary = new CaptureSummary(CreateTCPPacket(synchronize: false, [1, 2, 3, 4]));
+            var summary = new EthernetCapture(CreateTCPPacket(synchronize: false, [1, 2, 3, 4]));
 
             Assert.Null(watch.Evaluate(summary));
             Assert.True(filterWasResolved);
@@ -212,7 +213,7 @@ namespace MadWizard.Desomnia.Network.Tests
         {
             var watch = new NetworkServiceWatch(
                 new TransportNetworkService("SMB", new(IPProtocol.TCP, 445)));
-            var trigger = new TcpPacket(50000, 445) { Synchronize = true };
+            var trigger = new EthernetCapture(CreateTCPPacket(synchronize: true, []));
 
             watch.Usage += _ => Task.CompletedTask;
 

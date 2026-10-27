@@ -11,7 +11,7 @@ namespace MadWizard.Desomnia.Network.Knocking.Methods
     {
         public required ILogger<PlainTextKnockMethod> Logger { private get; init; }
 
-        void IKnockMethod.Knock(IPAddress source, IPEndPoint endpoint, IPService knock, SharedSecret secret)
+        void IKnockMethod.Knock(IPAddress source, IPServiceEndPoint endpoint, IPService knock, SharedSecret secret)
         {
             using UdpClient udp = new(endpoint.AddressFamily);
 

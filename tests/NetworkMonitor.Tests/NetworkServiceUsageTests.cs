@@ -23,7 +23,7 @@ namespace MadWizard.Desomnia.Network.Tests
         /// <summary>A service in name only – nothing here inspects a packet.</summary>
         private sealed class NamedService(string name) : NetworkService(name)
         {
-            public override bool Accepts(Packet packet, FlowDirection direction) => throw new Xunit.Sdk.XunitException("no packet should be inspected here");
+            public override bool Accepts(MadWizard.Desomnia.Network.Capture.INetworkCapture packet, FlowDirection direction) => throw new Xunit.Sdk.XunitException("no packet should be inspected here");
         }
 
         private static NetworkService Service(string name) => new NamedService(name);

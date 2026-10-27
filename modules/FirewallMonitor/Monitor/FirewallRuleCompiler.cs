@@ -31,7 +31,7 @@ namespace MadWizard.Desomnia.Firewall
                 // Validate even rules for other ports, so unsupported dependencies are not silently ignored.
                 var source = CompileSource(rule);
                 if (rule is not ServiceFilterRule transport
-                    || transport.Port.Port == service.Port && transport.Port.Protocol.HasFlag(service.Protocol))
+                    || transport.Service.Port == service.Port && transport.Service.Protocol.HasFlag(service.Protocol))
                     applicable.Add(source);
             }
             var permits = applicable.Where(r => r.Type == FilterRuleType.Must).ToArray();

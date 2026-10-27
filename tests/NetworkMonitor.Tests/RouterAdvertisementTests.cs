@@ -1,3 +1,4 @@
+using MadWizard.Desomnia.Network.Capture;
 using Autofac;
 using MadWizard.Desomnia.Network.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Hosts;
@@ -213,7 +214,7 @@ namespace MadWizard.Desomnia.Network.Tests
                 };
                 var ethernet = new EthernetPacket(mac ?? Mac, PhysicalAddress.Parse("333300000001"), EthernetType.IPv6) { PayloadPacket = ipv6 };
                 var parsed = (EthernetPacket)Packet.ParsePacket(LinkLayers.Ethernet, ethernet.Bytes);
-                ((INetworkService)Detector).ProcessPacket(parsed);
+                ((INetworkService)Detector).ProcessCapture(new EthernetCapture(parsed));
             }
 
             public async Task<List<NetworkRouterContext>> Discover()

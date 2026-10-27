@@ -1,4 +1,5 @@
-﻿using Autofac;
+using MadWizard.Desomnia.Network.Capture;
+using Autofac;
 using MadWizard.Desomnia.Network.Neighborhood;
 using PacketDotNet;
 using System.Diagnostics;
@@ -27,10 +28,10 @@ namespace MadWizard.Desomnia.Network.Demand
 
         internal DemandResult? Result { get; set; }
 
-        public DemandRequest(EthernetPacket trigger)
+        public DemandRequest(INetworkCapture trigger)
         {
-            SourceAddress = trigger.FindSourceIPAddress() ?? throw new ArgumentException("Trigger packet does not contain a source IP address.");
-            TargetAddress = trigger.FindTargetIPAddress() ?? throw new ArgumentException("Trigger packet does not contain a target IP address.");
+            SourceAddress = trigger.SourceAddress ?? throw new ArgumentException("Trigger packet does not contain a source IP address.");
+            TargetAddress = trigger.TargetAddress ?? throw new ArgumentException("Trigger packet does not contain a target IP address.");
         }
 
         void IDisposable.Dispose()

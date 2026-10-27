@@ -1,4 +1,5 @@
-﻿using MadWizard.Desomnia.Network.Neighborhood;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Neighborhood;
 using PacketDotNet;
 using System.Net;
 
@@ -8,11 +9,11 @@ namespace MadWizard.Desomnia.Network.Filter.Rules
     {
         public abstract bool MatchesAddress(IPAddress? ip = null);
 
-        override public bool Matches(EthernetPacket packet, FlowDirection direction = FlowDirection.Inbound)
+        override public bool Matches(INetworkCapture packet, FlowDirection direction = FlowDirection.Inbound)
         {
             var ip = direction == FlowDirection.Inbound
-                ? packet.FindSourceIPAddress()
-                : packet.FindTargetIPAddress();
+                ? packet.SourceAddress
+                : packet.TargetAddress;
 
             return MatchesAddress(ip);
         }

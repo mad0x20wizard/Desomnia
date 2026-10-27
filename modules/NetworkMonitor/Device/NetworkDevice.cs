@@ -1,5 +1,6 @@
 ﻿using Autofac;
 using MadWizard.Desomnia.Extensions.EventHandler;
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Device.Filter;
 using MadWizard.Desomnia.Network.Manager;
 using Microsoft.Extensions.Logging;
@@ -57,7 +58,7 @@ namespace MadWizard.Desomnia.Network.Device
             {
                 if (IPv6Addresses.Any() && Interface.IPv6ScopeIndex is int scopeId)
                 {
-                    return new IPAddress(IPAddressExt.LinkLocalMulticast.GetAddressBytes(), scopeId);
+                    return new IPAddress(IPAddress.LinkLocalMulticast.GetAddressBytes(), scopeId);
                 }
 
                 return null;
@@ -84,7 +85,7 @@ namespace MadWizard.Desomnia.Network.Device
             }
         }
 
-        public bool HasSentPacket(EthernetPacket packet) => HasSentPacket(packet.SourceHardwareAddress);
+        public bool HasSentPacket(INetworkCapture packet) => HasSentPacket(packet.SourcePhysicalAddress);
 
         // TODO will this work with virtual interfaces? (OpenVPN)
         public bool HasSentPacket(PhysicalAddress? source) => source is not null && PhysicalAddress.Equals(source); 
@@ -258,6 +259,7 @@ namespace MadWizard.Desomnia.Network.Device
             }
         }
 
+        /// <summary>Sends stored frame bytes; use prepare to update generated IP/UDP headers first.</summary>
         public void SendPacket(EthernetPacket packet, bool prepare = false)
         {
             if (prepare)
@@ -276,52 +278,13 @@ namespace MadWizard.Desomnia.Network.Device
 
                     lock (Device)
                     {
-                        Device.SendPacket(packet);
+                        Device.SendPacket(packet.CapturedBytes);
                     }
                 }
             }
             catch (DeviceNotReadyException ex)
             {
                 Logger.LogWarning(ex, "");
-            }
-        }
-
-        private async Task<bool> UntilFullyOperational()
-        {
-            const int MAX_RETRIES = 16;
-            const int WAIT_TIME = 500;
-
-            int retry = 0;
-
-            while (true)
-            {
-                try
-                {
-                    lock (Device)
-                    {
-                        Device.SendPacket(new EthernetPacket(PhysicalAddressExt.Empty, PhysicalAddressExt.Empty, EthernetType.WakeOnLan)
-                        {
-                            PayloadPacket = new WakeOnLanPacket(PhysicalAddressExt.Empty)
-                        });
-                    }
-
-                    return true;
-                }
-                catch (PcapException ex)
-                {
-                    if (retry++ == 0)
-                    {
-                        Logger.LogTrace($"Network device \"{Name}\" is not yet fully operational. Waiting up to {MAX_RETRIES * WAIT_TIME / 1000} seconds...");
-                    }
-                    else if (retry >= MAX_RETRIES)
-                    {
-                        Logger.LogError(ex, $"Network interface \"{Name}\" has not become fully operational.");
-
-                        return false;
-                    }
-
-                    await Task.Delay(WAIT_TIME);
-                }
             }
         }
 

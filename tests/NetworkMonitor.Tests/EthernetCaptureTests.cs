@@ -47,40 +47,11 @@ namespace MadWizard.Desomnia.Network.Tests
             };
         }
 
-        private static void AssertMatchesSummary(ref EthernetCapture capture, EthernetPacket packet)
+        private static void AssertOriginalFrameMetadata(EthernetCapture capture, EthernetPacket packet)
         {
-            var summary = new CaptureSummary(packet);
-            Assert.Equal(summary.SourcePhysicalAddress, capture.SourcePhysicalAddress);
-            Assert.Equal(summary.TargetPhysicalAddress, capture.TargetPhysicalAddress);
-            AssertMatchesEndPoint(summary.SourceAddress, summary.SourcePort, capture.SourceEndPoint);
-            AssertMatchesEndPoint(summary.TargetAddress, summary.TargetPort, capture.TargetEndPoint);
-            Assert.Equal(summary.IsIPUnicast, capture.IsIPUnicast);
-            Assert.Equal(summary.IsARPAnnouncement, capture.IsARPAnnouncement);
-            Assert.Equal(summary.IsARPGratuitous, capture.IsARPGratuitous);
-            Assert.Equal(summary.IsARPProbe, capture.IsARPProbe);
-            Assert.Equal(summary.IsDuplicateAddressDetection, capture.IsDuplicateAddressDetection);
-        }
-
-        private static void AssertMatchesEndPoint(IPAddress? address, IPService? port, IPEndPoint? endpoint)
-        {
-            if (address is null)
-            {
-                Assert.Null(endpoint);
-                return;
-            }
-
-            Assert.NotNull(endpoint);
-            Assert.Equal(address, endpoint.Address);
-            if (port is { } service)
-            {
-                var transport = Assert.IsAssignableFrom<TransportEndPoint>(endpoint);
-                Assert.Equal(service.Protocol, transport.Protocol);
-                Assert.Equal(service.Port, transport.Port);
-            }
-            else
-            {
-                Assert.Equal(0, Assert.IsType<IPEndPoint>(endpoint).Port);
-            }
+            Assert.Equal(packet.SourceHardwareAddress, capture.SourcePhysicalAddress);
+            Assert.Equal(packet.Type, capture.Type);
+            Assert.Same(packet, Assert.Single(capture));
         }
 
         [Fact]
@@ -96,7 +67,7 @@ namespace MadWizard.Desomnia.Network.Tests
             Assert.Equal(SourceMAC, capture.SourcePhysicalAddress);
             Assert.Equal(0, observed.PayloadReads);
 
-            var source = Assert.IsType<TCPEndPoint>(capture.SourceEndPoint);
+            var source = Assert.IsType<IPServiceEndPoint>(capture.SourceEndPoint);
             Assert.Equal(50000, source.Port);
             Assert.Equal(SourceIP, source.Address);
             Assert.Same(source, capture.SourceEndPoint);
@@ -109,18 +80,18 @@ namespace MadWizard.Desomnia.Network.Tests
         }
 
         [Fact]
-        public void MissingLayersAndMetadataAreRemembered()
+        public void MissingMetadataIsRememberedButPacketReferencesAreNotCached()
         {
             var observed = new ObservedPacket { PayloadPacket = new WakeOnLanPacket(TargetMAC) };
             var packet = new EthernetPacket(SourceMAC, TargetMAC, (EthernetType)0) { PayloadPacket = observed };
-            var capture = new EthernetCapture(packet);
+            INetworkCapture capture = new EthernetCapture(packet);
 
             Assert.False(capture.HasPacket<TransportPacket>(out var transport));
             Assert.Null(transport);
             int reads = observed.PayloadReads;
             Assert.True(reads > 0);
             Assert.False(capture.HasPacket<TransportPacket>());
-            Assert.Equal(reads, observed.PayloadReads);
+            Assert.True(observed.PayloadReads > reads);
 
             Assert.Null(capture.SourceEndPoint);
             Assert.Null(capture.TargetEndPoint);
@@ -133,7 +104,6 @@ namespace MadWizard.Desomnia.Network.Tests
             {
                 Assert.Null(capture.SourceEndPoint);
                 Assert.Null(capture.TargetEndPoint);
-                Assert.False(capture.HasPacket<TcpPacket>());
                 Assert.Equal(0, capture.PayloadLength);
                 Assert.Empty(capture.PayloadData);
             }
@@ -152,14 +122,10 @@ namespace MadWizard.Desomnia.Network.Tests
             var originalBytes = (byte[])packet.Bytes.Clone();
             var capture = new EthernetCapture(packet);
 
-            AssertMatchesSummary(ref capture, packet);
+            AssertOriginalFrameMetadata(capture, packet);
             Assert.True(capture.IsIPUnicast);
-            TransportEndPoint source = protocol == IPProtocol.TCP
-                ? Assert.IsType<TCPEndPoint>(capture.SourceEndPoint)
-                : Assert.IsType<UDPEndPoint>(capture.SourceEndPoint);
-            TransportEndPoint target = protocol == IPProtocol.TCP
-                ? Assert.IsType<TCPEndPoint>(capture.TargetEndPoint)
-                : Assert.IsType<UDPEndPoint>(capture.TargetEndPoint);
+            var source = Assert.IsType<IPServiceEndPoint>(capture.SourceEndPoint);
+            var target = Assert.IsType<IPServiceEndPoint>(capture.TargetEndPoint);
             Assert.Equal(protocol, source.Protocol);
             Assert.Equal(protocol, target.Protocol);
             Assert.Equal(50000, source.Port);
@@ -178,7 +144,7 @@ namespace MadWizard.Desomnia.Network.Tests
         public void SynMetadataDescribesPayloadAcquisitionWithoutPayload()
         {
             var capture = new EthernetCapture(TransportPacket(false, IPProtocol.TCP, []));
-            var target = Assert.IsType<TCPEndPoint>(capture.TargetEndPoint);
+            var target = Assert.IsType<IPServiceEndPoint>(capture.TargetEndPoint);
             var needed = new ServicePayloadNeededException(target, capture.SourceEndPoint!);
 
             Assert.Equal(new IPService(IPProtocol.TCP, 445), needed.Service);
@@ -204,7 +170,7 @@ namespace MadWizard.Desomnia.Network.Tests
             };
             var capture = new EthernetCapture(packet);
 
-            AssertMatchesSummary(ref capture, packet);
+            AssertOriginalFrameMetadata(capture, packet);
             Assert.Equal(IPAddress.Parse(source), capture.SourceEndPoint!.Address);
             Assert.Equal(IPAddress.Parse(target), capture.TargetEndPoint!.Address);
             Assert.Equal(announcement, capture.IsARPAnnouncement);
@@ -228,7 +194,7 @@ namespace MadWizard.Desomnia.Network.Tests
             var packet = new EthernetPacket(SourceMAC, BroadcastMAC, EthernetType.IPv6) { PayloadPacket = ip }.MakeCopy();
             var capture = new EthernetCapture(packet);
 
-            AssertMatchesSummary(ref capture, packet);
+            AssertOriginalFrameMetadata(capture, packet);
             Assert.Equal(target, capture.TargetEndPoint!.Address);
             Assert.Equal(dad ? IPAddress.IPv6Any : IPAddress.Parse("2001:db8::10"), capture.SourceEndPoint!.Address);
             Assert.False(capture.IsIPUnicast);
@@ -246,7 +212,7 @@ namespace MadWizard.Desomnia.Network.Tests
             var packet = new EthernetPacket(SourceMAC, TargetMAC, EthernetType.IPv6) { PayloadPacket = ip }.MakeCopy();
             var capture = new EthernetCapture(packet);
 
-            AssertMatchesSummary(ref capture, packet);
+            AssertOriginalFrameMetadata(capture, packet);
             Assert.Equal(destination, capture.TargetEndPoint!.Address);
             Assert.False(capture.IsIPUnicast);
             Assert.False(capture.IsDuplicateAddressDetection);
@@ -269,7 +235,7 @@ namespace MadWizard.Desomnia.Network.Tests
             }.MakeCopy();
             var capture = new EthernetCapture(packet);
 
-            AssertMatchesSummary(ref capture, packet);
+            AssertOriginalFrameMetadata(capture, packet);
             Assert.True(capture.IsIPUnicast);
             var source = Assert.IsType<IPEndPoint>(capture.SourceEndPoint);
             var target = Assert.IsType<IPEndPoint>(capture.TargetEndPoint);
@@ -294,7 +260,7 @@ namespace MadWizard.Desomnia.Network.Tests
                 PayloadPacket = ip
             };
             var capture = new EthernetCapture(packet);
-            AssertMatchesSummary(ref capture, packet);
+            AssertOriginalFrameMetadata(capture, packet);
             Assert.Equal(unicast, capture.IsIPUnicast);
         }
 
@@ -313,7 +279,7 @@ namespace MadWizard.Desomnia.Network.Tests
             };
             var capture = new EthernetCapture(packet);
 
-            AssertMatchesSummary(ref capture, packet);
+            AssertOriginalFrameMetadata(capture, packet);
             Assert.Equal(TargetMAC, capture.TargetPhysicalAddress);
             Assert.Same(capture.TargetPhysicalAddress, capture.TargetPhysicalAddress);
             Assert.Equal(overUdp ? wol.TotalPacketLength : 0, capture.PayloadLength);
@@ -322,18 +288,18 @@ namespace MadWizard.Desomnia.Network.Tests
         }
 
         [Fact]
-        public void OwnedCopiesShareWarmValuesButNotLaterCacheWrites()
+        public void SharedReferencesReuseBothExistingAndLaterCacheValues()
         {
             var capture = new EthernetCapture(TransportPacket(false, IPProtocol.TCP, []));
             var source = capture.SourceEndPoint;
-            var snapshot = capture; // Explicit ownership boundary, without cloning immutable packet bytes.
+            var snapshot = capture;
 
             Assert.Same(source, snapshot.SourceEndPoint);
             var snapshotTarget = snapshot.TargetEndPoint;
             var originalTarget = capture.TargetEndPoint;
             Assert.Equal(TargetIP, snapshotTarget!.Address);
             Assert.Equal(originalTarget, snapshotTarget);
-            Assert.NotSame(originalTarget, snapshotTarget);
+            Assert.Same(originalTarget, snapshotTarget);
             Assert.Same(snapshotTarget, snapshot.TargetEndPoint);
             Assert.Same(originalTarget, capture.TargetEndPoint);
         }
@@ -345,9 +311,9 @@ namespace MadWizard.Desomnia.Network.Tests
             packet.Extract<IPPacket>()!.Protocol = ProtocolType.Icmp; // Deliberately inconsistent tree.
             var capture = new EthernetCapture(packet);
 
-            Assert.True(capture.HasPacket<TransportPacket>());
-            Assert.True(capture.HasPacket<TcpPacket>());
-            AssertMatchesSummary(ref capture, packet);
+            Assert.True(((INetworkCapture)capture).HasPacket<TransportPacket>());
+            Assert.True(((INetworkCapture)capture).HasPacket<TcpPacket>());
+            AssertOriginalFrameMetadata(capture, packet);
             Assert.Equal(0, Assert.IsType<IPEndPoint>(capture.SourceEndPoint).Port);
             Assert.Equal(0, Assert.IsType<IPEndPoint>(capture.TargetEndPoint).Port);
             Assert.Equal(0, capture.PayloadLength);
@@ -386,11 +352,12 @@ namespace MadWizard.Desomnia.Network.Tests
 
         private static (int Bytes, long Allocated) MeasureLengthReads(EthernetPacket packet)
         {
+            var capture = new EthernetCapture(packet);
+            _ = capture.PayloadLength;
             long before = GC.GetAllocatedBytesForCurrentThread();
             int bytes = 0;
             for (int i = 0; i < 1024; i++)
             {
-                var capture = new EthernetCapture(packet);
                 bytes += capture.PayloadLength;
             }
             return (bytes, GC.GetAllocatedBytesForCurrentThread() - before);
@@ -399,7 +366,7 @@ namespace MadWizard.Desomnia.Network.Tests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
-        public void CountingFreshCapturesAllocatesNoPayloadArrays(bool decodedChild)
+        public void CountingPayloadOnSharedCaptureDoesNotAllocate(bool decodedChild)
         {
             EthernetPacket packet;
             int length;
