@@ -1,11 +1,11 @@
-using MadWizard.Desomnia.Network.Capture;
 using Autofac;
 using MadWizard.Desomnia.Configuration.Binding;
 using MadWizard.Desomnia.Configuration.Model;
 using MadWizard.Desomnia.Configuration.Xml;
 using MadWizard.Desomnia.Network;
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Configuration;
-using MadWizard.Desomnia.Network.Configuration.Filter;
+using MadWizard.Desomnia.Network.Device.Filter;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Service.Duo;
@@ -57,10 +57,10 @@ public sealed class InstanceFilterTests
             using var container = Container();
             using var context = new TestContext(container, instance);
 
-            Assert.False(context.Filter.ShouldFilter(Packet("192.0.2.12", 47989, false)));
-            Assert.True(context.Filter.ShouldFilter(Packet("192.0.2.10", 47989, false)));
-            Assert.True(context.Filter.ShouldFilter(Packet("192.0.2.11", 47989, false)));
-            Assert.True(context.Filter.ShouldFilter(Packet("198.51.100.10", 47989, false)));
+            Assert.False(context.ShouldFilter(Packet("192.0.2.12", 47989, false)));
+            Assert.True(context.ShouldFilter(Packet("192.0.2.10", 47989, false)));
+            Assert.True(context.ShouldFilter(Packet("192.0.2.11", 47989, false)));
+            Assert.True(context.ShouldFilter(Packet("198.51.100.10", 47989, false)));
         }
         finally
         {
@@ -83,7 +83,7 @@ public sealed class InstanceFilterTests
         using var instance = new DuoInstance("Player", DuoTestSupport.Settings(), info);
         using var container = Container();
         using var context = new TestContext(container, instance);
-        var filter = context.Filter;
+        var filter = context;
         var port = (ushort)(instance.Settings.Port + (udp ? 9 : 0));
 
         Assert.Equal(type == "MustNot", filter.ShouldFilter(Packet("192.0.2.10", port, udp)));
@@ -102,9 +102,9 @@ public sealed class InstanceFilterTests
         using var second = new TestContext(container, unrestricted);
         var packet = Packet("192.0.2.10", 47989, false);
 
-        Assert.True(first.Filter.ShouldFilter(packet));
-        Assert.False(second.Filter.ShouldFilter(packet));
-        Assert.True(second.Filter.ShouldFilter(Packet("192.0.2.10", 12345, false)));
+        Assert.True(first.ShouldFilter(packet));
+        Assert.False(second.ShouldFilter(packet));
+        Assert.True(second.ShouldFilter(Packet("192.0.2.10", 12345, false)));
     }
 
     [Theory]
@@ -130,6 +130,26 @@ public sealed class InstanceFilterTests
         var error = Assert.Throws<FormatException>(() => new TestModule().Configure(new ContainerBuilder(), config));
         Assert.Contains("Player", error.Message);
         Assert.Contains("packet capture", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void MultiportServiceRegistersItsPolicyOnceAndCapturesEveryPort()
+    {
+        using var container = Container();
+        using var instance = new DuoInstance("Player", DuoTestSupport.Settings(), BindFilters(false, "Must"));
+        using var context = new TestContext(container, instance);
+
+        Assert.IsType<StaticHostFilterRule>(Assert.Single(context.Filter.Rules));
+        Assert.Equal(8, context.Traffic.Length);
+        Assert.Equal(4, context.Traffic.OfType<TCPTrafficType>().Count());
+        Assert.Equal(4, context.Traffic.OfType<UDPTrafficType>().Count());
+        Assert.Equal(instance.Service.Select(port => (int)port.Port).Order(),
+            context.Traffic.Select(type => type switch
+            {
+                TCPTrafficType tcp => (int)tcp.Port!.Value,
+                UDPTrafficType udp => (int)udp.Port!.Value,
+                _ => throw new InvalidOperationException()
+            }).Order());
     }
 
     private static DuoInstanceWatchInfo BindFilters(bool range, string type)
@@ -159,8 +179,8 @@ public sealed class InstanceFilterTests
         builder.RegisterType<StaticHostFilterRule>();
         builder.RegisterType<StaticHostRangeFilterRule>();
         // Exercise the production packet filter without starting capture or OS services.
-        builder.RegisterType(typeof(IPacketFilter).Assembly.GetType(
-            "MadWizard.Desomnia.Network.Filter.PacketRuleFilter", throwOnError: true)!).As<IPacketFilter>()
+        builder.RegisterType(typeof(IFilter).Assembly.GetType(
+            "MadWizard.Desomnia.Network.Filter.RuleFilter", throwOnError: true)!).As<IFilter>()
             .InstancePerMatchingLifetimeScope(MatchingScopeLifetimeTags.NetworkServiceLifetimeScopeTag);
         return builder.Build();
     }
@@ -181,7 +201,15 @@ public sealed class InstanceFilterTests
 
     private sealed class TestContext(ILifetimeScope parent, DuoInstance instance) : SunshineServiceContext(parent, instance)
     {
-        public IPacketFilter Filter => Scope.Resolve<IPacketFilter>();
+        public IFilter Filter => Scope.Resolve<IFilter>();
+        public ITrafficType[] Traffic => Scope.Resolve<IEnumerable<TrafficFilterRequest>>().SelectMany(request => request.Types).ToArray();
+
+        public bool ShouldFilter(EthernetCapture capture)
+        {
+            var context = new DefaultFilterContextParser().CreateContext([capture], FlowDirection.Inbound);
+            return context is not IIPServiceFilterContext ips || !Service.Contains(ips.Service)
+                || Filter.ShouldFilter(context);
+        }
     }
 
     private sealed class TestModule : MadWizard.Desomnia.Service.Duo.PluginModule

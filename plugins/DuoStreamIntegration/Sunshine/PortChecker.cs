@@ -1,5 +1,4 @@
-﻿using MadWizard.Desomnia.Network.Neighborhood.Services;
-using System.Net;
+﻿using System.Net;
 using System.Runtime.InteropServices;
 
 namespace MadWizard.Desomnia.Service.Duo.Sunshine

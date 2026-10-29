@@ -156,7 +156,7 @@ public sealed class WatchExpressionIntegrationTests
 
         var instance = Instance("StreamTraffic");
         AttachYieldingSession(instance);
-        var network = new TestNetworkServiceWatch();
+        var network = new TestNetworkServiceWatch { Filter = new(() => throw new InvalidOperationException("This test must not evaluate packet filters.")) };
         instance.StartTracking(network);
 
         Assert.Empty(instance.Inspect(TimeSpan.FromSeconds(1)));
@@ -245,7 +245,7 @@ public sealed class WatchExpressionIntegrationTests
         watch.ApplyConfiguration(sessionConfig, duoConfig with { Watch = WatchExpression.Yield, OnIdle = null });
         instance.StartTracking(watch);
 
-        var network = new TestNetworkServiceWatch { HasTraffic = true };
+        var network = new TestNetworkServiceWatch { HasTraffic = true, Filter = new(() => throw new InvalidOperationException("This test must not evaluate packet filters.")) };
         instance.StartTracking(network);
 
         Assert.Empty(instance.Inspect(TimeSpan.FromSeconds(1)));

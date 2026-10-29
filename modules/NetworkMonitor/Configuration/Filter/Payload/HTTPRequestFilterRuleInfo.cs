@@ -1,22 +1,11 @@
 ﻿using MadWizard.Desomnia.Network.Filter.Rules;
-using System.Net;
 
 namespace MadWizard.Desomnia.Network.Configuration.Filter
 {
-    public class HTTPFilterRuleInfo : ServiceFilterRuleInfo
-    {
-        public HTTPFilterRuleInfo()
-        {
-            Name = "HTTP";
-            Protocol = IPProtocol.TCP;
-            Port = 80;
-        }
-
-        public IList<HTTPRequestFilterRuleInfo>? RequestFilterRule { get; set; }
-    }
-
     public class HTTPRequestFilterRuleInfo
     {
+        public IList<HTTPRequestFilterRuleInfo> RequestFilterRule { get; set; } = [];
+
         public string? Method { get; set; } // e.g. "GET", "POST", etc.
         public string? Path { get; set; } // /index.html
         public string? Version { get; set; } // e.g. "HTTP/1.1", "HTTP/2.0", etc.
@@ -68,6 +57,19 @@ namespace MadWizard.Desomnia.Network.Configuration.Filter
 
             public required string Name { get; set; }
             public string? Value { get; private set; }
+        }
+
+        public static implicit operator HTTPRequestPattern(HTTPRequestFilterRuleInfo info)
+        {
+            return new()
+            {
+                Method  = info.Method,
+                Path    = info.Path,
+                Version = info.Version,
+                Host    = info.Host,
+                Header  = (info.Headers ?? []).ToDictionary(header => header.Name, header => header.Text, StringComparer.OrdinalIgnoreCase),
+                Cookie  = info.Cookie.ToDictionary(cookie => cookie.Name, cookie => cookie.Value, StringComparer.Ordinal)
+            };
         }
     }
 }

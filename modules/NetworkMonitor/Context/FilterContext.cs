@@ -5,7 +5,6 @@ using MadWizard.Desomnia.Network.Context.Parameters;
 using MadWizard.Desomnia.Network.Device.Filter;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
-using MadWizard.Desomnia.Network.Monitor.Filter.Rules;
 using MadWizard.Desomnia.Network.Neighborhood;
 using NetTools;
 using System.Collections.Concurrent;
@@ -22,8 +21,6 @@ namespace MadWizard.Desomnia.Network.Context
 
         private readonly ConcurrentBag<HostFilterRuleInfo> _dynamicHostFilters = [];
 
-        //public required Lazy<IEnumerable<PacketFilterRule>> Rules { internal get; init; }
-
         protected FilterContext(ILifetimeScope parent, string? tagName = null)
         {
             _needsTCPData = parent.ResolveOptional<SystemUsageInspector>() is not null;
@@ -33,8 +30,8 @@ namespace MadWizard.Desomnia.Network.Context
 
         protected void RegisterTaggedPacketRuleFilter(ContainerBuilder builder)
         {
-            builder.RegisterComposite<PacketRuleFilter, IPacketFilter>()
-                .WithParameter(new PacketRuleFiltersParameter(_tagName));
+            builder.RegisterComposite<RuleFilter, IFilter>()
+                .WithParameter(new FilterRulesParameter(_tagName));
         }
 
         protected void RegisterFilters(ContainerBuilder builder, IFilterInfo info)
@@ -62,7 +59,7 @@ namespace MadWizard.Desomnia.Network.Context
                 builder.RegisterType<DynamicHostFilterRule>()
                     .WithParameter(TypedParameter.From(filter.Type))
                     .WithParameter(NetworkHostParameter<NetworkHost>.FindBy(filter.Name!))
-                    .As<PacketFilterRule>().As<HostFilterRule>()
+                    .As<FilterRule>().As<HostFilterRule>()
                     .WithMetadata("tag", _tagName)
                     .AsImplementedInterfaces()
                     .SingleInstance();
@@ -74,7 +71,7 @@ namespace MadWizard.Desomnia.Network.Context
                 builder.RegisterType<StaticHostFilterRule>()
                     .WithParameter(TypedParameter.From(filter.Type))
                     .WithParameter(TypedParameter.From(filter.IPAddresses))
-                    .As<PacketFilterRule>().As<HostFilterRule>()
+                    .As<FilterRule>().As<HostFilterRule>()
                     .WithMetadata("tag", _tagName)
                     .SingleInstance();
             }
@@ -95,7 +92,7 @@ namespace MadWizard.Desomnia.Network.Context
                 builder.RegisterType<DynamicHostRangeFilterRule>()
                     .WithParameter(TypedParameter.From(filter.Type))
                     .WithParameter(NetworkHostRangeParameter.FindBy(filter.Name!))
-                    .As<PacketFilterRule>().As<HostRangeFilterRule>()
+                    .As<FilterRule>().As<HostRangeFilterRule>()
                     .WithMetadata("tag", _tagName)
                     .SingleInstance();
             }
@@ -104,7 +101,8 @@ namespace MadWizard.Desomnia.Network.Context
                 builder.RegisterType<StaticHostRangeFilterRule>()
                     .WithParameter(TypedParameter.From(filter.Type))
                     .WithParameter(TypedParameter.From(addressRange))
-                    .As<PacketFilterRule>().As<HostRangeFilterRule>()
+                    .As<FilterRule>().As<HostRangeFilterRule>()
+                    .WithMetadata("tag", _tagName)
                     .SingleInstance();
             }
         }
@@ -113,9 +111,10 @@ namespace MadWizard.Desomnia.Network.Context
         {
             if (filter != null)
             {
-                var register = builder.RegisterType<F>().As<PacketFilterRule>()
+                var register = builder.RegisterType<F>().As<FilterRule>()
                     .WithParameter(TypedParameter.From(filter.Type))
                     .WithProperty(HostFilterRulesParameter.From(filter))
+                    .WithMetadata("tag", _tagName)
                     .SingleInstance()
                     .AsSelf();
 
@@ -139,48 +138,49 @@ namespace MadWizard.Desomnia.Network.Context
 
         protected void RegisterServiceFilter(ContainerBuilder builder, ServiceFilterRuleInfo filter)
         {
-            /*
-             * A rule's traffic shape is only a capture requirement if the rule can actually wake the host:
-             * Must-rules can; MustNot-rules never define needed traffic (their veto is applied in user space).
-             */
-            bool needsTraffic = filter.Type == FilterRuleType.Must;
-
-            if (filter.Protocol.HasFlag(IPProtocol.TCP))
+            foreach (var service in filter)
             {
-                var register = filter switch
-                {
-                    HTTPFilterRuleInfo => builder.RegisterType<HTTPFilterRule>(), // LATER: add parameters for HTTPRequestFilterRuleInfo
-
-                    ServiceFilterRuleInfo => builder.RegisterType<TCPServiceFilterRule>(),
-                };
-
-                register.As<PacketFilterRule>()
+                builder.RegisterType<ServiceFilterRule>().As<FilterRule>()
                     .WithParameter(TypedParameter.From(filter.Type))
-                    .WithParameter(TypedParameter.From(filter.Port))
+                    .WithParameter(TypedParameter.From(service))
                     .WithProperty(HostFilterRulesParameter.From(filter))
                     .WithMetadata("tag", _tagName)
                     .SingleInstance()
                     .AsSelf();
 
-                if (needsTraffic)
-                    RegisterTrafficFilter(builder, new TCPTrafficType(filter.Port, _needsTCPData));
-
-                RememberDynamicHostFilters(filter);
+                if (filter.Type is FilterRuleType.Must or FilterRuleType.May)
+                {
+                    RegisterServiceTraffic(builder, [service]);
+                }
             }
 
-            if (filter.Protocol.HasFlag(IPProtocol.UDP))
+            RememberDynamicHostFilters(filter);
+        }
+
+        /// <summary>Capture selection belongs to the service, independently of its admission rules.</summary>
+        protected void RegisterServiceTraffic(ContainerBuilder builder, IEnumerable<IPService> ports, bool needsPayload = false)
+        {
+            foreach (var port in ports.Distinct())
             {
-                var register = builder.RegisterType<UDPServiceFilterRule>().As<PacketFilterRule>()
+                if (port.Protocol.HasFlag(IPProtocol.TCP))
+                    RegisterTrafficFilter(builder, new TCPTrafficType(port.Port, _needsTCPData || needsPayload));
+                if (port.Protocol.HasFlag(IPProtocol.UDP))
+                    RegisterTrafficFilter(builder, new UDPTrafficType(port.Port));
+            }
+        }
+
+        protected void RegisterHTTPRequestFilters(ContainerBuilder builder, IEnumerable<HTTPRequestFilterRuleInfo> filters, ref bool needsPayload)
+        {
+            foreach (var filter in filters)
+            {
+                builder.RegisterType<HTTPRequestFilterRule>().As<FilterRule>()
                     .WithParameter(TypedParameter.From(filter.Type))
-                    .WithParameter(TypedParameter.From(filter.Port))
-                    .WithProperty(HostFilterRulesParameter.From(filter))
-                    .SingleInstance()
-                    .AsSelf();
+                    .WithParameter(TypedParameter.From<HTTPRequestPattern>(filter))
+                    .WithParameter(nameof(HTTPRequestFilterRule.Rules), Array.Empty<HTTPRequestFilterRule>()) // TODO: Implement nested rules recursively
+                    .WithMetadata("tag", _tagName)
+                    .SingleInstance();
 
-                if (needsTraffic)
-                    RegisterTrafficFilter(builder, new UDPTrafficType(filter.Port));
-
-                RememberDynamicHostFilters(filter);
+                needsPayload |= true;
             }
         }
 
@@ -188,12 +188,13 @@ namespace MadWizard.Desomnia.Network.Context
         {
             if (filter is not null)
             {
-                if (filter.Type == FilterRuleType.Must)
+                if (filter.Type is FilterRuleType.Must or FilterRuleType.May)
                     RegisterTrafficFilter(builder, new ICMPEchoTrafficType());
 
-                var register = builder.RegisterType<PingFilterRule>().As<PacketFilterRule>()
+                builder.RegisterType<PingFilterRule>().As<FilterRule>()
                     .WithParameter(TypedParameter.From(filter.Type))
-                    .WithProperty(HostFilterRulesParameter.From(filter))
+                    .WithParameter(HostFilterRulesParameter.From(filter))
+                    .WithMetadata("tag", _tagName)
                     .SingleInstance()
                     .AsSelf();
 
@@ -226,7 +227,7 @@ namespace MadWizard.Desomnia.Network.Context
 
         protected internal virtual void ResolveFilterRules()
         {
-            Scope?.Resolve<IEnumerable<PacketFilterRule>>();
+            Scope?.Resolve<IEnumerable<FilterRule>>();
         }
         #endregion
     }

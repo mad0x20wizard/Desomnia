@@ -1,6 +1,5 @@
 ﻿using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Neighborhood;
-using MadWizard.Desomnia.Network.Neighborhood.Services;
 using Makaretu.Dns;
 using System.Net;
 
@@ -44,7 +43,7 @@ namespace MadWizard.Desomnia.Network.Naming.Messages
             AnswerWith(record, options.Delay);
         }
 
-        public void AnswerWith(NetworkHost host, TransportNetworkService service, DomainName? instance = default, AnswerOptions options = default)
+        public void AnswerWith(NetworkHost host, NetworkService service, DomainName? instance = default, AnswerOptions options = default)
         {
             instance ??= new([service.InstanceName ?? host.Name, .. service.LocalDomainName.Labels]);
 
@@ -73,7 +72,7 @@ namespace MadWizard.Desomnia.Network.Naming.Messages
         /// (RFC 6763 §12.1) -- or, for a targeted query, the instance's own SRV (with its addresses
         /// bundled, §12.2) and TXT. A question that matches none of these names adds nothing.
         /// </summary>
-        public void AnswerWith(Question question, NetworkHost host, TransportNetworkService service, DomainName? instance = default, AnswerOptions options = default)
+        public void AnswerWith(Question question, NetworkHost host, NetworkService service, DomainName? instance = default, AnswerOptions options = default)
         {
             instance ??= new([service.InstanceName ?? host.Name, .. service.LocalDomainName.Labels]);
 
@@ -98,18 +97,18 @@ namespace MadWizard.Desomnia.Network.Naming.Messages
             }
         }
 
-        private static SRVRecord MakeService(NetworkHost host, TransportNetworkService service, DomainName instance, AnswerOptions options) => new()
+        private static SRVRecord MakeService(NetworkHost host, NetworkService service, DomainName instance, AnswerOptions options) => new()
         {
             Name = instance,
             Target = host.LocalDomainName,
-            Port = service.Port,
+            Port = ((IPService)service).Port,
             Priority = service.Priority,
             Weight = service.Weight,
 
             TTL = options.HostTTL
         };
 
-        private static TXTRecord MakeText(TransportNetworkService service, DomainName instance, AnswerOptions options) => new()
+        private static TXTRecord MakeText(NetworkService service, DomainName instance, AnswerOptions options) => new()
         {
             Name = instance,
             // RFC 6763 §6.1: a service with no attributes still carries a single empty string.

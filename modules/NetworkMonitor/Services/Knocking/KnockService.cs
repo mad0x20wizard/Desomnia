@@ -14,6 +14,8 @@ namespace MadWizard.Desomnia.Network.Knocking
 
         public required IIndex<string, IKnockMethod> Methods { private get; init; }
 
+        public required IFilterContextParser Parser { private get; init; }
+
         #region Stanza management
         private readonly HashSet<KnockStanza> _stanzas = [];
 
@@ -51,7 +53,7 @@ namespace MadWizard.Desomnia.Network.Knocking
 
                     try
                     {
-                        if (stanza.PacketFilter.Value.ShouldFilter(capture)) continue; // maybe filter packet
+                        if (stanza.PacketFilter.Value.ShouldFilter(Parser.CreateContext(new(ref capture)))) continue;
 
                         var ip = capture.FindPacket<IPPacket>() ?? throw new IOException("IPPacket not found");
 

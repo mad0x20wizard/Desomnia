@@ -1,6 +1,6 @@
 ﻿using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Naming.Messages;
-using MadWizard.Desomnia.Network.Neighborhood.Services;
+using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Watch;
 using Makaretu.Dns;
 using Microsoft.Extensions.Logging;
@@ -52,13 +52,12 @@ namespace MadWizard.Desomnia.Network.Naming.Resolver
         }
 
         /// <summary>The transport services that watched hosts have asked us to advertise on their behalf.</summary>
-        private IEnumerable<(HostDemandWatch watch, TransportNetworkService service)> AdvertisedServices =>
+        private IEnumerable<(HostDemandWatch watch, NetworkService service)> AdvertisedServices =>
             from    watch           in Monitor.OfType<HostDemandWatch>()
             from    serviceWatch    in watch
 
-            where   serviceWatch.Service is TransportNetworkService // does this service support advertising?
             where   serviceWatch.AdvertiseOptions.Type.HasFlag(AdvertiseType.Service) // should we advertise this service?
 
-            select (watch, (TransportNetworkService)serviceWatch.Service);
+            select (watch, serviceWatch.Service);
     }
 }

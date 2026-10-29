@@ -1,11 +1,20 @@
 ﻿namespace System.Net
 {
-    public class IPServiceEndPoint(IPAddress ip, IPProtocol protocol, ushort port) : IPEndPoint(ip, port)
+    public class IPServiceEndPoint : IPEndPoint
     {
-        public IPProtocol Protocol { get; } = protocol is IPProtocol.TCP or IPProtocol.UDP
-            ? protocol : throw new ArgumentOutOfRangeException(nameof(protocol), protocol, "An endpoint requires a single TCP or UDP protocol.");
+        public IPProtocol Protocol { get; }
 
-        public IPService Service => new(Protocol, (ushort)Port);
+        public IPServiceEndPoint(IPAddress ip, IPService service) : this(ip, service.Protocol, service.Port) { }
+
+        public IPServiceEndPoint(IPAddress ip, IPProtocol protocol, ushort port) : base(ip, port)
+        {
+            if (protocol is not (IPProtocol.TCP or IPProtocol.UDP))
+            {
+                throw new ArgumentOutOfRangeException(nameof(protocol), protocol, "An endpoint requires a single TCP or UDP protocol.");
+            }
+
+            Protocol = protocol;
+        }
 
         public override bool Equals(object? obj)
         {
@@ -22,6 +31,6 @@
             return base.ToString() + "/" + Protocol.ToString().ToLower();
         }
 
-        public static implicit operator IPService(IPServiceEndPoint endpoint) => endpoint.Service;
+        public static implicit operator IPService(IPServiceEndPoint endpoint) => new(endpoint.Protocol, (ushort)endpoint.Port);
     }
 }

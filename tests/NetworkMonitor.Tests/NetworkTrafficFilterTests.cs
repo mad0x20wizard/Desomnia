@@ -5,7 +5,6 @@ using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Network.Neighborhood;
-using MadWizard.Desomnia.Network.Neighborhood.Services;
 using MadWizard.Desomnia.Network.Watch;
 using Microsoft.Extensions.Logging.Abstractions;
 using NetTools;
@@ -33,17 +32,23 @@ namespace MadWizard.Desomnia.Network.Tests
 
             public void Report(DemandEvent @event) => ReportNetworkTraffic(@event);
             public void Forward(IEnumerable<INetworkCapture> captures) => ForwardPackets(captures);
+
+            public void ReportNetworkTraffic(INetworkCapture capture, FlowDirection direction)
+                => ReportNetworkTraffic(Context(capture, direction));
         }
 
-        private sealed class PayloadFilterRule() : TCPServiceFilterRule(445)
+        private sealed class PayloadFilterRule : FilterRule<IIPServicePayloadFilterContext>
         {
-            protected override bool MatchesPayload(byte[] payload) => throw new MalformedServicePayloadException(Service);
+            public override bool Matches(IIPServicePayloadFilterContext context) => throw new MalformedPayloadException(context.Service);
         }
 
-        private static TestWatch CreateWatch(params PacketFilterRule[] rules)
+        private static IFilterContext Context(INetworkCapture capture, FlowDirection direction)
+            => new DefaultFilterContextParser().CreateContext([capture], direction);
+
+        private static TestWatch CreateWatch(params FilterRule[] rules)
             => CreateWatch(null!, rules);
 
-        private static TestWatch CreateWatch(NetworkDevice device, params PacketFilterRule[] rules)
+        private static TestWatch CreateWatch(NetworkDevice device, params FilterRule[] rules)
         {
             var network = new NetworkSegment
             {
@@ -63,8 +68,8 @@ namespace MadWizard.Desomnia.Network.Tests
                 AdvertiseOptions = default,
                 HandoffOptions = default,
                 DemandOptions = default,
-                DefaultFilterOptions = default,
-                Filter = new Lazy<IPacketFilter>(() => new PacketRuleFilter(rules))
+                Parser = new DefaultFilterContextParser(),
+                Filter = new Lazy<IFilter>(() => new RuleFilter(rules))
             };
         }
 
@@ -118,12 +123,13 @@ namespace MadWizard.Desomnia.Network.Tests
             }
         }
 
-        private static ServiceFilterWatch AddService(TestWatch watch, IPProtocol protocol, params PacketFilterRule[] rules)
+        private static NetworkServiceWatch AddService(TestWatch watch, IPProtocol protocol, params FilterRule[] rules)
         {
-            var service = new ServiceFilterWatch(new TransportNetworkService("SMB", new(protocol, 445)))
+            var service = new NetworkServiceWatch(new NetworkService("SMB", new(protocol, 445)))
             {
-                Filter = new Lazy<IPacketFilter>(() => new CompositePacketFilter([watch.Filter.Value, new PacketRuleFilter(rules)]))
+                Filter = new Lazy<IFilter>(() => new RuleFilter(watch.Filter.Value.Rules.Concat(rules).ToArray()))
             };
+            watch.Host.AddService(service.Service);
             watch.StartTracking(service, adopt: false);
             return service;
         }
@@ -160,10 +166,7 @@ namespace MadWizard.Desomnia.Network.Tests
 
             IEnumerable<HostFilterRule> hostRules = [new StaticHostFilterRule { Type = FilterRuleType.Must, Addresses = [PeerIP] }];
 
-            ServiceFilterRule rule = protocol == IPProtocol.TCP
-                ? new TCPServiceFilterRule(445) { Type = FilterRuleType.Must, HostRules = hostRules }
-                : new UDPServiceFilterRule(445) { Type = FilterRuleType.Must, HostRules = hostRules };
-            var service = AddService(watch, protocol, rule);
+            var service = AddService(watch, protocol, hostRules.ToArray());
 
             watch.ReportNetworkTraffic(Packet(direction, protocol, peer: IPAddress.Parse("192.0.2.30")), direction);
             Assert.Empty(watch.Inspect(Interval));
@@ -186,7 +189,7 @@ namespace MadWizard.Desomnia.Network.Tests
         public void SMBClientKeepalive_DoesNotCountAsWatchedHostOrServiceUsage(FlowDirection direction, bool ipv6)
         {
             var watch = CreateWatch();
-            var service = AddService(watch, IPProtocol.TCP, new TCPServiceFilterRule(445) { Type = FilterRuleType.Must });
+            var service = AddService(watch, IPProtocol.TCP);
 
             // jindujun:50000 <-> DRAGON:445 never involves jindujun's service port.
             var packet = Packet(direction, watchedPort: 50000, ipv6: ipv6);
@@ -202,7 +205,7 @@ namespace MadWizard.Desomnia.Network.Tests
         [Theory]
         [InlineData(FlowDirection.Inbound)]
         [InlineData(FlowDirection.Outbound)]
-        public void HostRules_CanAllowUnmatchedTrafficButMustNotStillVetoesIt(FlowDirection direction)
+        public void ServiceSelectionRejectsUnwatchedPortsAndInheritsHostVetoes(FlowDirection direction)
         {
             var blocked = IPAddress.Parse("192.0.2.30");
             var watch = CreateWatch(
@@ -216,13 +219,15 @@ namespace MadWizard.Desomnia.Network.Tests
             Assert.Empty(watch.Inspect(Interval)); // the service's composite retains the host veto
             Assert.Empty(service.Inspect(Interval));
 
-            var packet = Packet(direction, watchedPort: 50000);
+            watch.ReportNetworkTraffic(Packet(direction, watchedPort: 50000), direction);
+            Assert.Empty(watch.Inspect(Interval));
+
+            var packet = Packet(direction);
             packet.FindPacket<TcpPacket>()!.PayloadData = [];
             watch.ReportNetworkTraffic(packet, direction);
             var usage = Assert.IsType<NetworkHostUsage>(Assert.Single(watch.Inspect(Interval)));
             Assert.Equal(0, usage.Bytes); // accepted ACK is activity even without payload
-            Assert.Empty(usage.Tokens);
-            Assert.Empty(service.Inspect(Interval));
+            Assert.Equal(0, Assert.IsType<NetworkServiceUsage>(Assert.Single(usage.Tokens)).Bytes);
         }
 
         [Theory]
@@ -234,7 +239,7 @@ namespace MadWizard.Desomnia.Network.Tests
             var service = AddService(watch, IPProtocol.TCP, new PayloadFilterRule { Type = FilterRuleType.Must });
             var packet = Packet(direction);
 
-            Assert.Throws<MalformedServicePayloadException>(() => watch.Verify(packet, direction));
+            Assert.Throws<MalformedPayloadException>(() => watch.Verify(Context(packet, direction)));
             if (direction == FlowDirection.Inbound)
                 Assert.Null(watch.Evaluate(packet));
             else
@@ -248,13 +253,25 @@ namespace MadWizard.Desomnia.Network.Tests
         public void DemandEventAccounting_FiltersEachPacket()
         {
             var watch = CreateWatch();
-            AddService(watch, IPProtocol.TCP, new TCPServiceFilterRule(445) { Type = FilterRuleType.Must });
+            AddService(watch, IPProtocol.TCP);
             watch.Report(new DemandEvent(watch.Host, packets:
                 [Packet(FlowDirection.Inbound), Packet(FlowDirection.Inbound, watchedPort: 50000)]));
 
             var usage = Assert.IsType<NetworkHostUsage>(Assert.Single(watch.Inspect(Interval)));
             Assert.Equal(4, usage.Bytes);
             Assert.Equal(4, Assert.IsType<NetworkServiceUsage>(Assert.Single(usage.Tokens)).Bytes);
+        }
+
+        [Fact]
+        public void ServiceSelectionOnlyRequestsIPFromInboundAddressResolution()
+        {
+            var watch = CreateWatch();
+            AddService(watch, IPProtocol.TCP);
+            Assert.Throws<IPTrafficNeededException>(() => watch.Verify(
+                new CaptureFilterContext(PeerIP) { Direction = FlowDirection.Inbound }));
+            Assert.False(watch.Verify(new CaptureFilterContext(PeerIP) { Direction = FlowDirection.Outbound }));
+            Assert.False(watch.Verify(new ICMPCaptureFilterContext(PeerIP, ICMPType.Echo) { Direction = FlowDirection.Inbound }));
+            Assert.False(watch.Verify(new IPCaptureFilterContext(PeerIP) { Direction = FlowDirection.Inbound }));
         }
 
         [Theory]
@@ -273,15 +290,15 @@ namespace MadWizard.Desomnia.Network.Tests
             };
             router.AddAddress(PeerIP);
             watch.Network.AddHost(router);
-            IPacketFilter filter = new RouterFilter
+            IFilter filter = new RouterFilter
             {
                 Logger = NullLogger<RouterFilter>.Instance,
                 Network = watch.Network,
                 Reachability = null! // unicast accounting must not probe VPN clients
             };
 
-            Assert.Equal(!allowWake, filter.ShouldFilter(Packet(direction), direction: direction));
-            Assert.False(filter.ShouldFilter(Packet(direction, peer: IPAddress.Parse("192.0.2.30")), direction: direction));
+            Assert.Equal(!allowWake, filter.ShouldFilter(Context(Packet(direction), direction)));
+            Assert.False(filter.ShouldFilter(Context(Packet(direction, peer: IPAddress.Parse("192.0.2.30")), direction)));
         }
     }
 }

@@ -1,8 +1,8 @@
+using MadWizard.Desomnia.Firewall.Manager;
+using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
-using MadWizard.Desomnia.Firewall.Manager;
-using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Neighborhood.Options;
 using MadWizard.Desomnia.Network.Neighborhood.Services;
@@ -83,7 +83,7 @@ namespace MadWizard.Desomnia.Firewall.Tests
                 new TCPServiceFilterRule(8443) { Type = FilterRuleType.MustNot, HostRules = [Host(FilterRuleType.Must, "192.0.2.12")] }
             ];
             var rules = Compile(configured);
-            var filter = new PacketRuleFilter(configured);
+            var filter = new RuleFilter(configured);
             for (int i = 0; i < 32; i++)
             {
                 var source = IPAddress.Parse($"192.0.2.{i}");
@@ -317,7 +317,7 @@ namespace MadWizard.Desomnia.Firewall.Tests
                     }
                 }
                 var projected = FirewallRuleCompiler.Compile([target], service, configured);
-                var filter = new PacketRuleFilter(configured);
+                var filter = new RuleFilter(configured);
                 for (int i = 0; i < 34; i++)
                 {
                     var source = Address(i);
@@ -345,16 +345,16 @@ namespace MadWizard.Desomnia.Firewall.Tests
             Host = host, Network = host.Network, Logger = NullLogger<NetworkHostWatch>.Instance,
             Scope = null!, Device = null!, AdvertiseOptions = default, HandoffOptions = default,
             DemandOptions = default, DefaultFilterOptions = default,
-            Filter = new(() => new PacketRuleFilter([]))
+            Filter = new(() => new RuleFilter([]))
         };
 
         private static void AddService(TestWatch host, ushort port, ServiceFlags flags)
         {
             var service = new TransportNetworkService("test", new(IPProtocol.TCP, port));
             host.Host.AddService(service, new(flags));
-            host.StartTracking(new ServiceFilterWatch(service)
+            host.StartTracking(new NetworkServiceWatch(service)
             {
-                Filter = new(() => new PacketRuleFilter([new TCPServiceFilterRule(port) { Type = FilterRuleType.Must }]))
+                Filter = new(() => new RuleFilter([new TCPServiceFilterRule(port) { Type = FilterRuleType.Must }]))
             }, adopt: false);
         }
 

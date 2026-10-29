@@ -2,7 +2,6 @@ using MadWizard.Desomnia.Firewall.Manager;
 using MadWizard.Desomnia.Network;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Neighborhood.Options;
-using MadWizard.Desomnia.Network.Neighborhood.Services;
 using MadWizard.Desomnia.Network.Watch;
 using Microsoft.Extensions.Logging;
 
@@ -26,11 +25,11 @@ namespace MadWizard.Desomnia.Firewall
             var policies = Monitor.TakeSnapshot()
                 .OfType<HostDemandWatch>()
                 .Where(w => w.Host is LocalHost) // LocalVirtualHostWatch also derives from LocalHostWatch.
-                .Select(w => (w.Host, Rules: w.TakeSnapshot().OfType<ServiceFilterWatch>()
+                .Select(w => (w.Host, Rules: w.TakeSnapshot().OfType<NetworkServiceWatch>()
                     .Where(s => w.Host[s.Service].HasFlags(ServiceFlags.Static))
-                    .SelectMany(s => s.Service is TransportNetworkService service
-                        ? service.GetPorts().SelectMany(port => FirewallRuleCompiler.Compile(
-                            w.Host.IPAddresses, port, s.FilterRules))
+                    .SelectMany(s => s.Service is NetworkService service
+                        ? service.SelectMany(port => FirewallRuleCompiler.Compile(
+                            w.Host.IPAddresses, port, s.Filter.Value.Rules))
                         : throw new NotSupportedException($"Firewall prototype cannot project service '{s.Service}'."))
                     .Distinct().ToArray()))
                 .ToArray();

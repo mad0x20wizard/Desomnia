@@ -4,6 +4,7 @@ using MadWizard.Desomnia.Network.Address;
 using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Demand;
+using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Knocking;
 using MadWizard.Desomnia.Network.Reachability;
 using Microsoft.Extensions.Hosting;

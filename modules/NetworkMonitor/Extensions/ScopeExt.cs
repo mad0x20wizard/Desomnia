@@ -12,14 +12,14 @@ namespace MadWizard.Desomnia.Network
             return scope.Resolve<TrafficFilterRequest>(new TypedParameter(typeof(ITrafficType[]), types));
         }
 
-        public static TrafficFilterRequest UseTrafficType(this ILifetimeScope scope, IPService port)
+        public static TrafficFilterRequest UseTrafficType(this ILifetimeScope scope, IPService service)
         {
-            return UseTrafficType(scope, port.Protocol switch
+            return UseTrafficType(scope, service.Protocol switch
             {
-                IPProtocol.TCP => new TCPTrafficType(port),
-                IPProtocol.UDP => new UDPTrafficType(port),
+                IPProtocol.TCP => new TCPTrafficType(service.Port),
+                IPProtocol.UDP => new UDPTrafficType(service.Port),
 
-                _ => throw new NotImplementedException("Unknown IP protocol: " + port.Protocol),
+                _ => throw new NotImplementedException("Unknown IP protocol: " + service.Protocol),
             });
         }
     }

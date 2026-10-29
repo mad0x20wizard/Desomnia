@@ -8,7 +8,6 @@ using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Neighborhood.Options;
 using Microsoft.Extensions.Logging;
 using NetTools;
-using System.Net;
 
 namespace MadWizard.Desomnia.Network.Context
 {
@@ -50,11 +49,11 @@ namespace MadWizard.Desomnia.Network.Context
         {
             foreach (var filter in rules)
             {
-                // Only protocol, port and rule type apply here; no nested host or payload filters.
-                if (filter.Protocol.HasFlag(IPProtocol.TCP))
-                    yield return new TCPServiceFilterRule(filter.Port) { Type = filter.Type };
-                if (filter.Protocol.HasFlag(IPProtocol.UDP))
-                    yield return new UDPServiceFilterRule(filter.Port) { Type = filter.Type };
+                foreach (var service in filter)
+                {
+                    // Only protocol, port and rule type apply here; no nested host or payload filters.
+                    yield return new ServiceFilterRule { Service = service, Type = filter.Type, Rules = [] };
+                }
             }
         }
 

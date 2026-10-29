@@ -12,5 +12,10 @@ namespace MadWizard.Desomnia.Network.Handoff.Registration
 
         /// <summary>Optional SecureOn Wake-on-LAN password.</summary>
         public byte[]? Password { get; set; }
+
+        public bool Contains(IPService service)
+        {
+            return Services.Select(s => (IPService)s).Contains(service);
+        }
     }
 }

@@ -1,7 +1,7 @@
-using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Address;
+using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Configuration.Options;
-using MadWizard.Desomnia.Network.Device;
+using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Naming;
 using MadWizard.Desomnia.Network.Naming.Options;
 using MadWizard.Desomnia.Network.Neighborhood;
@@ -24,7 +24,9 @@ namespace MadWizard.Desomnia.Network.Watch
 
         internal byte SleepProxyRegistrationCycle { get; private set; }
 
-        public override bool IsOnline => true; // the local proxy is always available
+        public override bool IsOnline => true; // the local host is always available
+
+        public override bool WatchServices => Host is LocalHost || base.WatchServices;
 
         public required AddressMappingService   AddressMapping  { protected get; init; }
         public required MulticastDNSService     MulticastDNS    { private get; init; }
@@ -145,7 +147,7 @@ namespace MadWizard.Desomnia.Network.Watch
                 // address can fail fast (e.g. no route to an IPv6), so we take the first *successful* response.
                 var attempts = proxy.SelectIPAddressesBy(HandoffOptions).Select(async ip =>
                 {
-                    var endpoint = new IPEndPoint(ip, service.Port);
+                    var endpoint = new IPServiceEndPoint(ip, service);
 
                     using var client = new UdpClient(ip.AddressFamily);
 

@@ -95,7 +95,6 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
                 EveryHostFilterRule = null,
 
                 ServiceFilterRule = [],
-                HTTPFilterRule = [],
 
                 PingFilterRule = null
             };

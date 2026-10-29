@@ -4,7 +4,6 @@ using MadWizard.Desomnia.Network.Configuration.Options;
 using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Filter;
-using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Network.Neighborhood;
 using Microsoft.Extensions.Logging;
 using PacketDotNet;
@@ -24,41 +23,20 @@ namespace MadWizard.Desomnia.Network.Watch
 
         protected virtual int MaxConcurrentRequests => DemandOptions.Parallel;
 
-        public required ILifetimeScope Scope { protected get; init; }
+        public required ILifetimeScope          Scope                   { protected get; init; }
 
-        public required NetworkDevice   Device  { protected get; init; }
-        public required NetworkSegment  Network { protected internal get; init; }
+        public required NetworkDevice           Device                  { protected get; init; }
+        public required NetworkSegment          Network                 { protected internal get; init; }
 
-        public required AdvertiseOptions        AdvertiseOptions    { get; init; }
-        public required HandoffOptions          HandoffOptions      { get; init; }
-        public required DemandOptions           DemandOptions       { get; init; }
+        public required AdvertiseOptions        AdvertiseOptions        { get; init; }
+        public required HandoffOptions          HandoffOptions          { get; init; }
+        public required DemandOptions           DemandOptions           { get; init; }
 
-        public required Lazy<IPacketFilter>     Filter              { internal get; init; }
+        public required IFilterContextParser    Parser                  { private get; init; }
+        public required Lazy<IFilter>           Filter                  { internal get; init; }
 
-        /// <summary>The configured baseline, as decided when the watch was constructed.</summary>
-        public required PacketFilterOptions     DefaultFilterOptions { internal get; init; }
-
-        /// <summary>
-        /// The effective filter options, determined dynamically: filter rules and service watches
-        /// can appear and disappear at runtime, so they cannot be decided statically.
-        /// Queried by the BPF engine to detect placeholder hosts still awaiting their services.
-        /// </summary>
-        public PacketFilterOptions FilterOptions
-        {
-            get
-            {
-                var options = DefaultFilterOptions;
-
-                bool services = this.OfType<ServiceFilterWatch>().Any();
-
-                options.BlockByDefault |= services || Filter.Value.Rules.Any(rule => rule.Type == FilterRuleType.Must);
-                options.NeedsIPTraffic |= services || Filter.Value.Rules.Any(rule => rule is IPFilterRule);
-
-                options.AwaitServices &= !services; // no longer a placeholder once services registered
-
-                return options;
-            }
-        }
+        public bool AwaitServices { get => TrackingCount == 0 && field; set; }
+        public virtual bool WatchServices { get => TrackingCount > 0 || AwaitServices; }
 
         readonly ConcurrentDictionary<object, DemandRequest> _ongoingRequests = [];
 
@@ -74,7 +52,7 @@ namespace MadWizard.Desomnia.Network.Watch
             }
         }
 
-        internal virtual DemandRequest? Evaluate(INetworkCapture capture)
+        internal DemandRequest? Evaluate(INetworkCapture capture)
         {
             /**
              * Magic Packets should never start a demand request,
@@ -104,7 +82,7 @@ namespace MadWizard.Desomnia.Network.Watch
                 // through the same filters, without starting a request.
                 else if (capture.FindPacket<TcpPacket>() is { Synchronize: false })
                 {
-                    ReportNetworkTraffic(capture, FlowDirection.Inbound);
+                    ReportCapturedTraffic(capture);
                 }
 
                 // can we start a new request for that source Options?
@@ -146,28 +124,6 @@ namespace MadWizard.Desomnia.Network.Watch
             return false;
         }
 
-        private protected virtual bool ShouldStartRequest(INetworkCapture capture)
-        {
-            try
-            {
-                if (Verify(capture))
-                {
-                    if (CanTriggerDemand(capture))
-                        return true;
-
-                    ReportNetworkTraffic(capture, FlowDirection.Inbound);
-
-                    return false;
-                }
-
-                return false; // shortcut successfully taken
-            }
-            catch (AdditionalDataNeededException)
-            {
-                return true; // to gather more information, we now need to start a request
-            }
-        }
-
         private DemandRequest? MaybeStartRequest(INetworkCapture trigger)
         {
             if (ShouldStartRequest(trigger))
@@ -190,35 +146,81 @@ namespace MadWizard.Desomnia.Network.Watch
             return null;
         }
 
-        public bool Verify(INetworkCapture packet, FlowDirection direction = FlowDirection.Inbound)
-        {
-            /*
-             * Packets accepted by a service watch are judged by that service's own filter, starting
-             * from the configured baseline. Everything else runs against the effective options,
-             * which already account for present service watches and Must-rules (see FilterOptions).
-             */
-            foreach (var serviceWatch in this.OfType<ServiceFilterWatch>().Where(w => w.Service.Accepts(packet, direction)))
-            {
-                return !serviceWatch.Filter.Value.ShouldFilter(packet, DefaultFilterOptions, direction);
-            }
-
-            return !Filter.Value.ShouldFilter(packet, FilterOptions, direction);
-        }
-
-        protected internal override void ReportNetworkTraffic(INetworkCapture packet, FlowDirection direction)
+        private protected virtual bool ShouldStartRequest(INetworkCapture capture)
         {
             try
             {
-                if (Verify(packet, direction))
+                var context = Parser.CreateContext(new(ref capture));
+
+                if (Verify(context))
                 {
-                    base.ReportNetworkTraffic(packet, direction);
+                    if (CanTriggerDemand(capture))
+                        return true;
+
+                    base.ReportNetworkTraffic(context);
+
+                    return false;
+                }
+
+                return false; // shortcut successfully taken
+            }
+            catch (AdditionalDataNeededException)
+            {
+                return true; // to gather more information, we now need to start a request
+            }
+            catch (MalformedPayloadException)
+            {
+                return false;
+            }
+        }
+
+
+        public bool Verify(IFilterContext context)
+        {
+            // A selected service owns its policy, including inherited host rules.
+            // Address resolution can request transport information after host-only vetoes.
+            if (WatchServices)
+            {
+                if (context is IIPServiceFilterContext ips)
+                {
+                    if (this[Host[ips.Service]] is NetworkServiceWatch watch)
+                    {
+                        return !watch.Filter.Value.ShouldFilter(context);
+                    }
+
+                    return false; // does not match any tracked service
+                }
+
+                // can we decline the request by host rules only?
+                else if (context is not IIPFilterContext && context.IsInbound && !Filter.Value.ShouldFilter(context))
+                {
+                    throw new IPTrafficNeededException();
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            else // Host only monitoring
+            {
+                return !Filter.Value.ShouldFilter(context);
+            }
+        }
+
+        protected internal override void ReportNetworkTraffic(IFilterContext context)
+        {
+            try
+            {
+                if (Verify(context))
+                {
+                    base.ReportNetworkTraffic(context);
                 }
             }
             catch (AdditionalDataNeededException)
             {
                 // Accounting never starts a request to gather missing information.
             }
-            catch (MalformedServicePayloadException)
+            catch (MalformedPayloadException)
             {
                 // Malformed payloads cannot contribute accepted traffic either.
             }
@@ -236,17 +238,42 @@ namespace MadWizard.Desomnia.Network.Watch
                 CanBeForwarded = forward
             };
 
-            var watch = this.FirstOrDefault(watch => request.Any(packet => watch.Service.Accepts(packet)));
-
-            @event.Service = watch?.Service;
+            if (request.FilterContext is IIPServiceFilterContext ips)
+            {
+                @event.Service = Host[ips.Service];
+            }
 
             ReportNetworkTraffic(@event);
 
             await TriggerDemandAsync(@event);
 
-            if (watch != null)
+            if (this[@event.Service] is NetworkServiceWatch watch)
             {
                 await watch.TriggerDemandAsync(@event);
+            }
+        }
+
+        protected void ReportNetworkTraffic(DemandEvent @event)
+        {
+            foreach (var capture in @event)
+            {
+                ReportCapturedTraffic(capture);
+            }
+        }
+
+        private void ReportCapturedTraffic(INetworkCapture capture)
+        {
+            try
+            {
+                ReportNetworkTraffic(Parser.CreateContext(new(ref capture)));
+            }
+            catch (AdditionalDataNeededException)
+            {
+                // Incomplete application headers cannot start a request while accounting.
+            }
+            catch (MalformedPayloadException)
+            {
+                // Parsing can reject traffic before a filter context exists.
             }
         }
 

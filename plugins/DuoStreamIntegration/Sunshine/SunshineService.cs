@@ -1,12 +1,9 @@
-﻿using MadWizard.Desomnia.Network.Configuration.Filter;
-using MadWizard.Desomnia.Network.Filter.Rules;
-using MadWizard.Desomnia.Network.Neighborhood.Services;
-using MadWizard.Desomnia.Service.Duo.Configuration;
+﻿using MadWizard.Desomnia.Network.Neighborhood;
 using System.Net;
 
 namespace MadWizard.Desomnia.Service.Duo.Sunshine
 {
-    public class SunshineService(string name, ushort port) : TransportNetworkService($"Sunshine<{name}>", new(IPProtocol.TCP, port))
+    public class SunshineService(string name, ushort port) : NetworkService($"Sunshine<{name}>", new(IPProtocol.TCP, port))
     {
         // TCP
         internal IPService HTTP      => new(IPProtocol.TCP, (ushort)(port + 0));
@@ -23,35 +20,16 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine
         public bool IsWaitingForClient => PortChecker.IsAnyPortInUse(HTTP);
         public bool HasClientConnected => PortChecker.IsAnyPortInUse(Video, Control, Audio, Mic);
 
-        internal IEnumerable<ServiceFilterRuleInfo> CreateFilterRules(DuoInstanceWatchInfo info)
+        public override IEnumerator<IPService> GetEnumerator()
         {
-            foreach (var servicePort in Ports)
-            {
-                yield return new ServiceFilterRuleInfo
-                {
-                    Type = FilterRuleType.Must,
-                    Protocol = servicePort.Protocol,
-                    Port = servicePort,
-
-                    HostFilterRule = info.HostFilterRule,
-                    HostRangeFilterRule = info.HostRangeFilterRule
-                };
-            }
-        }
-
-        protected override IEnumerable<IPService> Ports
-        {
-            get
-            {
-                yield return HTTP;
-                yield return HTTPS;
-                yield return Web;
-                yield return RTSP;
-                yield return Video;
-                yield return Control;
-                yield return Audio;
-                yield return Mic;
-            }
+            yield return HTTP;
+            yield return HTTPS;
+            yield return Web;
+            yield return RTSP;
+            yield return Video;
+            yield return Control;
+            yield return Audio;
+            yield return Mic;
         }
     }
 }

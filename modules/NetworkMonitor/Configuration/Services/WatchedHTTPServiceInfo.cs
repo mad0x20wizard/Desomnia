@@ -1,5 +1,4 @@
 ﻿using MadWizard.Desomnia.Network.Configuration.Filter;
-using MadWizard.Desomnia.Network.Filter.Rules;
 using System.Net;
 
 namespace MadWizard.Desomnia.Network.Configuration.Services
@@ -13,22 +12,6 @@ namespace MadWizard.Desomnia.Network.Configuration.Services
             Port = 80;
         }
 
-        public IList<HTTPRequestFilterRuleInfo>? RequestFilterRule { get; set; }
-
-        public override ServiceFilterRuleInfo ToFilterRule()
-        {
-            return new HTTPFilterRuleInfo
-            {
-                Name = Name,
-                Protocol = Protocol,
-                Port = Port,
-
-                HostFilterRule = HostFilterRule,
-                HostRangeFilterRule = HostRangeFilterRule,
-                RequestFilterRule = RequestFilterRule,
-
-                Type = FilterRuleType.Must
-            };
-        }
+        public IList<HTTPRequestFilterRuleInfo> RequestFilterRule { get; set; } = [];
     }
 }

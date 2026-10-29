@@ -1,33 +1,46 @@
-﻿namespace MadWizard.Desomnia.Network.Filter.Rules
+﻿using System.Text.RegularExpressions;
+
+namespace MadWizard.Desomnia.Network.Filter.Rules
 {
-    public class HTTPRequestFilterRule : FilterRule
+    public class HTTPRequestFilterRule : FilterRule<IHTTPFilterContext, HTTPRequestFilterRule>
     {
-        public required string? Method  { get; init; }
-        public required string? Path    { get; init; }
-        public required string? Version { get; init; }
-        public required string? Host    { get; init; }
+        public required HTTPRequestPattern Pattern { get; init; }
+
+        public override bool Matches(IHTTPFilterContext context)
+        {
+            if (Pattern.Matches(context))
+            {
+                base.Matches(context);
+            }
+
+            return false;
+        }
+    }
+
+    public readonly struct HTTPRequestPattern
+    {
+        public string?  Version     { get; init; }
+
+        public string?  Method      { get; init; }
+
+        public string?  Host        { get; init; }
+        public Regex?   HostRegex   { get; init; }
+
+        public string?  Path        { get; init; }
+        public string?  PathPrefix  { get; init; }
+        public Regex?   PathRegex   { get; init; }
 
         public Dictionary<string, string?> Header { get; init; } = [];
         public Dictionary<string, string?> Cookie { get; init; } = [];
 
-        public bool Matches(HTTPRequest request)
+        public HTTPRequestPattern()
         {
-            if (Method != null && !string.Equals(request.Method, Method, StringComparison.OrdinalIgnoreCase))
-                return false;
-            if (Path != null && !string.Equals(request.Path, Path, StringComparison.OrdinalIgnoreCase))
-                return false;
-            if (Version != null && !string.Equals(request.Version, Version, StringComparison.OrdinalIgnoreCase))
-                return false;
-            // LATER: implement headers and cookies
-            return true;
-        }
-    }
 
-    public class HTTPRequest
-    {
-        public required string Method   { get; init; }
-        public required string Path     { get; init; }
-        public required string Version  { get; init; }
-        public required string Host     { get; init; }
+        }
+
+        public bool Matches(IHTTPFilterContext context)
+        {
+            return false; // TODO: implement
+        }
     }
 }

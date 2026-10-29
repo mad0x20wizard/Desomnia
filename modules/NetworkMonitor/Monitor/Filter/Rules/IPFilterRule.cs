@@ -1,8 +1,6 @@
-﻿using MadWizard.Desomnia.Network.Monitor.Filter.Rules;
-
-namespace MadWizard.Desomnia.Network.Filter.Rules
+﻿namespace MadWizard.Desomnia.Network.Filter.Rules
 {
-    public abstract class IPFilterRule : EveryHostFilterRule
+    public abstract class IPFilterRule<T> : FilterRule<T, HostFilterRule> where T : IIPFilterContext
     {
 
     }

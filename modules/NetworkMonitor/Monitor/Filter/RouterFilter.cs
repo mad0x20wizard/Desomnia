@@ -1,13 +1,10 @@
-using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Reachability;
 using Microsoft.Extensions.Logging;
-using PacketDotNet;
-using System.Net;
 
 namespace MadWizard.Desomnia.Network.Filter
 {
-    internal class RouterFilter : IPacketFilter
+    internal class RouterFilter : IFilter
     {
         public required ILogger<RouterFilter> Logger { private get; init; }
 
@@ -15,15 +12,15 @@ namespace MadWizard.Desomnia.Network.Filter
 
         public required ReachabilityService Reachability { private get; init; }
 
-        bool IPacketFilter.ShouldFilter(INetworkCapture packet, PacketFilterOptions options, FlowDirection direction)
+        bool IFilter.ShouldFilter(IFilterContext context)
         {
-            if (FindPeerRouter(packet, direction) is NetworkRouter router)
+            if (FindPeerRouter(context) is NetworkRouter router)
             {
-                if (direction == FlowDirection.Inbound)
+                if (context.Direction == FlowDirection.Inbound)
                 {
-                    if (!packet.IsIPUnicast && ShouldAllow(router, packet) && packet.TargetAddress is IPAddress ip)
+                    if (context is not IIPFilterContext && ShouldAllow(router))
                     {
-                        throw new IPUnicastNeededException(ip); // respond to ARP/NDP request
+                        throw new IPTrafficNeededException(); // respond to ARP/NDP request
                     }
                 }
 
@@ -36,7 +33,7 @@ namespace MadWizard.Desomnia.Network.Filter
             return false;
         }
 
-        private bool ShouldAllow(NetworkRouter router, INetworkCapture packet)
+        private bool ShouldAllow(NetworkRouter router)
         {
             /*
              * Has the user opted out of the router filtering?
@@ -50,14 +47,6 @@ namespace MadWizard.Desomnia.Network.Filter
                 return true; // no further checks required
             }
 
-            /*
-             * Then we check if we deal with a MagicPacket packet
-             * and if the user has made an exception to allow MagicPacket.
-             */
-            else if (router.Options.AllowWakeOnLAN && packet.IsMagicPacket())
-            {
-                return true;
-            }
 
             /*
              * Then we check if the user has opted in, to allow VPN clients
@@ -71,11 +60,9 @@ namespace MadWizard.Desomnia.Network.Filter
             return false;
         }
 
-        private NetworkRouter? FindPeerRouter(INetworkCapture packet, FlowDirection direction)
+        private NetworkRouter? FindPeerRouter(IFilterContext context)
         {
-            var peer = direction == FlowDirection.Inbound ? packet.SourceAddress : packet.TargetAddress;
-
-            return Network.OfType<NetworkRouter>().FirstOrDefault(router => router.HasAddress(ip: peer));
+            return Network.OfType<NetworkRouter>().FirstOrDefault(router => router.HasAddress(context.RemoteAddress));
         }
 
         public async Task<bool> HasAnyVPNClientConnected(NetworkRouter router)

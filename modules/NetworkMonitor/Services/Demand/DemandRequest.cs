@@ -1,7 +1,7 @@
-using MadWizard.Desomnia.Network.Capture;
 using Autofac;
+using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Neighborhood;
-using PacketDotNet;
 using System.Diagnostics;
 using System.Net;
 
@@ -12,6 +12,8 @@ namespace MadWizard.Desomnia.Network.Demand
         private Stopwatch _stopwatch = Stopwatch.StartNew();
 
         public required ILifetimeScope Scope { private get; init; }
+
+        public required IFilterContextParser Parser { private get; init; }
 
         public int Number { get; internal set; }
 
@@ -34,6 +36,14 @@ namespace MadWizard.Desomnia.Network.Demand
             TargetAddress = trigger.TargetAddress ?? throw new ArgumentException("Trigger packet does not contain a target IP address.");
         }
 
+        public IFilterContext FilterContext // TODO: optimize by caching value
+        {
+            get
+            {
+                return Parser.CreateContext(this.ToArray(), FlowDirection.Inbound); // TODO: maybe optimize array?
+            }
+        }
+
         void IDisposable.Dispose()
         {
             Scope.Dispose();
@@ -49,6 +59,7 @@ namespace MadWizard.Desomnia.Network.Demand
     {
         Valid,
         Filtered,
-        Timeout
+        Timeout,
+        Error
     }
 }

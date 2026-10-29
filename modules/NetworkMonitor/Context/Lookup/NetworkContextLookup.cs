@@ -1,5 +1,4 @@
 ﻿using MadWizard.Desomnia.Network.Neighborhood;
-using MadWizard.Desomnia.Network.Neighborhood.Services;
 using Nito.Disposables.Internals;
 using System.Net;
 using System.Net.NetworkInformation;
@@ -20,7 +19,7 @@ namespace MadWizard.Desomnia.Network.Context
 
         extension (NetworkHostContext context)
         {
-            internal NetworkServiceContext? FindServiceContextBy(IPService port) => context.FirstOrDefault(ctx => ctx.Service is TransportNetworkService t && t.Port == port);
+            internal NetworkServiceContext? FindServiceContextBy(IPService service) => context.FirstOrDefault(ctx => ctx.Service == service);
         }
     }
 }

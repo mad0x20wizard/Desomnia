@@ -212,6 +212,7 @@ namespace MadWizard.Desomnia.Network.Tests
                 });
                 builder.RegisterInstance(Detector).Named<IKnockDetector>("test");
                 builder.RegisterType<KnockService>().SingleInstance();
+                builder.RegisterType<DefaultFilterContextParser>().As<IFilterContextParser>();
                 builder.RegisterType<NetworkHostContext>()
                     .WithParameter(TypedParameter.From(new NetworkMonitorConfig())).ExternallyOwned();
                 builder.RegisterType<NetworkJanitor>()
@@ -219,7 +220,7 @@ namespace MadWizard.Desomnia.Network.Tests
                 builder.RegisterType<NetworkKnockContext>()
                     .WithParameter(TypedParameter.From(new NetworkMonitorConfig())).ExternallyOwned();
                 if (unresolvableParentRule)
-                    builder.Register<PacketFilterRule>(_ => throw new InvalidOperationException("Unrelated rule resolved"));
+                    builder.Register<FilterRule>(_ => throw new InvalidOperationException("Unrelated rule resolved"));
                 _container = builder.Build();
                 Service = _container.Resolve<KnockService>();
 

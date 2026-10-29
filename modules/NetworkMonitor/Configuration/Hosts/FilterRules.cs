@@ -11,7 +11,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
                 .Concat(new[] { EveryHostFilterRule }.WhereNotNull());
 
         public IEnumerable<ServiceFilterRuleInfo> ServiceFilterRules
-            => ServiceFilterRule.Concat(HTTPFilterRule);
+            => ServiceFilterRule;
 
         // Host filter rules
         public IList<HostFilterRuleInfo>        HostFilterRule          { get; }
@@ -21,7 +21,6 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
 
         // Service filter rules
         public IList<ServiceFilterRuleInfo>     ServiceFilterRule       { get; }
-        public IList<HTTPFilterRuleInfo>        HTTPFilterRule          { get; }
         public PingFilterRuleInfo?              PingFilterRule          { get; }
     }
 
@@ -35,7 +34,6 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
 
         // Service filter rules
         public IList<ServiceFilterRuleInfo> ServiceFilterRule { get; set; } = [];
-        public IList<HTTPFilterRuleInfo> HTTPFilterRule { get; set; } = [];
         public PingFilterRuleInfo? PingFilterRule { get; set; }
     }
 }

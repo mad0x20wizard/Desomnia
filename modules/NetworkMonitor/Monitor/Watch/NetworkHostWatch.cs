@@ -1,10 +1,8 @@
-using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Events;
 using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Neighborhood;
 using Microsoft.Extensions.Logging;
-using PacketDotNet;
 
 namespace MadWizard.Desomnia.Network.Watch
 {
@@ -34,22 +32,14 @@ namespace MadWizard.Desomnia.Network.Watch
             await base.StartWatch();
         }
 
-        protected internal override void ReportNetworkTraffic(INetworkCapture packet, FlowDirection direction)
+        protected internal override void ReportNetworkTraffic(IFilterContext context)
         {
             foreach (var watch in this)
             {
-                watch.ReportNetworkTraffic(packet, direction);
+                watch.ReportNetworkTraffic(context);
             }
 
-            base.ReportNetworkTraffic(packet, direction);
-        }
-
-        protected void ReportNetworkTraffic(DemandEvent @event)
-        {
-            foreach (var packet in @event)
-            {
-                ReportNetworkTraffic(packet, FlowDirection.Inbound); // demand is always aimed AT the host
-            }
+            base.ReportNetworkTraffic(context);
         }
 
         internal protected override async Task StopWatch(bool gracefully)

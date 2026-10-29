@@ -62,9 +62,9 @@ public class NetworkInterfaceMonitorTests
         using var manager = new TestManager();
         var adapter = manager.Add("eth0", true);
         await using var monitor = Create(manager,
-            new NetworkInterfaceWatchInfo { Name = "eth.*", Disabled = true, AllowToChange = NetworkInterfaceState.Disabled },
+            new NetworkInterfaceWatchInfo { Name = "eth0", Disabled = true, AllowToChange = NetworkInterfaceState.Disabled },
             new NetworkInterfaceWatchInfo { Name = "eth0", Disabled = false },
-            new NetworkInterfaceWatchInfo { Name = ".*" });
+            new NetworkInterfaceWatchInfo { Name = "eth0" });
         await Reconcile(monitor);
         Assert.False(adapter.Disabled);
         adapter.Disabled = true;
@@ -79,7 +79,7 @@ public class NetworkInterfaceMonitorTests
         using var manager = new TestManager();
         var adapter = manager.Add("eth0");
         await using var monitor = Create(manager,
-            new NetworkInterfaceWatchInfo { Name = ".*", Disabled = true, AllowToChange = NetworkInterfaceState.Disabled },
+            new NetworkInterfaceWatchInfo { Name = "eth0", Disabled = true, AllowToChange = NetworkInterfaceState.Disabled },
             new NetworkInterfaceWatchInfo { Name = "eth0", AllowToChange = NetworkInterfaceState.None });
         await Reconcile(monitor);
         adapter.Disabled = false;
@@ -300,7 +300,7 @@ public class NetworkInterfaceMonitorTests
         manager.Add("eth0");
         manager.Add("wlan0");
         await using var monitor = Create(manager,
-            new NetworkInterfaceWatchInfo { Name = "eth.*", Monitor = false },
+            new NetworkInterfaceWatchInfo { Name = "eth0", Monitor = false },
             new NetworkInterfaceWatchInfo { Name = "eth0" });
         await monitor.StartAsync();
         Assert.Equal("wlan0", Assert.Single(monitor.GetAvailableInterfaces()).Name);
@@ -314,7 +314,7 @@ public class NetworkInterfaceMonitorTests
         using var manager = new TestManager();
         manager.Add("eth0");
         await using var monitor = Create(manager,
-            new NetworkInterfaceWatchInfo { Name = "eth.*", Monitor = false },
+            new NetworkInterfaceWatchInfo { Name = "eth0", Monitor = false },
             new NetworkInterfaceWatchInfo { Name = "eth0", Monitor = true });
         await monitor.StartAsync();
         Assert.Single(monitor.GetAvailableInterfaces());

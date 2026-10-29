@@ -14,7 +14,7 @@ public class HTTPFilterContextParserTests
     private IHTTPFilterContext Parse(string data)
     {
         var capture = Tcp(100, data);
-        return Assert.IsAssignableFrom<IHTTPFilterContext>(_parser.Parse([capture], FlowDirection.Inbound));
+        return Assert.IsAssignableFrom<IHTTPFilterContext>(_parser.CreateContext([capture], FlowDirection.Inbound));
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public class HTTPFilterContextParserTests
     public void DocumentedLibraryLimitsAreTerminalEvenWithoutSyn(string request)
     {
         var capture = Tcp(100, request);
-        Assert.Throws<MalformedServicePayloadException>(() => _parser.Parse([capture], FlowDirection.Inbound));
+        Assert.Throws<MalformedPayloadException>(() => _parser.CreateContext([capture], FlowDirection.Inbound));
     }
 
     [Fact]
@@ -108,9 +108,10 @@ public class HTTPFilterContextParserTests
         {
             INetworkCapture[] history = [Tcp(100, syn: true), Tcp(101, request[..split]),
                 Tcp((uint)(101 + split), request[split..])];
-            var partial = _parser.Parse(history.AsSpan(0, 2), FlowDirection.Inbound);
-            Assert.False(partial is IHTTPFilterContext);
-            var complete = Assert.IsAssignableFrom<IHTTPFilterContext>(_parser.Parse(history, FlowDirection.Inbound));
+            var needed = Assert.Throws<IPServicePayloadNeededException>(() => _parser.CreateContext(history.AsSpan(0, 2), FlowDirection.Inbound));
+            Assert.Equal(new IPService(IPProtocol.TCP, 80), needed.Service);
+            Assert.Equal(history[1].SourceEndPoint, needed.RemoteEndPoint);
+            var complete = Assert.IsAssignableFrom<IHTTPFilterContext>(_parser.CreateContext(history, FlowDirection.Inbound));
             Assert.Equal("/path", complete.Path);
             Assert.Equal("ä", complete.Query["a"].ToString());
             Assert.Equal(new[] { "one", "two" }, complete.Cookies["id"].ToArray());
@@ -125,8 +126,8 @@ public class HTTPFilterContextParserTests
         INetworkCapture[] history = [Tcp(100, syn: true), Tcp(101, first),
             Tcp((uint)(101 + first.Length + second.Length), "\r\n"),
             Tcp((uint)(101 + first.Length), second), Tcp((uint)(101 + first.Length), second)];
-        Assert.False(_parser.Parse(history.AsSpan(0, 3), FlowDirection.Inbound) is IHTTPFilterContext);
-        var complete = Assert.IsAssignableFrom<IHTTPFilterContext>(_parser.Parse(history, FlowDirection.Inbound));
+        Assert.Throws<IPServicePayloadNeededException>(() => _parser.CreateContext(history.AsSpan(0, 3), FlowDirection.Inbound));
+        var complete = Assert.IsAssignableFrom<IHTTPFilterContext>(_parser.CreateContext(history, FlowDirection.Inbound));
         Assert.Single(complete.Headers["Host"]);
     }
 
@@ -134,13 +135,13 @@ public class HTTPFilterContextParserTests
     public void MidstreamFragmentsResponsesAndUdpRetainDefaultContext()
     {
         var fragment = Tcp(100, "Host: test\r\n\r\n");
-        Assert.False(_parser.Parse([fragment], FlowDirection.Inbound) is IHTTPFilterContext);
+        Assert.False(_parser.CreateContext([fragment], FlowDirection.Inbound) is IHTTPFilterContext);
         var response = Tcp(100, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n", outbound: true);
-        Assert.False(_parser.Parse([response], FlowDirection.Outbound) is IHTTPFilterContext);
+        Assert.False(_parser.CreateContext([response], FlowDirection.Outbound) is IHTTPFilterContext);
         var udp = Udp("GET / HTTP/1.1\r\nHost: test\r\n\r\n");
-        Assert.False(_parser.Parse([udp], FlowDirection.Inbound) is IHTTPFilterContext);
+        Assert.False(_parser.CreateContext([udp], FlowDirection.Inbound) is IHTTPFilterContext);
         INetworkCapture[] history = [Tcp(100, "HTTP/1.1\r\nHost: test\r\n\r\n"), Tcp(94, "GET / ")];
-        Assert.IsAssignableFrom<IHTTPFilterContext>(_parser.Parse(history, FlowDirection.Inbound));
+        Assert.IsAssignableFrom<IHTTPFilterContext>(_parser.CreateContext(history, FlowDirection.Inbound));
     }
 
     [Theory]
@@ -169,7 +170,7 @@ public class HTTPFilterContextParserTests
     public void EstablishedMalformedOrUnsupportedHttpIsTerminal(string request)
     {
         INetworkCapture[] history = [Tcp(100, syn: true), Tcp(101, request)];
-        var error = Assert.Throws<MalformedServicePayloadException>(() => _parser.Parse(history, FlowDirection.Inbound));
+        var error = Assert.Throws<MalformedPayloadException>(() => _parser.CreateContext(history, FlowDirection.Inbound));
         Assert.Equal(new IPService(IPProtocol.TCP, 80), error.Service);
     }
 
@@ -179,15 +180,33 @@ public class HTTPFilterContextParserTests
         protected override int MaximumHttpHeaderCount => 2;
     }
 
+    [Theory]
+    [InlineData("GET / HTTP/1.1")]
+    [InlineData("GET / HTTP/1.1\r\nHost: test\r\n")]
+    public void RecognizedIncompleteRequestWithoutSynRequestsMoreData(string request)
+    {
+        var capture = Tcp(100, request);
+        Assert.Throws<IPServicePayloadNeededException>(() => _parser.CreateContext([capture], FlowDirection.Inbound));
+    }
+
+    [Theory]
+    [InlineData("G")]
+    [InlineData("GET / HTTP/1.1\r\nHost: test\r\n")]
+    public void IncompleteOutboundRequestNeverRequestsMoreData(string request)
+    {
+        var capture = Tcp(100, request, syn: true, outbound: true);
+        Assert.IsAssignableFrom<IIPServicePayloadFilterContext>(_parser.CreateContext([capture], FlowDirection.Outbound));
+    }
+
     [Fact]
     public void HeaderLimitsApplyBeforeCompletionButDoNotCountBody()
     {
         var parser = new SmallHeadersParser();
         var oversized = Tcp(100, "GET / HTTP/1.1\r\nHost: " + new string('x', 64), syn: true);
-        Assert.Throws<MalformedServicePayloadException>(() => parser.Parse([oversized], FlowDirection.Inbound));
+        Assert.Throws<MalformedPayloadException>(() => parser.CreateContext([oversized], FlowDirection.Inbound));
         var many = Tcp(100, "GET / HTTP/1.1\r\nHost: test\r\nX-One: 1\r\nX-Two: 2\r\n", syn: true);
-        Assert.Throws<MalformedServicePayloadException>(() => parser.Parse([many], FlowDirection.Inbound));
+        Assert.Throws<MalformedPayloadException>(() => parser.CreateContext([many], FlowDirection.Inbound));
         var body = Tcp(100, "GET / HTTP/1.1\r\nHost: test\r\n\r\n" + new string('x', 100));
-        Assert.IsAssignableFrom<IHTTPFilterContext>(parser.Parse([body], FlowDirection.Inbound));
+        Assert.IsAssignableFrom<IHTTPFilterContext>(parser.CreateContext([body], FlowDirection.Inbound));
     }
 }

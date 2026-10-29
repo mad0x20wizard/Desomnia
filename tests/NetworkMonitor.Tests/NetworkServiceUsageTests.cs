@@ -21,12 +21,7 @@ namespace MadWizard.Desomnia.Network.Tests
         }
 
         /// <summary>A service in name only – nothing here inspects a packet.</summary>
-        private sealed class NamedService(string name) : NetworkService(name)
-        {
-            public override bool Accepts(MadWizard.Desomnia.Network.Capture.INetworkCapture packet, FlowDirection direction) => throw new Xunit.Sdk.XunitException("no packet should be inspected here");
-        }
-
-        private static NetworkService Service(string name) => new NamedService(name);
+        private static NetworkService Service(string name) => new(name, new(System.Net.IPProtocol.TCP, 80));
 
         [Fact]
         public void WithoutARate_TheServiceSpeaksForItself()

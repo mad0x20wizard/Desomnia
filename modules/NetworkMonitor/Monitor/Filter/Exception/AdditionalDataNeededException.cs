@@ -7,8 +7,14 @@
     /// </summary>
     public abstract class AdditionalDataNeededException : Exception
     {
+        protected AdditionalDataNeededException() : base()
+        {
+
+        }
+
         protected AdditionalDataNeededException(string message) : base(message)
         {
+
         }
     }
 }

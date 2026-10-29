@@ -254,7 +254,7 @@ namespace MadWizard.Desomnia.Network.Configuration
             .Concat(WatchedHosts.SelectMany(w => Enumerate(w.ForeignHostFilterRule)))
             .Concat(Enumerate(LocalHost?.ForeignHostFilterRule));
 
-        public IEnumerable<ServiceFilterRuleInfo> ServiceFilterRules => ServiceFilterRule.Concat(HTTPFilterRule);
+        public IEnumerable<ServiceFilterRuleInfo> ServiceFilterRules => ServiceFilterRule;
 
         private static IEnumerable<T> Enumerate<T>(T? value) => new[] { value }.OfType<T>();
         #endregion

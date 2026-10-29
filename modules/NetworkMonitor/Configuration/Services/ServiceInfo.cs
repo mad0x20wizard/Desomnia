@@ -1,4 +1,4 @@
-﻿using MadWizard.Desomnia.Network.Neighborhood.Services;
+﻿using MadWizard.Desomnia.Network.Neighborhood;
 using System.Net;
 
 namespace MadWizard.Desomnia.Network.Configuration.Services
@@ -13,7 +13,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Services
 
         /// <summary>
         /// Optional DNS-SD instance label the service is advertised under when it differs from the
-        /// host's name (see <see cref="Neighborhood.Services.TransportNetworkService.InstanceName"/>).
+        /// host's name (see <see cref="NetworkService.InstanceName"/>).
         /// </summary>
         public string?          InstanceName        { get; set; }
 
@@ -27,9 +27,15 @@ namespace MadWizard.Desomnia.Network.Configuration.Services
         public IPProtocol       Protocol            { get; set; } = IPProtocol.TCP;
         public ushort           Port                { get; set; }
 
-        public IPService IPPort => new(Protocol, Port);
+        public static implicit operator IPService(ServiceInfo info)
+        {
+            if (!info.Protocol.IsSingle)
+                throw new FormatException($"Unsupported service protocol: {info.Protocol}.");
 
-        public virtual TransportNetworkService Service => new(Name, IPPort)
+            return new(info.Protocol, info.Port);
+        }
+
+        public virtual NetworkService Service => new(Name, this)
         {
             ServiceName = ServiceName!
         };

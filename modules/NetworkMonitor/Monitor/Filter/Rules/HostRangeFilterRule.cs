@@ -1,7 +1,6 @@
-using MadWizard.Desomnia.Network.Capture;
+using MadWizard.Desomnia.Network.Monitor.Filter.Rules;
 using MadWizard.Desomnia.Network.Neighborhood;
 using NetTools;
-using PacketDotNet;
 using System.Net;
 
 namespace MadWizard.Desomnia.Network.Filter.Rules
@@ -12,29 +11,36 @@ namespace MadWizard.Desomnia.Network.Filter.Rules
     {
         public required IPAddressRange Range { get; init; }
 
-        public override bool MatchesAddress(IPAddress? ip = null)
+        public override bool MatchesAddress(IPAddress ip)
         {
-            return ip != null && Range.Contains(ip);
+            return Range.Contains(ip);
         }
     }
 
     public class DynamicHostRangeFilterRule : HostRangeFilterRule, IDisposable
     {
+        private FilterRuleNeeds _needs;
+
         public required NetworkHostRange Range
         {
             get; init
             {
                 (field = value).AddDynamicFilterRule(this);
+
+                if (field is NetworkServiceHostRange range)
+                {
+                    _needs = new(range.Rules);
+                }
             }
         }
 
-        public override bool Matches(INetworkCapture packet, FlowDirection direction = FlowDirection.Inbound)
+        public override bool Matches(IFilterContext context)
         {
-            if (base.Matches(packet, direction))
+            if (base.Matches(context))
             {
                 if (Range is NetworkServiceHostRange range)
                 {
-                    return MatchesRules(range.Rules, packet, direction);
+                    return context is IIPServiceFilterContext && MatchesRules(range.Rules, context, _needs);
                 }
 
                 return true;
@@ -43,9 +49,9 @@ namespace MadWizard.Desomnia.Network.Filter.Rules
             return false;
         }
 
-        public override bool MatchesAddress(IPAddress? ip = null)
+        public override bool MatchesAddress(IPAddress ip)
         {
-            return ip != null && Range.Contains(ip);
+            return Range.Contains(ip);
         }
 
         void IDisposable.Dispose()

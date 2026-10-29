@@ -1,9 +1,7 @@
 using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Events;
-using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Demand;
 using MadWizard.Desomnia.Network.Filter;
-using System.Net;
 
 namespace MadWizard.Desomnia.Network.Watch
 {
@@ -55,11 +53,17 @@ namespace MadWizard.Desomnia.Network.Watch
             }
         }
 
-        protected internal virtual void ReportNetworkTraffic(INetworkCapture capture, FlowDirection direction)
+        protected internal virtual void ReportNetworkTraffic(IFilterContext context)
         {
-            if (capture.SourceEndPoint is IPServiceEndPoint)
+            switch (context)
             {
-                ReportNetworkTraffic(capture.PayloadLength, direction);
+                case IIPServicePayloadFilterContext service:
+                    ReportNetworkTraffic(service.PayloadLength, context.Direction);
+                    break;
+
+                case IIPServiceFilterContext:
+                    ReportNetworkTraffic(0, context.Direction);
+                    break;
             }
         }
 

@@ -41,7 +41,11 @@ public sealed class SunshineListenerAdapterTests
             CreateSunshineListener = service =>
             {
                 // Construction/disposal do not open sockets or configure the firewall.
-                var listener = new TestListener(service) { Logger = NullLogger<SunshineListener>.Instance, Firewall = null! };
+                var listener = new TestListener(service)
+                {
+                    Logger = NullLogger<SunshineListener>.Instance, Firewall = null!,
+                    Filter = new(() => throw new InvalidOperationException("This test must not evaluate packet filters."))
+                };
                 created.Add(listener);
                 return listener;
             }

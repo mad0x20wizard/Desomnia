@@ -74,9 +74,9 @@ public class IPReassemblyTests
         var parser = new DefaultFilterContextParser();
         foreach (var direction in new[] { FlowDirection.Inbound, FlowDirection.Outbound })
         {
-            var context = Assert.IsAssignableFrom<IIPServicePayloadFilterContext>(parser.Parse([capture], direction));
+            var context = Assert.IsAssignableFrom<IIPServicePayloadFilterContext>(parser.CreateContext([capture], direction));
             Assert.Same(direction == FlowDirection.Inbound ? capture.SourceEndPoint : capture.TargetEndPoint, context.RemoteEndPoint);
-            Assert.Equal(tcp ? IPProtocol.TCP : IPProtocol.UDP, context.Protocol);
+            Assert.Equal(tcp ? IPProtocol.TCP : IPProtocol.UDP, context.Service.Protocol);
             Assert.Equal(data.Length - (tcp ? 20 : 8), context.PayloadLength);
             Assert.Null(typeof(EthernetCapture).GetField("_payloadData", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(capture));
             if (!tcp)
@@ -106,11 +106,11 @@ public class IPReassemblyTests
         uint start = unchecked(synSequence + 1);
         INetworkCapture[] history = [Reassemble(synSequence, text[..8], true, 1), Reassemble(unchecked(start + 20), text[20..], false, 2)];
         var parser = new HTTPFilterContextParser();
-        var incomplete = parser.Parse(history, FlowDirection.Inbound);
-        Assert.False(incomplete is IHTTPFilterContext);
+        Assert.Throws<IPServicePayloadNeededException>(() => parser.CreateContext(history, FlowDirection.Inbound));
+        var incomplete = new DefaultFilterContextParser().CreateContext(history, FlowDirection.Inbound);
         Assert.Equal(text[..8], Encoding.ASCII.GetString(((IIPServicePayloadFilterContext)incomplete).PayloadData));
         var middle = Reassemble(unchecked(start + 8), text[8..20], false, 3);
-        var complete = Assert.IsAssignableFrom<IHTTPFilterContext>(parser.Parse([.. history, middle, middle], FlowDirection.Inbound));
+        var complete = Assert.IsAssignableFrom<IHTTPFilterContext>(parser.CreateContext([.. history, middle, middle], FlowDirection.Inbound));
         Assert.Equal("/several", complete.Path);
         Assert.Equal("1", complete.Query["q"].ToString());
         Assert.Equal(text, Encoding.ASCII.GetString(complete.PayloadData));
@@ -438,7 +438,7 @@ public class IPReassemblyTests
         Consume(reassembly, Fragment(ipv6, data, 0, split, true, protocol: 6));
         var result = Consume(reassembly, Fragment(ipv6, data, split, data.Length - split, false, protocol: 6));
         var capture = Assert.IsType<FragmentedIPCapture>(result);
-        var context = Assert.IsAssignableFrom<IHTTPFilterContext>(new HTTPFilterContextParser().Parse([capture], FlowDirection.Inbound));
+        var context = Assert.IsAssignableFrom<IHTTPFilterContext>(new HTTPFilterContextParser().CreateContext([capture], FlowDirection.Inbound));
         Assert.Equal("/fragmented", context.Path);
         Assert.Equal("q=1", context.QueryString);
         Assert.Equal(data.Length - 20, context.PayloadLength);
@@ -652,8 +652,8 @@ public class IPReassemblyTests
         Assert.True(b.IsIPUnicast);
         Assert.Equal(first.DestinationHardwareAddress, a.TargetPhysicalAddress);
         Assert.Equal(last.DestinationHardwareAddress, b.TargetPhysicalAddress);
-        Assert.IsAssignableFrom<IIPServicePayloadFilterContext>(new DefaultFilterContextParser().Parse([a], FlowDirection.Inbound));
-        Assert.IsAssignableFrom<IIPFilterContext>(new DefaultFilterContextParser().Parse([b], FlowDirection.Inbound));
+        Assert.IsAssignableFrom<IIPServicePayloadFilterContext>(new DefaultFilterContextParser().CreateContext([a], FlowDirection.Inbound));
+        Assert.IsAssignableFrom<IIPFilterContext>(new DefaultFilterContextParser().CreateContext([b], FlowDirection.Inbound));
         Assert.Equal(firstBytes, first.CapturedBytes);
         Assert.Equal(lastBytes, last.CapturedBytes);
     }

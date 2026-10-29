@@ -9,7 +9,7 @@ namespace MadWizard.Desomnia.Network.Configuration.Options
         public bool             Forward             { get; init; }
         public int              Parallel            { get; init; }
 
-        public bool ShouldForward(DemandEvent @event)                   => Forward && @event.CanBeForwarded;
+        public bool ShouldForward(DemandEvent @event) => Forward && @event.CanBeForwarded;
     }
 
     public enum DemandSource

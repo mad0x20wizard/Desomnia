@@ -21,14 +21,14 @@ namespace MadWizard.Desomnia.Network.Context
             }
         } = null!;
 
-        protected void RegisterTrafficFilter(ContainerBuilder builder, IPService port)
+        protected void RegisterTrafficFilter(ContainerBuilder builder, IPService service)
         {
-            RegisterTrafficFilter(builder, port.Protocol switch
+            RegisterTrafficFilter(builder, service.Protocol switch
             {
-                IPProtocol.TCP => new TCPTrafficType(port),
-                IPProtocol.UDP => new UDPTrafficType(port),
+                IPProtocol.TCP => new TCPTrafficType(service.Port),
+                IPProtocol.UDP => new UDPTrafficType(service.Port),
 
-                _ => throw new NotImplementedException("Unknown IP protocol: " + port.Protocol),
+                _ => throw new NotImplementedException("Unknown IP protocol: " + service.Protocol),
             });
         }
 

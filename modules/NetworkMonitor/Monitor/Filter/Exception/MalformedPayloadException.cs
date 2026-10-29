@@ -6,7 +6,7 @@ namespace MadWizard.Desomnia.Network.Filter
     /// The parser established invalid service payload. This is terminal for a DemandRequest
     /// and must never be handled as a retryable <see cref="AdditionalDataNeededException"/>.
     /// </summary>
-    public class MalformedServicePayloadException(IPService service, string? message = null, Exception? innerException = null)
+    public class MalformedPayloadException(IPService service, string? message = null, Exception? innerException = null)
         : Exception(message ?? $"Invalid payload for service {service}.", innerException)
     {
         public IPService Service { get; } = service;

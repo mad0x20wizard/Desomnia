@@ -33,4 +33,13 @@ namespace MadWizard.Desomnia.Network.Filter
         Inbound,
         Outbound,
     }
+
+    public static class IFilterContextExt
+    {
+        extension (IFilterContext context)
+        {
+            public bool IsInbound => context.Direction == FlowDirection.Inbound;
+            public bool IsOutbound => context.Direction == FlowDirection.Outbound;
+        }
+    }
 }

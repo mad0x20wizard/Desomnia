@@ -20,7 +20,7 @@ public class IPServiceEndPointTests
 
         Assert.Equal(protocol, endpoint.Protocol);
         Assert.Equal(new IPService(protocol, 80), service);
-        Assert.Equal(service, endpoint.Service);
+        Assert.Equal(service.Port, endpoint.Port);
         Assert.EndsWith("/" + protocol.ToString().ToLowerInvariant(), endpoint.ToString());
     }
 

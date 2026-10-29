@@ -20,12 +20,12 @@ namespace MadWizard.Desomnia.Network.Capture
         private IFilterContext InterpretPacket(INetworkCapture capture, FlowDirection direction)
         {
             var context = ParsePacket(capture, direction);
-            bool startsAtSyn = context is IIPServiceFilterContext { Protocol: IPProtocol.TCP }
+            bool startsAtSyn = context is IIPServiceFilterContext { Service.Protocol: IPProtocol.TCP }
                 && capture.FindPacket<TcpPacket>()?.Synchronize == true;
             return Interpret(context, startsAtSyn);
         }
 
-        public virtual IFilterContext Parse(ReadOnlySpan<INetworkCapture> captures, FlowDirection direction)
+        public virtual IFilterContext CreateContext(ReadOnlySpan<INetworkCapture> captures, FlowDirection direction)
         {
             ValidateDirection(direction);
             if (captures.IsEmpty)
@@ -93,10 +93,10 @@ namespace MadWizard.Desomnia.Network.Capture
             if (!capture.HasPacket<IPPacket>())
                 return new CaptureFilterContext(remote.Address) { Direction = direction };
 
-            if (local is IPServiceEndPoint service && remote is IPServiceEndPoint)
+            if (local is IPServiceEndPoint service && remote is IPServiceEndPoint peer)
                 return capture.PayloadLength == 0
-                    ? new ServiceCaptureFilterContext(remote, service) { Direction = direction }
-                    : new PacketPayloadFilterContext(remote, service, capture, capture.PayloadLength) { Direction = direction };
+                    ? new ServiceCaptureFilterContext(peer, service) { Direction = direction }
+                    : new PacketPayloadFilterContext(peer, service, capture, capture.PayloadLength) { Direction = direction };
 
             if (capture.HasPacket<NdpPacket>())
                 return new CaptureFilterContext(remote.Address) { Direction = direction };

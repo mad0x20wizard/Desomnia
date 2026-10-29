@@ -24,6 +24,8 @@ namespace MadWizard.Desomnia.Network.Demand
 
         public required IEnumerable<IDemandDetector> Detectors { private get; init; }
 
+        public required IFilterContextParser Parser { private get; init; }
+
         private bool IsWatchedBy<T>(INetworkCapture packet) where T : NetworkHostWatch
         {
             if ((Network[packet.TargetAddress] ?? Network[packet.TargetPhysicalAddress]) is NetworkHost host)
@@ -73,13 +75,15 @@ namespace MadWizard.Desomnia.Network.Demand
          * destination-keyed, so wake/verify/forward logic never sees a packet from
          * the watched host's own side.
          */
-        private void ReportSourceTraffic(INetworkCapture packet)
+        private void ReportSourceTraffic(INetworkCapture capture)
         {
-            if (packet.HasPacket<IPPacket>())
+            if (capture.HasPacket<IPPacket>())
             {
-                if (Network[packet.SourceAddress] is NetworkHost host && Monitor[host] is NetworkHostWatch watch)
+                if (Network[capture.SourceAddress] is NetworkHost host && Monitor[host] is LocalHostWatch watch)
                 {
-                    watch.ReportNetworkTraffic(packet, FlowDirection.Outbound);
+                    var context = Parser.CreateContext(new(ref capture), FlowDirection.Outbound);
+
+                    watch.ReportNetworkTraffic(context);
                 }
             }
         }
@@ -111,31 +115,31 @@ namespace MadWizard.Desomnia.Network.Demand
 
                     try
                     {
-                        if (watch.Verify(packet))
+                        if (watch.Verify(request.FilterContext))
                         {
                             await watch.ReportDemand(request, forward); // TODO: discard remaining packets
 
                             request.Result ??= DemandResult.Valid;
                         }
                     }
-                    catch (IPUnicastNeededException needed)
+                    catch (IPTrafficNeededException)
                     {
-                        if (!watch.IsOnline)
+                        if (!watch.IsOnline && packet.TargetAddress is IPAddress address)
                         {
-                            if (watch.AdvertiseOptions.ShouldAdvertiseOnRemoteHostDemand(needed.Address))
+                            if (watch.AdvertiseOptions.ShouldAdvertiseOnRemoteHostDemand(address))
                             {
                                 Logger.LogTrace($"More information needed; try to request IP unicast traffic");
 
-                                if (await watch.RequestIPUnicastTrafficTo(needed.Address) is PhysicalAddress mac)
+                                if (await watch.RequestIPUnicastTrafficTo(address) is PhysicalAddress mac)
                                 {
-                                    AddressMapping.Advertise(new(needed.Address, mac), respondTo: packet);
+                                    AddressMapping.Advertise(new(address, mac), respondTo: packet);
 
                                     continue;
                                 }
                             }
                         }
                     }
-                    catch (ServicePayloadNeededException needed)
+                    catch (IPServicePayloadNeededException needed)
                     {
                         if (watch.IsOnline)
                         {
@@ -153,6 +157,13 @@ namespace MadWizard.Desomnia.Network.Demand
                             }
 
                         }
+                    }
+
+                    catch (MalformedPayloadException exception)
+                    {
+                        Logger.LogTrace(exception, "Malformed demand payload; rejecting request");
+
+                        request.Result ??= DemandResult.Error;
                     }
 
                     request.Result ??= DemandResult.Filtered;

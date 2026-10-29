@@ -6,13 +6,15 @@ using MadWizard.Desomnia.Network.Device;
 using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Network.Neighborhood;
-using MadWizard.Desomnia.Network.Neighborhood.Services;
 using MadWizard.Desomnia.Network.Watch;
 using Microsoft.Extensions.Logging.Abstractions;
 using PacketDotNet;
 using System.Net;
 using System.Net.NetworkInformation;
 using Xunit;
+
+using Autofac;
+using System.Text;
 
 namespace MadWizard.Desomnia.Network.Tests
 {
@@ -32,14 +34,14 @@ namespace MadWizard.Desomnia.Network.Tests
             public override bool IsOnline => Online;
         }
 
-        private sealed class RoutingWatch : HostDemandWatch
+        private sealed class RoutingWatch : LocalHostWatch
         {
             public override bool IsOnline => false;
             public int DemandEvaluations { get; private set; }
-            internal override DemandRequest? Evaluate(INetworkCapture capture)
+            private protected override bool ShouldStartRequest(INetworkCapture capture)
             {
                 DemandEvaluations++;
-                return null;
+                return false;
             }
         }
 
@@ -77,8 +79,8 @@ namespace MadWizard.Desomnia.Network.Tests
 
             Assert.Equal(SourceIP, summary.SourceAddress);
             Assert.Equal(TargetIP, summary.TargetAddress);
-            Assert.Equal(new IPService(IPProtocol.TCP, 50000), Assert.IsType<IPServiceEndPoint>(summary.SourceEndPoint).Service);
-            Assert.Equal(new IPService(IPProtocol.TCP, 445), Assert.IsType<IPServiceEndPoint>(summary.TargetEndPoint).Service);
+            Assert.Equal(new IPService(IPProtocol.TCP, 50000), (IPService)Assert.IsType<IPServiceEndPoint>(summary.SourceEndPoint));
+            Assert.Equal(new IPService(IPProtocol.TCP, 445), (IPService)Assert.IsType<IPServiceEndPoint>(summary.TargetEndPoint));
             Assert.Equal(payload.Length, summary.PayloadLength);
             Assert.False(summary.FindPacket<TcpPacket>()!.Synchronize);
         }
@@ -144,7 +146,8 @@ namespace MadWizard.Desomnia.Network.Tests
                 Logger = NullLogger<NetworkHostWatch>.Instance
             };
             var serviceWatch = new NetworkServiceWatch(
-                new TransportNetworkService("SMB", new(IPProtocol.TCP, 445)));
+                new NetworkService("SMB", new(IPProtocol.TCP, 445)))
+                { Filter = new(() => new RuleFilter([])) };
             var monitor = new NetworkMonitor
             {
                 Logger = NullLogger<NetworkMonitor>.Instance,
@@ -159,14 +162,14 @@ namespace MadWizard.Desomnia.Network.Tests
             hostWatch.StartTracking(serviceWatch, adopt: false);
 
             Assert.Same(hostWatch, monitor[host]);
-            Assert.Same(serviceWatch, hostWatch.FirstOrDefault(watch => watch.Service is TransportNetworkService trans && trans.Serves(new(IPProtocol.TCP, 445))));
+            Assert.Same(serviceWatch, hostWatch.FirstOrDefault(watch => watch.Service.Contains(new(IPProtocol.TCP, 445))));
             Assert.Same(serviceWatch, hostWatch[serviceWatch.Service]);
 
             hostWatch.StopTracking(serviceWatch);
             monitor.StopTracking(hostWatch);
 
             Assert.Null(monitor[host]);
-            Assert.Null(hostWatch.FirstOrDefault(watch => watch.Service is TransportNetworkService trans && trans.Serves(new(IPProtocol.TCP, 445))));
+            Assert.Null(hostWatch.FirstOrDefault(watch => watch.Service.Contains(new(IPProtocol.TCP, 445))));
             Assert.Null(hostWatch[serviceWatch.Service]);
         }
 
@@ -192,16 +195,16 @@ namespace MadWizard.Desomnia.Network.Tests
                 AdvertiseOptions = default,
                 HandoffOptions = default,
                 DemandOptions = new DemandOptions { Source = DemandSource.IP, Parallel = 1 },
-                Filter = new Lazy<IPacketFilter>(() =>
+                Filter = new Lazy<IFilter>(() =>
                 {
                     filterWasResolved = true;
-                    return new PacketRuleFilter(allowed ? [] : [new StaticHostFilterRule
+                    return new RuleFilter(allowed ? [] : [new StaticHostFilterRule
                     {
                         Type = FilterRuleType.MustNot,
                         Addresses = [SourceIP]
                     }]);
                 }),
-                DefaultFilterOptions = default
+                Parser = new DefaultFilterContextParser()
             };
 
             var summary = new EthernetCapture(CreateTCPPacket(synchronize: false, [1, 2, 3, 4]));
@@ -237,8 +240,9 @@ namespace MadWizard.Desomnia.Network.Tests
                     Host = host, Network = network, Device = null!, Scope = null!,
                     Logger = NullLogger<NetworkHostWatch>.Instance,
                     AdvertiseOptions = default, HandoffOptions = default, DemandOptions = default,
-                    DefaultFilterOptions = default,
-                    Filter = new Lazy<IPacketFilter>(() => new PacketRuleFilter([]))
+                    Parser = new DefaultFilterContextParser(),
+                    AddressMapping = null!, MulticastDNS = null!, CreateSleepProxyRegistration = null!, CreateMessageBurst = null!,
+                    Filter = new Lazy<IFilter>(() => new RuleFilter([]))
                 };
             }
             var source = Watch("source", SourceIP, SourceMAC);
@@ -255,7 +259,8 @@ namespace MadWizard.Desomnia.Network.Tests
             INetworkService service = new DemandService
             {
                 Logger = NullLogger<DemandService>.Instance, Device = null!, Monitor = monitor,
-                Network = network, AddressMapping = null!, Detectors = [new DemandByIP { Network = network }]
+                Network = network, AddressMapping = null!, Detectors = [new DemandByIP { Network = network }],
+                Parser = new DefaultFilterContextParser()
             };
 
             service.ProcessCapture(new EthernetCapture(CreateTCPPacket(synchronize: true, [1, 2, 3, 4])));
@@ -271,7 +276,8 @@ namespace MadWizard.Desomnia.Network.Tests
         public void ServiceUsageHandlerDoesNotEnableExternalDemand()
         {
             var watch = new NetworkServiceWatch(
-                new TransportNetworkService("SMB", new(IPProtocol.TCP, 445)));
+                new NetworkService("SMB", new(IPProtocol.TCP, 445)))
+                { Filter = new(() => new RuleFilter([])) };
             var trigger = new EthernetCapture(CreateTCPPacket(synchronize: true, []));
 
             watch.Usage += _ => Task.CompletedTask;
@@ -281,6 +287,41 @@ namespace MadWizard.Desomnia.Network.Tests
             watch.Demand += _ => Task.CompletedTask;
 
             Assert.True(watch.CanTriggerDemand(trigger));
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void IncompleteHttpOnlyStartsRequestOnTheDemandPath(bool synchronize)
+        {
+            var network = CreateNetwork();
+            var host = new NetworkHost("target") { Network = network };
+            var parser = new HTTPFilterContextParser();
+            var builder = new ContainerBuilder();
+            builder.RegisterInstance(host);
+            builder.RegisterInstance<IFilterContextParser>(parser);
+            builder.RegisterType<DemandRequest>();
+            using var root = builder.Build();
+            var watch = new TestDemandWatch
+            {
+                Host = host, Network = network, Device = null!, Scope = root,
+                Logger = NullLogger<NetworkHostWatch>.Instance,
+                AdvertiseOptions = default, HandoffOptions = default,
+                DemandOptions = new() { Source = DemandSource.IP, Parallel = 1 },
+                Parser = parser, Filter = new(() => new RuleFilter([]))
+            };
+            var capture = new EthernetCapture(CreateTCPPacket(synchronize,
+                Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: test\r\n")));
+            var request = watch.Evaluate(capture);
+            if (synchronize)
+            {
+                Assert.NotNull(request);
+                Assert.Equal(1, request.Number);
+                ((IDisposable)request).Dispose();
+            }
+            else
+                Assert.Null(request);
+            Assert.Empty(watch.Inspect(TimeSpan.FromSeconds(1)));
         }
     }
 }

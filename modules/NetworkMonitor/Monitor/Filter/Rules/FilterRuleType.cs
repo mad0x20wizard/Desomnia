@@ -4,5 +4,6 @@ namespace MadWizard.Desomnia.Network.Filter.Rules
     {
         MustNot = 0,
         Must    = 1,
+        May     = 2
     }
 }

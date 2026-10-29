@@ -10,6 +10,7 @@ using MadWizard.Desomnia.Network.Watch;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Net;
 using System.Net.NetworkInformation;
 
 namespace MadWizard.Desomnia.Network.SleepProxy.Registration
@@ -86,12 +87,12 @@ namespace MadWizard.Desomnia.Network.SleepProxy.Registration
 
                 if (ctxHost.Auto.HasFlag(AutoDiscoveryType.Service))
                 {
-                    foreach (var serviceInfo in reg.Services)
+                    foreach (var service in reg.Services)
                     {
-                        if (ctxHost.FindServiceContextBy(serviceInfo.IPPort) is NetworkServiceContext ctxService)
-                            throw new NotSupportedException($"Already watching service at {serviceInfo.IPPort} for {ctxHost.Host.Name}.");
+                        if (ctxHost.FindServiceContextBy(service) is NetworkServiceContext ctxService)
+                            throw new NotSupportedException($"Already watching service at {(IPService)service} for {ctxHost.Host.Name}.");
 
-                        ctxService = ctxHost.CreateWatchedService(serviceInfo);
+                        ctxService = ctxHost.CreateWatchedService(service);
 
                         lease.AddInstanceForDisposal(ctxService);
                     }

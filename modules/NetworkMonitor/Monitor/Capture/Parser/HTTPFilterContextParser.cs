@@ -18,7 +18,7 @@ namespace MadWizard.Desomnia.Network.Capture
     /// <remarks>
     /// Uses HttpMachine.PCL 6.2.0 for HTTP syntax. Its bracketed IPv6 request-target and
     /// signed 32-bit Content-Length restrictions are intentional initial limitations.
-    /// IPv6 Host fields are supported. Unsupported input raises MalformedServicePayloadException.
+    /// IPv6 Host fields are supported. Unsupported input raises MalformedPayloadException.
     /// </remarks>
     public class HTTPFilterContextParser : DefaultFilterContextParser
     {
@@ -31,7 +31,7 @@ namespace MadWizard.Desomnia.Network.Capture
 
         protected override IFilterContext Interpret(IFilterContext context, bool startsAtSyn)
         {
-            if (context is not IIPServicePayloadFilterContext { Protocol: IPProtocol.TCP } payload)
+            if (context is not IIPServicePayloadFilterContext { Service.Protocol: IPProtocol.TCP } payload)
                 return context;
             if (MaximumHttpHeaderLength <= 0 || MaximumHttpHeaderCount <= 0)
                 throw new InvalidOperationException("HTTP parsing limits must be positive.");
@@ -48,7 +48,14 @@ namespace MadWizard.Desomnia.Network.Capture
             if (lineEnd < 0)
             {
                 if (startsAtSyn)
+                {
                     ValidateLineEndings(header, Invalid);
+                    return Incomplete();
+                }
+                // Without a SYN, only a recognizable request prefix justifies gathering
+                // more bytes. Arbitrary midstream data must remain a generic payload.
+                if (header.Contains(" HTTP/", StringComparison.Ordinal))
+                    return Incomplete();
                 return context;
             }
             if (header.StartsWith("HTTP/", StringComparison.Ordinal))
@@ -63,7 +70,7 @@ namespace MadWizard.Desomnia.Network.Capture
             try { consumed = parser.Execute(data[..headerLength]); }
             catch (Exception exception) when (exception is FormatException or OverflowException)
             {
-                throw new MalformedServicePayloadException(payload.Service,
+                throw new MalformedPayloadException(payload.Service,
                     "HTTP framing value is invalid or exceeds the parser's supported numeric range.", exception);
             }
             if (collector.Error || consumed != headerLength)
@@ -76,7 +83,7 @@ namespace MadWizard.Desomnia.Network.Capture
                 return context;
             ValidateLineEndings(header, Invalid);
             if (!collector.Complete)
-                return context;
+                return Incomplete();
             if (parser.MajorVersion != 1 || parser.MinorVersion is not 0 and not 1)
                 throw Invalid("Only HTTP/1.0 and HTTP/1.1 request headers are supported.");
 
@@ -147,7 +154,14 @@ namespace MadWizard.Desomnia.Network.Capture
                 Cookies = ParseCookies(headers, Invalid),
             };
 
-            MalformedServicePayloadException Invalid(string message) => new(payload.Service, message);
+            MalformedPayloadException Invalid(string message) => new(payload.Service, message);
+
+            IFilterContext Incomplete()
+            {
+                if (context.Direction == FlowDirection.Inbound)
+                    throw new IPServicePayloadNeededException(payload.Service, payload.RemoteEndPoint);
+                return context;
+            }
         }
 
         private static bool IsToken(string value) => value.Length > 0 && value.All(c =>

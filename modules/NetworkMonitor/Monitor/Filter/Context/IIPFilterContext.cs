@@ -18,7 +18,7 @@ namespace MadWizard.Desomnia.Network.Filter
         /// The watched host's service: destination port inbound, source port outbound.
         /// Its protocol identifies this traffic, not a configured TCP-or-UDP alternative.
         /// </summary>
-        public IPService    Service         { get; }
+        public IPService Service { get; }
 
         /// <summary>
         /// The peer's transport endpoint. Reuse the cached <see cref="IFilterContext.RemoteAddress"/>
@@ -26,9 +26,7 @@ namespace MadWizard.Desomnia.Network.Filter
         /// Port zero denotes an unavailable original peer port, such as in ForwardAuth.
         /// The endpoint is descriptive metadata, not a unique authorization-call identifier.
         /// </summary>
-        public IPEndPoint   RemoteEndPoint  { get; }
-
-        public IPProtocol   Protocol => Service.Protocol;
+        public IPServiceEndPoint RemoteEndPoint  { get; }
     }
 
     /// <summary>
@@ -59,6 +57,7 @@ namespace MadWizard.Desomnia.Network.Filter
         /// the array. Already received body bytes ma
         /// y be present without being interpreted.
         /// </summary>
+        /// 
         /// <exception cref="NotSupportedException">The source cannot provide raw payload.</exception>
         public byte[]   PayloadData     { get; }
     }

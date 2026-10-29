@@ -24,11 +24,11 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
             if (Rule is null)
             {
                 Rule = Firewall.CreatePortRule(
-                    name:       $"DesomniaDuoInstance:{service.Port}",
+                    name:       $"DesomniaDuoInstance:{(IPService)service}",
                     profiles:   FirewallProfiles.Domain | FirewallProfiles.Private | FirewallProfiles.Public,
                     action:     FirewallAction.Allow,
                     protocol:   FirewallProtocol.TCP,
-                    portNumber: service.Port
+                    portNumber: ((IPService)service).Port
                 );
 
                 if (Rule is FirewallWASRule wasRule)
@@ -38,7 +38,7 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Listener
                         ?? null;
 
                     wasRule.ApplicationName = exePath;
-                    wasRule.Description = $"Needed to automatically start/stop the Duo instance with port {service.Port}.";
+                    wasRule.Description = $"Needed to automatically start/stop the Duo instance with port {((IPService)service).Port}.";
                 }
 
                 Firewall.Rules.Add(Rule);

@@ -1,7 +1,6 @@
 ﻿using MadWizard.Desomnia.Configuration;
 using MadWizard.Desomnia.Network.Configuration.Filter;
 using MadWizard.Desomnia.Network.Configuration.Options;
-using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Network.Knocking.Secrets;
 using System.Net;
 using System.Text;
@@ -93,22 +92,5 @@ namespace MadWizard.Desomnia.Network.Configuration.Services
         // Filter-Rules
         public IList<HostFilterRuleInfo> HostFilterRule { get; set; } = [];
         public IList<HostRangeFilterRuleInfo> HostRangeFilterRule { get; init; } = [];
-
-        public static implicit operator ServiceFilterRuleInfo(WatchedServiceInfo info) => info.ToFilterRule();
-
-        public virtual ServiceFilterRuleInfo ToFilterRule()
-        {
-            return new ServiceFilterRuleInfo
-            {
-                Name = Name,
-                Protocol = Protocol,
-                Port = Port,
-
-                HostFilterRule = HostFilterRule,
-                HostRangeFilterRule = HostRangeFilterRule,
-
-                Type = FilterRuleType.Must
-            };
-        }
     }
 }

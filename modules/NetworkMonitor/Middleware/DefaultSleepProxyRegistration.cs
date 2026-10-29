@@ -3,11 +3,10 @@ using Autofac.Core.Resolving.Pipeline;
 using MadWizard.Desomnia.Network.Configuration.Filter;
 using MadWizard.Desomnia.Network.Filter.Rules;
 using MadWizard.Desomnia.Network.Handoff.Registration;
-using MadWizard.Desomnia.Network.Monitor.Filter.Rules;
 using MadWizard.Desomnia.Network.Neighborhood;
-using MadWizard.Desomnia.Network.Neighborhood.Services;
 using MadWizard.Desomnia.Network.SleepProxy.Registration;
 using MadWizard.Desomnia.Network.Watch;
+using System.Net;
 
 namespace MadWizard.Desomnia.Network.Middleware
 {
@@ -29,7 +28,7 @@ namespace MadWizard.Desomnia.Network.Middleware
                 {
                     foreach (var watchService in watch.Where(w => w.ShouldHandoffToSleepProxy))
                     {
-                        if (watchService.Service is not TransportNetworkService service)
+                        if (watchService.Service is not NetworkService service)
                             continue;
 
                         var info = new HandoffServiceInfo(watch.AdvertiseOptions)
@@ -38,8 +37,8 @@ namespace MadWizard.Desomnia.Network.Middleware
                             ServiceName = service.ServiceName,
                             InstanceName = service.InstanceName,
 
-                            Protocol = service.Port.Protocol,
-                            Port = service.Port,
+                            Protocol = ((IPService)service).Protocol,
+                            Port = ((IPService)service).Port,
 
                             Priority = service.Priority,
                             Weight = service.Weight,
@@ -47,10 +46,7 @@ namespace MadWizard.Desomnia.Network.Middleware
                             Properties = service.Properties,
                         };
 
-                        if (watchService is ServiceFilterWatch filterWatch)
-                        {
-                            ExtractFlattenFilterRules(info, filterWatch.Filter.Value.Rules);
-                        }
+                        ExtractFlattenFilterRules(info, watchService.Filter.Value.Rules);
 
                         reg.Services.Add(info);
                     }
@@ -58,10 +54,10 @@ namespace MadWizard.Desomnia.Network.Middleware
             }
         }
 
-        private static void ExtractFlattenFilterRules(HandoffServiceInfo info, IEnumerable<PacketFilterRule> rules)
+        private static void ExtractFlattenFilterRules(HandoffServiceInfo info, IEnumerable<FilterRule> rules)
         {
             // first we map the direct host filter rules of the service, these are easy
-            foreach (var rule in rules.OfType<ServiceFilterRule>().Where(r => r.Type == FilterRuleType.Must && r.Service == info.Port).SelectMany(r => r.HostRules))
+            foreach (var rule in rules.OfType<ServiceFilterRule>().Where(r => r.Type == FilterRuleType.Must && r.Service == (IPService)info).SelectMany(r => r.Rules))
             {
                 switch (rule)
                 {
@@ -116,15 +112,12 @@ namespace MadWizard.Desomnia.Network.Middleware
             // then we try to map some of the edge cases
             foreach (var ruleEveryHost in rules.OfType<EveryHostFilterRule>().Where(r => r.Type == FilterRuleType.MustNot))
             {
-                if (ruleEveryHost is IPFilterRule)
-                    continue;
-
                 if (ruleEveryHost is ForeignHostFilterRule)
                 {
                     info.HostRangeFilterRule.Add(new LocalRangeFilterRuleInfo() { Type = FilterRuleType.Must });
                 }
 
-                foreach (var ruleHost in ruleEveryHost.HostRules.Where(r => r.Type == FilterRuleType.MustNot))
+                foreach (var ruleHost in ruleEveryHost.Rules.Where(r => r.Type == FilterRuleType.MustNot))
                 {
                     switch (ruleHost)
                     {

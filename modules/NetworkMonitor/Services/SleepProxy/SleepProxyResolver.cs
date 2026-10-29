@@ -4,7 +4,7 @@ using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.SleepProxy.Registration;
 using Makaretu.Dns;
 using Microsoft.Extensions.Logging;
-
+using System.Net;
 using static MadWizard.Desomnia.Network.Naming.Messages.DNSMessage;
 
 namespace MadWizard.Desomnia.Network.SleepProxy
@@ -14,7 +14,7 @@ namespace MadWizard.Desomnia.Network.SleepProxy
     /// the proxy service itself (<c>_sleep-proxy._udp.local</c>) and the services that watched hosts
     /// have asked us to advertise on their behalf while they are asleep / unreachable.
     /// </summary>
-    internal class SleepProxyResolver(NetworkHost proxy, SleepProxyService service) : SleepProxyRegistrationBuffer(service.Port), IMulticastDNSResolver
+    internal class SleepProxyResolver(NetworkHost proxy, SleepProxyService service) : SleepProxyRegistrationBuffer(((IPService)service).Port), IMulticastDNSResolver
     {
         public required ILogger<SleepProxyResolver> Logger { private get; init; }
 
@@ -25,7 +25,7 @@ namespace MadWizard.Desomnia.Network.SleepProxy
 
         void IMulticastDNSResolver.Announce(DNSMessage announcement)
         {
-            Logger.LogInformation("Advertising as Sleep Proxy via {Port} with metrics: '{Metrics}'", service.Port, service.Metrics);
+            Logger.LogInformation("Advertising as Sleep Proxy via {Port} with metrics: '{Metrics}'", (IPService)service, service.Metrics);
 
             announcement.AnswerWith(proxy, service, Instance);
         }

@@ -14,20 +14,16 @@ namespace MadWizard.Desomnia.Service.Duo.Sunshine.Watch
             {
                 builder.RegisterInstance(instance.Service).As<NetworkService>();
 
-                foreach (var filter in instance.Service.CreateFilterRules(instance.Info))
-                {
-                    RegisterServiceFilter(builder, filter);
-                }
-
-                var watch = builder.RegisterType<ServiceFilterWatch>().As<NetworkServiceWatch>()
+                var watch = builder.RegisterType<NetworkServiceWatch>()
+                    .WithProperty(TypedParameter.From(instance.Info.MinStreamTraffic))
                     //.WithProperty(TypedParameter.From(info.MakeAdvertiseOptions())) // TODO MakeAdvertiseOptions ??
                     .SingleInstance()
                     .AsSelf();
 
-                watch.OnActivated(args =>
-                {
-                    args.Instance.Threshold = instance.Info.MinStreamTraffic;
-                });
+                RegisterHostFilters(builder, instance.Info.HostFilterRule);
+                RegisterHostRangeFilters(builder, instance.Info.HostRangeFilterRule);
+
+                RegisterServiceTraffic(builder, instance.Service);
             });
         }
     }

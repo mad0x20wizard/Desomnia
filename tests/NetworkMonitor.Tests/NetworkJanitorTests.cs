@@ -222,13 +222,17 @@ namespace MadWizard.Desomnia.Network.Tests
             var range = new NetworkHostRange();
             fixture.Janitor.WatchRange(range);
             range.AddAddress(Peer, new() { Expires = DateTime.Now.AddSeconds(-6) });
+            int changes = 0;
+            range.Changed += (_, _) => changes++;
             ((IDisposable)range).Dispose();
+            Assert.Empty(range);
+            int changesAfterDisposal = changes;
             using var context = fixture.CreateContext();
             fixture.Janitor.MakeHostEligibleForSweeping(context);
             context.Dispose();
 
             Assert.Null(fixture.Sweep(DateTime.Now));
-            Assert.True(range.Contains(Peer));
+            Assert.Equal(changesAfterDisposal, changes);
             Assert.Empty(fixture.Network);
         }
 
@@ -266,10 +270,7 @@ namespace MadWizard.Desomnia.Network.Tests
             Assert.Equal(9, changes);
         }
 
-        private sealed class TestService() : NetworkService("test")
-        {
-            public override bool Accepts(MadWizard.Desomnia.Network.Capture.INetworkCapture packet, FlowDirection direction) => false;
-        }
+        private sealed class TestService() : NetworkService("test", new(IPProtocol.TCP, 80));
 
         private sealed class TestContext : NetworkHostContext
         {

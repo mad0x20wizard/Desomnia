@@ -1,6 +1,5 @@
 ﻿using MadWizard.Desomnia.Network.Neighborhood.Events;
 using MadWizard.Desomnia.Network.Neighborhood.Options;
-using MadWizard.Desomnia.Network.Neighborhood.Services;
 using Makaretu.Dns;
 using System.Collections.Concurrent;
 using System.Net;
@@ -100,14 +99,22 @@ namespace MadWizard.Desomnia.Network.Neighborhood
 
             return false;
         }
+        public bool HasAddress(PhysicalAddress? mac)
+        {
+            return mac != null && mac.Equals(this.PhysicalAddress);
+        }
+        public bool HasAddress(IPAddress? ip)
+        {
+            return ip != null && this.IPAddresses.Contains(ip);
+        }
         public bool HasAddress(PhysicalAddress? mac = null, IPAddress? ip = null, bool both = false)
         {
             if (mac != null || ip != null)
             {
-                bool hasMac = mac != null && mac.Equals(this.PhysicalAddress);
-                bool hasIP = ip != null && this.IPAddresses.Contains(ip);
+                bool hasMAC = HasAddress(mac);
+                bool hasIP  = HasAddress(ip);
 
-                return both ? hasMac && hasIP : hasMac || hasIP;
+                return both ? hasMAC && hasIP : hasMAC || hasIP;
             }
 
             return false;
@@ -128,6 +135,8 @@ namespace MadWizard.Desomnia.Network.Neighborhood
         #region Services
         readonly ConcurrentDictionary<NetworkService, ServiceOptions> _services = [];
 
+        public NetworkService? this[IPService service] => Services.FirstOrDefault(net => net.Contains(service));
+
         public virtual ServiceOptions this[NetworkService service]
         {
             get
@@ -142,24 +151,23 @@ namespace MadWizard.Desomnia.Network.Neighborhood
         }
 
         public virtual IEnumerable<NetworkService> Services => _services.Keys;
-        public IEnumerable<TransportNetworkService> TransportServices => Services.OfType<TransportNetworkService>();
 
         public event EventHandler<ServiceAddedEventArgs>? ServiceAdded;
         public event EventHandler<ServiceRemovedEventArgs>? ServiceRemoved;
 
         public virtual bool AddService(NetworkService service, ServiceOptions options = default)
         {
-            if (_services.TryGetValue(service, out ServiceOptions existing))
+            if (_services.TryGetValue(service, out ServiceOptions existingOpts))
             {
                 // Already known: a re-advertisement only pushes the expiry further out, mirroring
                 // how IP addresses are refreshed. Statically configured services never expire.
-                if (!existing.HasFlags(ServiceFlags.Static))
+                if (!existingOpts.HasFlags(ServiceFlags.Static))
                 {
-                    if (existing.Expires < options.Expires)
+                    if (existingOpts.Expires < options.Expires)
                     {
-                        existing.Expires = options.Expires;
+                        existingOpts.Expires = options.Expires;
 
-                        _services[service] = existing;
+                        _services[service] = existingOpts;
 
                         TriggerChanged();
                     }
@@ -168,12 +176,9 @@ namespace MadWizard.Desomnia.Network.Neighborhood
                 return false;
             }
 
-            if (service is TransportNetworkService tran)
-            {
-                foreach (var t in _services.Keys.OfType<TransportNetworkService>())
-                    if (t.Ports.Intersect(tran.Ports).Any())
-                        throw new ArgumentException($"TransportNetworkService {t} conflicts with {tran}.");
-            }
+            foreach (var existingSrv in _services.Keys)
+                if (existingSrv.Intersect(service).Any())
+                    throw new ArgumentException($"NetworkService {existingSrv} conflicts with {service}.");
 
             _services[service] = options;
 

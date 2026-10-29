@@ -92,7 +92,7 @@ namespace MadWizard.Desomnia.Network.Reachability
 
         public override void NotifyReachable(IPEndPoint source)
         {
-            if (source is IPServiceEndPoint sourceEndPoint && sourceEndPoint.Service == endpoint.Service)
+            if (source is IPServiceEndPoint sourceEndPoint && sourceEndPoint.Equals(endpoint))
             {
                 base.NotifyReachable(source);
             }

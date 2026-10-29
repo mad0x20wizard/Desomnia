@@ -40,7 +40,7 @@ namespace MadWizard.Desomnia.Network.Tests
                 Logger = NullLogger<NetworkHostWatch>.Instance,
                 Scope = null!, Device = null!, Filter = null!,
                 AdvertiseOptions = default, HandoffOptions = default,
-                DemandOptions = default, DefaultFilterOptions = default,
+                DemandOptions = default, Parser = new Capture.DefaultFilterContextParser(),
                 Reachability = null!, ReachabilityCache = null!,
                 AddressMapping = null!, Knocking = null!,
                 PingOptions = default, WakeOptions = default

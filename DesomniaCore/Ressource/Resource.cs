@@ -12,8 +12,6 @@ namespace MadWizard.Desomnia
      */
     public abstract class Resource : EventMetaObject, IInspectable
     {
-        /// <summary>The monitors tracking this resource — a view over the engine's
-        /// parent edges (ServiceFilterWatch aggregates filter rules through it).</summary>
         protected IEnumerable<ResourceMonitor> Monitors => Parents.OfType<ResourceMonitor>();
 
         public bool IsMonitoredBy<T>() where T : ResourceMonitor => Parents.OfType<T>().Any();

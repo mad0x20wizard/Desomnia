@@ -5,7 +5,6 @@ using MadWizard.Desomnia.Network.Context;
 using MadWizard.Desomnia.Network.Naming;
 using MadWizard.Desomnia.Network.Naming.Browser.Events;
 using MadWizard.Desomnia.Network.Neighborhood;
-using MadWizard.Desomnia.Network.Neighborhood.Services;
 using MadWizard.Desomnia.Network.SleepProxy;
 using Makaretu.Dns;
 using Microsoft.Extensions.Logging;
@@ -126,9 +125,9 @@ namespace MadWizard.Desomnia.Network.Discovery.BuiltIn
 
             NetworkHost host = Network[name] ?? Network[instance.HostName, byHostName: true] ?? CreateProxyHost(name, instance.HostName);
 
-            if (host.Services.WithPort(instance.Port) is not TransportNetworkService service)
+            if (host.Services.FirstOrDefault(t => t.Contains(instance.Service)) is not NetworkService service)
             {
-                service = new SleepProxyService(instance.Port) { Metrics = metrics };
+                service = new SleepProxyService(instance.Service.Port) { Metrics = metrics };
 
                 if (host.AddService(service))
                 {

@@ -142,15 +142,15 @@ namespace MadWizard.Desomnia.Network
                 .PreserveExistingDefaults();
 
             builder.RegisterType<RouterFilter>()
-                .As<IPacketFilter>()
+                .As<IFilter>()
                 .InstancePerNetwork();
-            builder.RegisterType<PacketRuleFilter>()
-                .As<IPacketFilter>()
+            builder.RegisterType<RuleFilter>()
+                .As<IFilter>()
                 .InstancePerMatchingLifetimeScope(
                     MatchingScopeLifetimeTags.NetworkHostLifetimeScopeTag,
                     MatchingScopeLifetimeTags.NetworkServiceLifetimeScopeTag);
 
-            builder.RegisterComposite<CompositePacketFilter, IPacketFilter>();
+            builder.RegisterComposite<CompositeFilter, IFilter>();
 
             // Network Services //
 

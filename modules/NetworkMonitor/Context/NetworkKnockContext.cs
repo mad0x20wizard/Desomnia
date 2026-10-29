@@ -5,7 +5,6 @@ using MadWizard.Desomnia.Network.Context.Parameters;
 using MadWizard.Desomnia.Network.Knocking;
 using MadWizard.Desomnia.Network.Knocking.Events;
 using MadWizard.Desomnia.Network.Knocking.Filter;
-using MadWizard.Desomnia.Network.Knocking.Filter.Rules;
 using MadWizard.Desomnia.Network.Knocking.Secrets;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Neighborhood.Options;
@@ -141,23 +140,6 @@ namespace MadWizard.Desomnia.Network.Context
                 builder.RegisterType<KnockTimeFilter>().As<IKnockFilter>()
                     .WithParameter(TypedParameter.From(time))
                     .SingleInstance();
-            }
-
-
-            if (config.ServiceFilterRule.Any())
-            {
-                builder.RegisterType<KnockRuleFilter>().As<IKnockFilter>()
-                    .SingleInstance();
-
-                foreach (var filter in config.ServiceFilterRule)
-                {
-                    builder.RegisterType<KnockPortFilterRule>()
-                        .WithParameter(TypedParameter.From(filter.Type))
-                        .WithParameter(TypedParameter.From(filter.Protocol))
-                        .WithParameter(TypedParameter.From(filter.Port))
-                        .As<KnockFilterRule>()
-                        .SingleInstance();
-                }
             }
 
             builder.RegisterComposite<CompositeKnockFilter, IKnockFilter>();

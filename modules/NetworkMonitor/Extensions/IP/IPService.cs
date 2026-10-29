@@ -60,8 +60,6 @@ namespace System.Net
             return null;
         }
 
-        public static implicit operator ushort(IPService port) => port.Port;
-
         private string ToProtocolString()
         {
             return Protocol.ToString().ToLower().Replace(" ", "").Replace(",", "+");

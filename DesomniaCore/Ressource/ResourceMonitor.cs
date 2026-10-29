@@ -19,6 +19,17 @@ namespace MadWizard.Desomnia
         // loop enumerates — guarded, with snapshot-on-enumerate
         private readonly HashSet<T> _inspectables = [];
 
+        public int TrackingCount
+        {
+            get
+            {
+                lock (_inspectables)
+                {
+                    return _inspectables.Count;
+                }
+            }
+        }
+
         private bool ShouldTrackRessource(T inspectable)
         {
             if (TrackingFilter != null)

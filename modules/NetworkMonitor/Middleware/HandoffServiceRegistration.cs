@@ -22,7 +22,7 @@ namespace MadWizard.Desomnia.Network.Middleware
                 {
                     foreach (var service in HandoffServices(context, watch))
                     {
-                        if (!reg.Services.Any(s => s.IPPort == service.IPPort))
+                        if (!reg.Contains(service))
                         {
                             reg.Services.Add(service);
                         }

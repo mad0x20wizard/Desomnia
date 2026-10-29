@@ -1,21 +1,15 @@
-using MadWizard.Desomnia.Network.Capture;
 using MadWizard.Desomnia.Network.Neighborhood;
-using PacketDotNet;
 using System.Net;
 
 namespace MadWizard.Desomnia.Network.Filter.Rules
 {
-    public abstract class HostFilterRule : PacketFilterRule
+    public abstract class HostFilterRule : FilterRule<IFilterContext>
     {
-        public abstract bool MatchesAddress(IPAddress? ip = null);
+        public abstract bool MatchesAddress(IPAddress ip);
 
-        override public bool Matches(INetworkCapture packet, FlowDirection direction = FlowDirection.Inbound)
+        override public bool Matches(IFilterContext context)
         {
-            var ip = direction == FlowDirection.Inbound
-                ? packet.SourceAddress
-                : packet.TargetAddress;
-
-            return MatchesAddress(ip);
+            return MatchesAddress(context.RemoteAddress);
         }
     }
 
@@ -23,9 +17,9 @@ namespace MadWizard.Desomnia.Network.Filter.Rules
     {
         public required IEnumerable<IPAddress> Addresses { get; init; }
 
-        public override bool MatchesAddress(IPAddress? ip = null)
+        public override bool MatchesAddress(IPAddress ip)
         {
-            return ip != null && Addresses.Contains(ip);
+            return Addresses.Contains(ip);
         }
     }
 
@@ -39,9 +33,9 @@ namespace MadWizard.Desomnia.Network.Filter.Rules
             }
         }
 
-        public override bool MatchesAddress(IPAddress? ip = null)
+        public override bool MatchesAddress(IPAddress ip)
         {
-            return ip != null && Host.HasAddress(ip: ip);
+            return Host.HasAddress(ip);
         }
 
         void IDisposable.Dispose()

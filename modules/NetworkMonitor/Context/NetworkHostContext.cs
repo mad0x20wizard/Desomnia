@@ -8,7 +8,6 @@ using MadWizard.Desomnia.Network.Configuration.Services;
 using MadWizard.Desomnia.Network.Context.Parameters;
 using MadWizard.Desomnia.Network.Context.Watch;
 using MadWizard.Desomnia.Network.Device.Filter;
-using MadWizard.Desomnia.Network.Filter;
 using MadWizard.Desomnia.Network.Manager;
 using MadWizard.Desomnia.Network.Neighborhood;
 using MadWizard.Desomnia.Network.Neighborhood.Options;
@@ -70,7 +69,6 @@ namespace MadWizard.Desomnia.Network.Context
                     .WithParameter(TypedParameter.From(config.MakeAdvertiseOptions(configNetwork)))
                     .WithParameter(TypedParameter.From(config.MakeHandoffOptions(configNetwork)))
                     .WithParameter(TypedParameter.From(config.MakeDemandOptions(configNetwork)))
-                    .WithParameter(TypedParameter.From(new PacketFilterOptions { BlockByDefault = true }))
                     .WithProperty(TypedParameter.From(config.MinTraffic))
                     .SingleInstance()
                     .AsSelf();
@@ -104,8 +102,7 @@ namespace MadWizard.Desomnia.Network.Context
                     .WithParameter(TypedParameter.From(config.MakeAdvertiseOptions(configNetwork)))
                     .WithParameter(TypedParameter.From(config.MakeHandoffOptions(configNetwork)))
                     .WithParameter(TypedParameter.From(config.MakeDemandOptions(configNetwork)))
-                    .WithParameter(TypedParameter.From(new PacketFilterOptions { BlockByDefault = false })) // LATER: maybe later services too?
-                    .OnActivated(args => ConfigureWatch(args, config))
+                    .OnActivated(args => ConfigureWatch(args, config, Auto))
                     .SingleInstance()
                     .AsSelf();
             });
@@ -139,8 +136,7 @@ namespace MadWizard.Desomnia.Network.Context
                     .WithParameter(TypedParameter.From(config.MakePingOptions(configNetwork)))
                     .WithParameter(TypedParameter.From(config.MakeWakeOptions(configNetwork)))
                     .WithParameter(TypedParameter.From(config.MakeHandoffOptions(configNetwork)))
-                    .WithParameter(TypedParameter.From(new PacketFilterOptions(Auto)))
-                    .OnActivated(args => ConfigureWatch(args, config))
+                    .OnActivated(args => ConfigureWatch(args, config, Auto))
                     .SingleInstance()
                     .AsSelf();
             });
@@ -175,8 +171,7 @@ namespace MadWizard.Desomnia.Network.Context
                     .WithParameter(TypedParameter.From(config.MakeDemandOptions(configNetwork)))
                     .WithParameter(TypedParameter.From(config.MakePingOptions(configNetwork)))
                     .WithParameter(TypedParameter.From(config.MakeWakeOptions(configNetwork)))
-                    .WithParameter(TypedParameter.From(new PacketFilterOptions(Auto)))
-                    .OnActivated(args => ConfigureWatch(args, config))
+                    .OnActivated(args => ConfigureWatch(args, config, Auto))
                     .SingleInstance()
                     .AsSelf();
             });
@@ -255,14 +250,19 @@ namespace MadWizard.Desomnia.Network.Context
             }
         }
 
-        private static void ConfigureWatch(IActivatedEventArgs<NetworkHostWatch> args, WatchedHostInfo config)
+        private static void ConfigureWatch(IActivatedEventArgs<NetworkHostWatch> args, WatchedHostInfo config, AutoDiscoveryType auto)
         {
             var watch = args.Instance;
 
             watch.Threshold = config.MinTraffic;
 
-            if (watch is HostDemandWatch)
+            if (watch is HostDemandWatch demand)
             {
+                if (auto.HasFlag(AutoDiscoveryType.Service))
+                {
+                    demand.AwaitServices = true;
+                }
+
                 ((IEventSystem)watch)[nameof(HostDemandWatch.Usage)].AddAction(config.OnUsage);
                 ((IEventSystem)watch)[nameof(HostDemandWatch.Demand)].AddAction(config.OnDemand);
                 ((IEventSystem)watch)[nameof(HostDemandWatch.Idle)].AddAction(config.OnIdle);

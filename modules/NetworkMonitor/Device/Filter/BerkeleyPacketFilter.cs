@@ -403,7 +403,7 @@ namespace MadWizard.Desomnia.Network.Device.Filter
 
                     // A placeholder host awaits the registration of its services (via the Sleep Proxy
                     // endpoint); until then nothing shall wake it, so it is a dead end for capturing.
-                    if (watch.FilterOptions.AwaitServices)
+                    if (watch.AwaitServices)
                         continue;
 
                     captureUnconditional = watch is not LocalHostWatch;

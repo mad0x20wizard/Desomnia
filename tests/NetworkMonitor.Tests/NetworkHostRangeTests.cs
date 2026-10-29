@@ -193,15 +193,18 @@ namespace MadWizard.Desomnia.Network.Tests
         }
 
         [Fact]
-        public void DisposalPreventsNewEntries()
+        public void DisposalRemovesEntriesAndPreventsNewOnes()
         {
             var ranges = new NetworkHostRange();
-            bool removed = false;
-            ranges.AddressRangeRemoved += (_, _) => removed = true;
+            int removed = 0;
+            ranges.AddressRangeRemoved += (_, _) => removed++;
             ranges.AddAddress(Peer, new(TimeSpan.FromMilliseconds(200)));
             ((IDisposable)ranges).Dispose();
 
-            Assert.False(removed);
+            Assert.Empty(ranges);
+            Assert.Equal(1, removed);
+            ((IDisposable)ranges).Dispose();
+            Assert.Equal(1, removed);
             Assert.Throws<ObjectDisposedException>(() => ranges.AddAddress(Peer));
         }
     }

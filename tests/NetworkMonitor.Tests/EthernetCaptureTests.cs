@@ -145,7 +145,7 @@ namespace MadWizard.Desomnia.Network.Tests
         {
             var capture = new EthernetCapture(TransportPacket(false, IPProtocol.TCP, []));
             var target = Assert.IsType<IPServiceEndPoint>(capture.TargetEndPoint);
-            var needed = new ServicePayloadNeededException(target, capture.SourceEndPoint!);
+            var needed = new IPServicePayloadNeededException(target, capture.SourceEndPoint!);
 
             Assert.Equal(new IPService(IPProtocol.TCP, 445), needed.Service);
             Assert.Same(capture.SourceEndPoint, needed.RemoteEndPoint);

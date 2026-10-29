@@ -25,7 +25,7 @@ namespace MadWizard.Desomnia.Network.Neighborhood
             }
         }
 
-        internal void AddDynamicFilterRule(PacketFilterRule rule)
+        internal void AddDynamicFilterRule(FilterRule rule)
         {
             lock(_filterRules)
             {
@@ -36,7 +36,7 @@ namespace MadWizard.Desomnia.Network.Neighborhood
             TriggerChanged();
         }
 
-        internal void RemoveDynamicFilterRule(PacketFilterRule rule)
+        internal void RemoveDynamicFilterRule(FilterRule rule)
         {
             lock (_filterRules)
             {

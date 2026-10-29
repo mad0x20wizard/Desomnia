@@ -22,6 +22,7 @@ using MadWizard.Desomnia.Network.SleepProxy.Registration;
 using MadWizard.Desomnia.Network.Trace;
 using Microsoft.Extensions.Logging;
 using Nito.Disposables;
+using System.Net;
 
 namespace MadWizard.Desomnia.Network.Context
 {
@@ -248,7 +249,7 @@ namespace MadWizard.Desomnia.Network.Context
                             }
                         };
 
-                        RegisterTrafficFilter(builder, new UDPTrafficType(service.Port));
+                        RegisterTrafficFilter(builder, new UDPTrafficType(((IPService)service).Port));
 
                         builder.RegisterType<SleepProxyLease>()
                             .InstancePerDependency()

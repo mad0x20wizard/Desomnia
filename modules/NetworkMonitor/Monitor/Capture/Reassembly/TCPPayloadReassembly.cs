@@ -90,7 +90,7 @@ namespace MadWizard.Desomnia.Network.Capture
             }
             return new(parts.ToArray(), (int)(next - first), start.HasValue);
 
-            MalformedServicePayloadException Invalid(string message) => new(service, message);
+            MalformedPayloadException Invalid(string message) => new(service, message);
         }
     }
 }

@@ -1,5 +1,4 @@
 using MadWizard.Desomnia.Network.Filter;
-using PacketDotNet;
 using System.Net;
 
 namespace MadWizard.Desomnia.Network.Capture
@@ -30,11 +29,11 @@ namespace MadWizard.Desomnia.Network.Capture
 
     internal class ServiceCaptureFilterContext : IPCaptureFilterContext, IIPServiceFilterContext
     {
-        public IPEndPoint RemoteEndPoint { get; }
+        public IPServiceEndPoint RemoteEndPoint { get; }
 
         public IPService Service { get; }
 
-        public ServiceCaptureFilterContext(IPEndPoint remote, IPService service) : base(remote.Address)
+        public ServiceCaptureFilterContext(IPServiceEndPoint remote, IPService service) : base(remote.Address)
         {
             RemoteEndPoint = remote;
             Service = service;
@@ -49,7 +48,7 @@ namespace MadWizard.Desomnia.Network.Capture
 
         public byte[] PayloadData => _capture.PayloadData;
 
-        public PacketPayloadFilterContext(IPEndPoint remote,
+        public PacketPayloadFilterContext(IPServiceEndPoint remote,
             IPService service, INetworkCapture capture, int length)
             : base(remote, service)
         {
@@ -83,7 +82,7 @@ namespace MadWizard.Desomnia.Network.Capture
             }
         }
 
-        public StreamPayloadFilterContext(IPEndPoint remote,
+        public StreamPayloadFilterContext(IPServiceEndPoint remote,
             IPService service, ReadOnlyMemory<byte>[] parts, int length)
             : base(remote, service)
         {

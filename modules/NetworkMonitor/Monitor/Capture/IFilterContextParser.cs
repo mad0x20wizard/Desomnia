@@ -8,9 +8,10 @@ namespace MadWizard.Desomnia.Network.Capture
     /// </summary>
     /// <remarks>
     /// Each call creates a fresh evaluation snapshot with the most specialized context
-    /// supported by the available information. Insufficient data returns a less specialized
-    /// context; the evaluator decides whether to request more data after considering all rules.
-    /// Parsers do not throw <see cref="AdditionalDataNeededException"/> for incomplete input.
+    /// supported by the available information. Missing transport data returns a less specialized
+    /// context; the evaluator decides whether to acquire it after considering all rules.
+    /// An application parser may throw <see cref="IPServicePayloadNeededException"/> for
+    /// a recognized but incomplete inbound request. Outbound accounting never requests more data.
     ///
     /// Input storage is borrowed only for the duration of the call. Implementations may
     /// initialize capture metadata caches, but must not mutate packets, retain borrowed
@@ -49,10 +50,13 @@ namespace MadWizard.Desomnia.Network.Capture
         /// <exception cref="ArgumentException">
         /// The input is empty or mixes directions, addresses or transport connection endpoints.
         /// </exception>
-        /// <exception cref="MalformedServicePayloadException">
+        /// <exception cref="MalformedPayloadException">
         /// Available data establishes an invalid service payload, rather than incomplete input.
         /// </exception>
+        /// <exception cref="IPServicePayloadNeededException">
+        /// An inbound application request needs more payload before it can be interpreted.
+        /// </exception>
         /// <exception cref="NotSupportedException">The capture has no usable IP address.</exception>
-        IFilterContext Parse(ReadOnlySpan<INetworkCapture> captures, FlowDirection direction);
+        IFilterContext CreateContext(ReadOnlySpan<INetworkCapture> captures, FlowDirection direction = FlowDirection.Inbound);
     }
 }

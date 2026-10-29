@@ -6,7 +6,7 @@ namespace MadWizard.Desomnia.Network.Filter
     /// Requests more payload for the watched transport service. This also covers an existing
     /// generic payload context that cannot yet satisfy a specialized requirement such as HTTP.
     /// </summary>
-    public class ServicePayloadNeededException(IPService service, IPEndPoint remoteEndPoint)
+    public class IPServicePayloadNeededException(IPService service, IPEndPoint remoteEndPoint)
         : AdditionalDataNeededException($"More payload from {remoteEndPoint} for service {service} is required for filtering.")
     {
         /// <summary>The watched-side protocol and port.</summary>

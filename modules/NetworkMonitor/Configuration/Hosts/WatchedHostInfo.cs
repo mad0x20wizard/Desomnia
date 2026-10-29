@@ -105,7 +105,6 @@ namespace MadWizard.Desomnia.Network.Configuration.Hosts
         public EveryHostFilterRuleInfo? EveryHostFilterRule { get; set; }
 
         public IList<ServiceFilterRuleInfo> ServiceFilterRule { get; set; } = [];
-        public IList<HTTPFilterRuleInfo> HTTPFilterRule { get; set; } = [];
         public PingFilterRuleInfo? PingFilterRule { get; set; }
     }
 }
